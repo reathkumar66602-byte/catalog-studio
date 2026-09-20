@@ -1,0 +1,42 @@
+# Build
+**/target/
+**/dist/
+**/build/
+**/.vite/
+**/node_modules/
+**/*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Env and secrets
+.env
+.env.local
+.env.gcp
+catalog-studio-backend/config/
+certs/
+*.pem
+*.p12
+*.jks
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads and logs
+listingai-backend/uploads/
+listingai-backend/logs/
+uploads/
+*.log
+
+# Extension build
+listingai-extension/dist/
+catalog-studio-extension/release/
+
+# Test
+coverage/
+.nyc_output/
+tmp/

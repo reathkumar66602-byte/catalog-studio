@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/catalog_studio}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD:root}
+  jpa:
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 2
+
+logging:
+  level:
+    com.catalogstudio: DEBUG
+    org.springframework.security: INFO
+
+catalogstudio:
+  otp:
+    log-code: ${OTP_LOG_CODE:false}

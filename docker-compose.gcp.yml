@@ -1,0 +1,37 @@
+# Overlay for the GCP VM. Use with docker-compose.yml.
+# Postgres is published for pgAdmin; GCP firewall must allow only your home IP.
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-catalog_studio}
+    ports: !override
+      - "5432:5432"
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-catalog_studio}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      STORAGE_PUBLIC_BASE_URL: ${PUBLIC_ORIGIN}/api/v1/files
+      JWT_SECRET: ${JWT_SECRET}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_API_KEY: ${AI_API_KEY:-}
+      MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-zoho}
+      ZOHO_MAIL_HOST: ${ZOHO_MAIL_HOST:-smtppro.zoho.in}
+      ZOHO_MAIL_PORT: ${ZOHO_MAIL_PORT:-465}
+      ZOHO_MAIL_USERNAME: ${ZOHO_MAIL_USERNAME:-}
+      ZOHO_MAIL_PASSWORD: ${ZOHO_MAIL_PASSWORD:-}
+      ZOHO_MAIL_FROM: ${ZOHO_MAIL_FROM:-support@catalogstudio.in}
+      ZOHO_MAIL_FROM_NAME: ${ZOHO_MAIL_FROM_NAME:-Catalog Studio}
+      MAIL_SUPPORT_INBOX: ${MAIL_SUPPORT_INBOX:-support@catalogstudio.in}
+      ZEPTOMAIL_API_URL: ${ZEPTOMAIL_API_URL:-https://api.zeptomail.in/v1.1/email}
+      ZEPTOMAIL_SEND_TOKEN: ${ZEPTOMAIL_SEND_TOKEN:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      LOG_DIR: /var/catalog-studio/logs
+    volumes:
+      - catalog_studio_logs:/var/catalog-studio/logs
+  dashboard:
+    ports:
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro

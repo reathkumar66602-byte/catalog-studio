@@ -1,0 +1,9 @@
+#cs-scout-fab { position:fixed; right:0; top:38%; z-index:2147483000; writing-mode:vertical-rl; background:#0f766e; color:#fff; border:0; border-radius:10px 0 0 10px; padding:14px 8px; font:700 12px Segoe UI,sans-serif; cursor:pointer; letter-spacing:.04em; }
+#cs-scout { position:fixed; top:0; right:0; width:380px; max-width:100%; height:100vh; background:#fff; z-index:2147483001; box-shadow:-8px 0 30px rgba(15,23,42,.2); transform:translateX(110%); transition:transform .2s; font-family:Segoe UI,sans-serif; color:#0f172a; }
+#cs-scout.open { transform:none; }
+#cs-scout header { padding:14px 16px; background:#0f766e; color:#fff; display:flex; justify-content:space-between; align-items:center; }
+#cs-scout .body { padding:14px; overflow:auto; height:calc(100vh - 58px); }
+#cs-scout button, #cs-scout input { border-radius:8px; border:1px solid #e2e8f0; padding:8px; }
+#cs-scout .btn { background:#0f766e; color:#fff; border:0; font-weight:700; cursor:pointer; width:100%; }
+#cs-scout .card { border:1px solid #e2e8f0; border-radius:12px; padding:10px; margin:8px 0; font-size:13px; }
+#cs-scout .note { color:#64748b; font-size:12px; }

@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:catalog_studio;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+
+catalogstudio:
+  jwt:
+    secret: test-secret-key-which-is-long-enough-for-hs256-algorithms
+    access-token-minutes: 15
+    refresh-token-days: 7
+  ai:
+    provider: mock
+    api-key: test
+  storage:
+    provider: local
+    local-path: ./target/test-uploads
+  seed:
+    admin-email: admin@test.local
+    admin-password: Admin@Test123
+    demo-seller-email: seller@test.local
+    demo-seller-password: Seller@Test123
+  mail:
+    enabled: false
+  otp:
+    enabled: false
+    log-code: true
+  google:
+    maps-api-key: ""

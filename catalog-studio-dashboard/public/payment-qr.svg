@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="UPI payment scanner">
+  <rect width="240" height="240" rx="20" fill="#f8fafc"/>
+  <rect x="18" y="18" width="204" height="204" rx="12" fill="#fff" stroke="#0f766e" stroke-width="4"/>
+  <rect x="36" y="36" width="52" height="52" fill="#0f172a"/>
+  <rect x="152" y="36" width="52" height="52" fill="#0f172a"/>
+  <rect x="36" y="152" width="52" height="52" fill="#0f172a"/>
+  <rect x="48" y="48" width="28" height="28" fill="#fff"/>
+  <rect x="164" y="48" width="28" height="28" fill="#fff"/>
+  <rect x="48" y="164" width="28" height="28" fill="#fff"/>
+  <rect x="56" y="56" width="12" height="12" fill="#0f766e"/>
+  <rect x="172" y="56" width="12" height="12" fill="#0f766e"/>
+  <rect x="56" y="172" width="12" height="12" fill="#0f766e"/>
+  <rect x="108" y="48" width="12" height="12" fill="#0f172a"/>
+  <rect x="128" y="48" width="12" height="12" fill="#0f172a"/>
+  <rect x="108" y="68" width="28" height="12" fill="#0f172a"/>
+  <rect x="96" y="108" width="48" height="12" fill="#0f172a"/>
+  <rect x="152" y="108" width="36" height="12" fill="#0f172a"/>
+  <rect x="108" y="128" width="12" height="36" fill="#0f172a"/>
+  <rect x="132" y="148" width="48" height="12" fill="#0f172a"/>
+  <rect x="164" y="168" width="24" height="24" fill="#0f172a"/>
+  <text x="120" y="228" text-anchor="middle" font-size="11" fill="#0f766e" font-family="Segoe UI, Arial">Scan UPI QR</text>
+</svg>
