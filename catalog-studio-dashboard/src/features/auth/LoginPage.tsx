@@ -77,6 +77,11 @@ export function LoginPage() {
             </button>
           </div>
         </label>
+        <div className="flex justify-end -mt-2">
+          <Link to="/forgot-password" className="text-sm font-medium text-teal-800">
+            {t("login.forgot")}
+          </Link>
+        </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" name="remember" className="accent-teal-700" />
           {t("login.remember")}

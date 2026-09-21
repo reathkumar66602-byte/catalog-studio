@@ -358,7 +358,7 @@ export function fallbackSizesForListing(listing: MappedListing) {
   if (/pant|trouser|jean|palazzo|lower/.test(blob)) return PANT_SIZES;
   if (/kurti fabric|unstitched|semi stitched/.test(blob)) return listing.size ? [listing.size] : ["Semi Stitched"];
   if (/\bkurti|\bkurtas?\b|\bdress|\bgown/.test(blob)) return ["M", "L", "XL", "XXL"];
-  if (/\bt-?shirt|\btee\b|\btunic|\btops?\b/.test(blob)) return FALLBACK_APPAREL;
+  if (/\bt-?shirt|\btee\b|\btunic|\btops?\b|\bshirts?\b/.test(blob)) return FALLBACK_APPAREL;
   return listing.size ? [listing.size] : FALLBACK_APPAREL;
 }
 
@@ -373,11 +373,16 @@ export function sizesForListing(listing: MappedListing) {
 
 export function measuresForSize(size: string, listing: MappedListing): SizeMeasures | null {
   const key = chartKey(size);
-  const blob = `${listing.title || ""} ${listing.genericName || ""} ${listing.mainCategory || ""}`.toLowerCase();
+  const blob = `${listing.gender || ""} ${listing.title || ""} ${listing.genericName || ""} ${listing.mainCategory || ""}`.toLowerCase();
   if (/pant|trouser|jean|palazzo/.test(blob) && /^\d+$/.test(size)) return pantMeasures(size);
   if (/\bt-?shirt|\btee\b/.test(blob)) return TSHIRT_CHART[key] || numericShirtMeasures(size);
+  if (/\bshirts?\b/.test(blob) && !/\bt-?shirts?\b/.test(blob)) {
+    if (/\bwom[ae]n|ladies|girl|female/.test(blob)) return TOP_CHART[key] || TSHIRT_CHART[key] || numericShirtMeasures(size);
+    return TSHIRT_CHART[key] || TOP_CHART[key] || numericShirtMeasures(size);
+  }
   if (/\btunic|\btops?\b/.test(blob)) return TOP_CHART[key] || TSHIRT_CHART[key] || numericShirtMeasures(size);
-  return KURTI_CHART[key] || TOP_CHART[key] || TSHIRT_CHART[key] || pantMeasures(size);
+  if (/\bkurti|\bkurta|\bsaree|\bdress|\bgown/.test(blob)) return KURTI_CHART[key] || TOP_CHART[key] || numericShirtMeasures(size);
+  return TOP_CHART[key] || TSHIRT_CHART[key] || KURTI_CHART[key] || pantMeasures(size);
 }
 
 function chartKey(size: string) {

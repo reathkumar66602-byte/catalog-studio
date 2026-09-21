@@ -110,6 +110,32 @@ class ExtensionFeatureServiceTest {
     }
 
     @Test
+    void listingColorIsNotTreatedAsADifferentShop() {
+        ExtensionUserSettings saved = ExtensionUserSettings.builder()
+                .userId(1L)
+                .settingsJson(Map.of("lockedShopName", "Krishnasrstore", "lockedShopUid", ""))
+                .build();
+        when(settingsRepository.findById(1L)).thenReturn(Optional.of(saved));
+
+        Map<String, Object> wait = featureService.verifyShop("cst_x", new VerifyShopRequest("Purple", ""));
+        assertThat(wait.get("status")).isEqualTo("wait");
+        assertThat(wait.get("registered")).isEqualTo("Krishnasrstore");
+    }
+
+    @Test
+    void sameShopUidStaysLockedWhenDisplayNameDrifts() {
+        ExtensionUserSettings saved = ExtensionUserSettings.builder()
+                .userId(1L)
+                .settingsJson(Map.of("lockedShopName", "Krishnasrstore", "lockedShopUid", "y2ogj"))
+                .build();
+        when(settingsRepository.findById(1L)).thenReturn(Optional.of(saved));
+
+        Map<String, Object> ok = featureService.verifyShop("cst_x", new VerifyShopRequest("Krishna SR Store", "y2ogj"));
+        assertThat(ok.get("status")).isEqualTo("ok");
+        assertThat(ok.get("registered")).isEqualTo("Krishnasrstore");
+    }
+
+    @Test
     void fillGapsAddsMissingFabric() {
         Map<String, Object> result = featureService.fillGaps("cst_x", new FillGapsRequest(
                 "Women Kurti",

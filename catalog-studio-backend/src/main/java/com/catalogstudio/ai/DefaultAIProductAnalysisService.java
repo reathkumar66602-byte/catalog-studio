@@ -19,15 +19,12 @@ public class DefaultAIProductAnalysisService implements AIProductAnalysisService
 
     @Override
     public ProductAnalysisResponse analyze(ProductAnalysisRequest request) {
-        AIProvider provider = AIProvider.from(properties.ai().provider());
+        AIProvider provider = AiProviderResolver.resolve(properties.ai().provider(), properties.ai().apiKey());
         VisionModelClient client = clients.stream()
                 .filter(c -> c.provider() == provider)
                 .findFirst()
-                .orElseGet(() -> clients.stream()
-                        .filter(c -> c.provider() == AIProvider.MOCK)
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalStateException("No AI provider registered")));
-        return client.analyze(request, loadPrompt(request));
+                .orElseThrow(() -> new IllegalStateException("No AI provider registered for " + provider));
+        return ListingCopyNormalizer.align(client.analyze(request, loadPrompt(request)));
     }
 
     private String loadPrompt(ProductAnalysisRequest request) {

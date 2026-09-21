@@ -202,6 +202,7 @@ describe("meesho defaults", () => {
     expect(defaults.fit).toBe("Regular Fit");
     expect(defaults.fabric).toBe("Cotton");
     expect(deriveGenericName("Teal Floral Embroidered Tunic", "Image dobara lein", "Image dobara lein")).toBe("Tunic");
+    expect(deriveGenericName("Women's Navy Checked Shirt", "Shirts", "Shirt")).toBe("Shirt");
     expect(deriveFabric("", "Teal Floral Embroidered Tunic")).toBe("Cotton");
     expect(deriveFabric("Rayon Blend")).toBe("Rayon");
     expect(deriveOccasion("", "casual daily wear")).toBe("Daily");
@@ -225,6 +226,11 @@ describe("shop helpers", () => {
     expect(sanitizeStoreName("Krishnasrstore")).toBe("Krishnasrstore");
     history.replaceState({}, "", "/panel?supplierId=shop-22");
     expect(meeshoUid()).toBe("shop-22");
+    history.replaceState({}, "", "/panel/v3/new/cataloging/y2ogj/catalogs/single/add");
+    expect(meeshoUid()).toBe("y2ogj");
+    expect(sanitizeStoreName("Purple")).toBe("");
+    expect(sanitizeStoreName("Purple-Kurti-D5560")).toBe("");
+    expect(sanitizeStoreName("Krishnasrstore")).toBe("Krishnasrstore");
   });
 });
 
@@ -375,6 +381,8 @@ describe("meesho page scan", () => {
     expect(sizeAliases("M (38)")).toEqual(expect.arrayContaining(["M", "38", "M (38)"]));
     const measures = measuresForSize("M", { title: "Women White Rayon Printed Top" });
     expect(measures?.bust).toBe("36");
+    expect(measuresForSize("M", { title: "Women's Checked Casual Shirt", gender: "Women" })?.length).toBe("25");
+    expect(measuresForSize("M", { title: "Women Kurti" })?.length).toBe("42");
     const chart = await fillSizeChart({
       skuId: "NS-1",
       inventory: "5",
@@ -536,6 +544,18 @@ describe("meesho category detection", () => {
       "Tops & Tunics",
     ]);
     expect(isMeeshoProductDetailsPage()).toBe(false);
+  });
+
+  it("maps a women's shirt to women shirts, not men's t-shirts", async () => {
+    const { categoryClickPath } = await import("../src/content/shared/meeshoCatalog");
+    document.body.innerHTML = "<main><h1>Add Single Catalog</h1></main>";
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    expect(categoryClickPath({ gender: "Women", productType: "Shirt", name: "Women's Checked Casual Shirt" })).toEqual([
+      "Women Fashion",
+      "Western Wear",
+      "Tops, Tshirts & Shirts",
+      "Shirts",
+    ]);
   });
 
   it("does not treat Catalog Uploads list or the extension sidebar as a product form", async () => {

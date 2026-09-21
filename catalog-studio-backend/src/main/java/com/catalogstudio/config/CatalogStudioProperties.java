@@ -20,7 +20,38 @@ public record CatalogStudioProperties(
 ) {
     public record Jwt(String secret, long accessTokenMinutes, long refreshTokenDays) {}
 
-    public record Cors(List<String> allowedOrigins) {}
+    public record Cors(List<String> allowedOrigins) {
+        public String publicAppOrigin() {
+            if (allowedOrigins != null) {
+                String local = null;
+                for (String raw : allowedOrigins) {
+                    if (raw == null || raw.isBlank()) {
+                        continue;
+                    }
+                    String origin = raw.trim().replaceAll("/+$", "");
+                    if (origin.contains("*")) {
+                        continue;
+                    }
+                    String lower = origin.toLowerCase();
+                    if (lower.contains("catalogstudio.in")) {
+                        return origin;
+                    }
+                    if (local == null && (lower.contains("localhost") || lower.contains("127.0.0.1"))) {
+                        local = origin;
+                    }
+                }
+                if (local != null) {
+                    return local;
+                }
+                for (String raw : allowedOrigins) {
+                    if (raw != null && !raw.isBlank() && !raw.contains("*")) {
+                        return raw.trim().replaceAll("/+$", "");
+                    }
+                }
+            }
+            return "http://localhost:5173";
+        }
+    }
 
     public record Storage(String provider, String localPath, String publicBaseUrl) {}
 

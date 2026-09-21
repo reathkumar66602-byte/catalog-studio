@@ -3,7 +3,7 @@ import { dirname, join, posix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const distDir = join(root, "dist");
+const distDir = join(root, process.env.CS_EXT_OUT || "dist");
 const releaseDir = join(root, "release");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const version = pkg.version;
@@ -120,4 +120,4 @@ const zipPath = join(releaseDir, zipName);
 writeFileSync(zipPath, zipStore(collectFiles(distDir)));
 
 console.log(`Chrome Web Store zip: ${relative(root, zipPath)}`);
-console.log("Load unpacked from catalog-studio-extension/dist to test against the live API before upload.");
+console.log(`Prod unpacked build: ${relative(root, distDir)}`);

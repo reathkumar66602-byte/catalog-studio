@@ -28,6 +28,7 @@ import com.catalogstudio.security.AuthUser;
 import com.catalogstudio.security.JwtService;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.service.SubscriptionAccessService;
+import com.catalogstudio.email.service.TemplatedEmailService;
 import com.catalogstudio.otp.entity.OtpChallenge;
 import com.catalogstudio.otp.service.OtpService;
 import com.catalogstudio.user.entity.User;
@@ -35,6 +36,7 @@ import com.catalogstudio.user.repository.UserRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +63,7 @@ public class AuthService {
     private final CatalogStudioProperties properties;
     private final AuditService auditService;
     private final OtpService otpService;
+    private final TemplatedEmailService templatedEmailService;
 
     @Transactional
     public AuthFlowResponse register(RegisterRequest request, String ip, String userAgent) {
@@ -203,20 +206,19 @@ public class AuthService {
     }
 
     @Transactional
-    public void forgotPassword(ForgotPasswordRequest request) {
-        userRepository.findByEmailIgnoreCase(request.email()).ifPresent(user -> {
-            String token = TokenHasher.randomToken(32);
-            passwordTokenRepository.save(PasswordResetToken.builder()
-                    .user(user)
-                    .tokenHash(TokenHasher.sha256(token))
-                    .expiresAt(Instant.now().plus(2, ChronoUnit.HOURS))
-                    .build());
-            log.info("Password reset token for {} is {}", user.getEmail(), token);
-        });
+    public void forgotPassword(ForgotPasswordRequest request, String ip) {
+        String email = request.email() == null ? "" : request.email().trim();
+        if (!StringUtils.hasText(email)) {
+            return;
+        }
+        userRepository.findByEmailIgnoreCase(email).ifPresent(user -> sendPasswordReset(user, ip));
     }
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
+        if (StringUtils.hasText(request.confirmPassword()) && !request.password().equals(request.confirmPassword())) {
+            throw ApiException.badRequest("Password and confirm password do not match");
+        }
         PasswordResetToken stored = passwordTokenRepository.findByTokenHash(TokenHasher.sha256(request.token()))
                 .orElseThrow(() -> ApiException.badRequest("Invalid reset token"));
         if (stored.getUsedAt() != null || stored.getExpiresAt().isBefore(Instant.now())) {
@@ -225,6 +227,7 @@ public class AuthService {
         stored.setUsedAt(Instant.now());
         stored.getUser().setPasswordHash(passwordEncoder.encode(request.password()));
         sessionRepository.revokeAllForUser(stored.getUser().getId());
+        auditService.log(stored.getUser(), "PASSWORD_RESET", "USER", stored.getUser().getUuid().toString(), null, Map.of());
     }
 
     @Transactional
@@ -235,6 +238,42 @@ public class AuthService {
                 session.setRevoked(true);
             }
         });
+    }
+
+    private void sendPasswordReset(User user, String ip) {
+        if (user.getStatus() == User.UserStatus.DISABLED) {
+            return;
+        }
+        passwordTokenRepository.invalidateUnusedForUser(user.getId());
+        String token = TokenHasher.randomToken(32);
+        passwordTokenRepository.save(PasswordResetToken.builder()
+                .user(user)
+                .tokenHash(TokenHasher.sha256(token))
+                .expiresAt(Instant.now().plus(2, ChronoUnit.HOURS))
+                .build());
+        String resetLink = properties.cors().publicAppOrigin() + "/reset-password?token=" + token;
+        Map<String, String> vars = new LinkedHashMap<>();
+        vars.put("name", user.getName() == null ? "there" : user.getName());
+        vars.put("username", user.getUsername() == null ? user.getName() : user.getUsername());
+        vars.put("email", user.getEmail());
+        vars.put("appName", "Catalog Studio");
+        vars.put("resetLink", resetLink);
+        vars.put("expiresMinutes", "120");
+        boolean sent = templatedEmailService.send("password-reset", user.getEmail(), vars);
+        if (!sent) {
+            if (!properties.mail().enabled()) {
+                log.warn("Mail disabled; password reset email skipped for {}", user.getEmail());
+            } else {
+                log.error("Password reset email was not delivered to {} via {}", user.getEmail(),
+                        properties.mail().resolvedHost());
+            }
+            if (properties.otp().logCode()) {
+                log.info("Password reset token for {} is {}", user.getEmail(), token);
+            }
+        } else {
+            log.info("Password reset email queued for {}", user.getEmail());
+        }
+        auditService.log(user, "PASSWORD_RESET_REQUESTED", "USER", user.getUuid().toString(), ip, Map.of());
     }
 
     private void assignPlan(User user, String referralCode) {

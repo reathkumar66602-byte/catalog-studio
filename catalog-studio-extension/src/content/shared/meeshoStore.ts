@@ -49,6 +49,12 @@ const NAV_NOISE = [
   "required",
 ];
 
+const COLOR_NOISE = new Set([
+  "purple", "navy", "navy blue", "blue", "red", "pink", "black", "white", "green", "yellow",
+  "orange", "grey", "gray", "brown", "beige", "cream", "maroon", "olive", "teal", "gold",
+  "silver", "wine", "rust", "peach", "mustard", "khaki", "lavender", "coral", "magenta",
+]);
+
 const PREFERRED_NAME_KEYS = [
   "shopName", "shop_name", "storeName", "store_name", "supplierName", "supplier_name",
   "sellerName", "seller_name", "businessName", "business_name", "firmName", "companyName",
@@ -83,6 +89,9 @@ export function meeshoUid() {
     const href = location.href;
     const fromQuery = href.match(/[?&](?:supplierId|supplier_id|shopId|shop_id)=([^&]+)/i);
     if (fromQuery?.[1]) return decodeURIComponent(fromQuery[1]).slice(0, 80);
+    const fromPath = href.match(/\/cataloging\/([^/?#]+)/i);
+    const slug = fromPath?.[1] || "";
+    if (slug && !/^(new|v3|panel|add|single)$/i.test(slug)) return slug.slice(0, 80);
   } catch {
     // ignore
   }
@@ -274,7 +283,16 @@ export function sanitizeStoreName(raw: string) {
   if (/[^a-z0-9 .'_&()/-]/i.test(name)) return "";
   if (/\b(select|add|save|discard|catalog|product|image)\b/i.test(name) && name.includes(" ")) return "";
   if (looksLikeIdentifier(name)) return "";
+  if (looksLikeListingToken(name)) return "";
   return name;
+}
+
+function looksLikeListingToken(name: string) {
+  const lower = name.toLowerCase();
+  if (COLOR_NOISE.has(lower)) return true;
+  if (/^(navy|sky|light|dark|off)\s+(blue|green|pink|grey|gray|brown|white)$/i.test(name)) return true;
+  if (/^[a-z]+-[a-z0-9]+-d?\d{2,}$/i.test(name.replace(/\s+/g, ""))) return true;
+  return false;
 }
 
 function scoreStoreName(name: string, source?: MeeshoStore["source"]) {

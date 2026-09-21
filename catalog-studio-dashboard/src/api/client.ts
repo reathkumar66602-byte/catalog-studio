@@ -12,7 +12,9 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem("cs_access");
   const url = String(config.url || "");
   const publicSite = url === "/site" || url.startsWith("/site/");
-  if (token && !publicSite) {
+  const publicAuth =
+    url.startsWith("/auth/forgot-password") || url.startsWith("/auth/reset-password");
+  if (token && !publicSite && !publicAuth) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -24,7 +26,7 @@ api.interceptors.response.use(
     const original = error.config;
     if (error.response?.status === 401 && !original._retry && localStorage.getItem("cs_refresh")) {
       const url = String(original.url || "");
-      if (url === "/site" || url.startsWith("/site/")) {
+      if (url === "/site" || url.startsWith("/site/") || url.startsWith("/auth/forgot-password") || url.startsWith("/auth/reset-password")) {
         return Promise.reject(error);
       }
       original._retry = true;
@@ -45,7 +47,7 @@ api.interceptors.response.use(
     }
     if (error.response?.status === 402) {
       const here = window.location.pathname;
-      if (here !== "/subscription" && !here.startsWith("/login")) {
+      if (here !== "/subscription" && !here.startsWith("/login") && here !== "/forgot-password" && here !== "/reset-password" && here !== "/register") {
         window.location.href = "/subscription";
       }
     }

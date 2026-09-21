@@ -117,6 +117,7 @@ export const CATEGORY_PATHS: Record<string, string[]> = {
   Dresses: ["Women Fashion", "Western Wear", "Dresses, Gowns & Jumpsuits", "Dresses"],
   "Tops & Tunics": ["Women Fashion", "Western Wear", "Tops, Tshirts & Shirts", "Tops & Tunics"],
   "T-shirts": ["Women Fashion", "Western Wear", "Tops, Tshirts & Shirts", "T-shirts"],
+  Shirts: ["Women Fashion", "Western Wear", "Tops, Tshirts & Shirts", "Shirts"],
 };
 
 export function readMeeshoCategoryFromPage() {
@@ -285,6 +286,14 @@ function pathFromBreadcrumb() {
   return [];
 }
 
+function isWomenAudience(blob: string) {
+  return /\bwom[ae]n|ladies|female|girls?\b/.test(blob);
+}
+
+function isMenAudience(blob: string) {
+  return (/\bmen\b|\bmale\b|\bboys?\b/.test(blob) || /\bmens\b/.test(blob)) && !isWomenAudience(blob);
+}
+
 export function categoryClickPath(product: ProductLike): string[] {
   const pagePath = readMeeshoCategoryPath();
   if (pagePath.length >= 2) return pagePath;
@@ -310,10 +319,16 @@ export function categoryClickPath(product: ProductLike): string[] {
     return CATEGORY_PATHS.Sarees;
   }
   if (/\bt-?shirt|\btee\b/.test(blob)) {
-    if (/\bwom[ae]n|ladies/.test(blob)) {
-      return ["Women Fashion", "Western Wear", "Tops, Tshirts & Shirts", "T-shirts"];
+    if (isMenAudience(blob)) {
+      return ["Men Fashion", "Western Wear", "T-shirts"];
     }
-    return ["Men Fashion", "Western Wear", "T-shirts"];
+    return CATEGORY_PATHS["T-shirts"];
+  }
+  if (/\bshirts?\b/.test(blob)) {
+    if (isMenAudience(blob)) {
+      return ["Men Fashion", "Casual Wear", "Shirts"];
+    }
+    return CATEGORY_PATHS.Shirts;
   }
   if (/\bgown|jumpsuit/.test(blob)) {
     return CATEGORY_PATHS["Western Gowns"];

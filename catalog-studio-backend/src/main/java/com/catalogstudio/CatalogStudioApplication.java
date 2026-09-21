@@ -1,10 +1,14 @@
 package com.catalogstudio;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
@@ -18,8 +22,26 @@ import org.springframework.scheduling.annotation.EnableAsync;
 public class CatalogStudioApplication {
 
     public static void main(String[] args) {
-        loadDotEnv(List.of(Path.of(".env"), Path.of("..").resolve(".env")));
+        loadDotEnv(dotenvCandidates());
         SpringApplication.run(CatalogStudioApplication.class, args);
+    }
+
+    static List<Path> dotenvCandidates() {
+        Set<Path> paths = new LinkedHashSet<>();
+        paths.add(Path.of(".env"));
+        paths.add(Path.of("..").resolve(".env"));
+        paths.add(Path.of("../..").resolve(".env"));
+        try {
+            Path source = Path.of(CatalogStudioApplication.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            Path dir = Files.isDirectory(source) ? source : source.getParent();
+            for (int i = 0; i < 5 && dir != null; i++) {
+                paths.add(dir.resolve(".env"));
+                dir = dir.getParent();
+            }
+        } catch (URISyntaxException | RuntimeException ignored) {
+            // keep cwd candidates
+        }
+        return new ArrayList<>(paths);
     }
 
     static void loadDotEnv(List<Path> candidates) {
@@ -40,10 +62,14 @@ public class CatalogStudioApplication {
                     }
                     String key = line.substring(0, eq).trim();
                     String value = unquote(line.substring(eq + 1).trim());
-                    if (key.isEmpty() || System.getenv(key) != null) {
+                    if (key.isEmpty()) {
                         continue;
                     }
-                    if (System.getProperty(key) == null) {
+                    String existingEnv = System.getenv(key);
+                    if (existingEnv != null && !existingEnv.isBlank()) {
+                        continue;
+                    }
+                    if (System.getProperty(key) == null || System.getProperty(key).isBlank()) {
                         System.setProperty(key, value);
                     }
                 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Catalog Studio Autofill",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Detect the Meesho store, generate listing details from the product photo, and fill the catalog form. Never auto-submits.",
   "icons": {
     "16": "icons/icon16.png",

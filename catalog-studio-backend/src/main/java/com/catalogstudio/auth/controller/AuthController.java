@@ -83,8 +83,8 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     @Operation(summary = "Request password reset")
-    public ApiResponse<Void> forgot(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.forgotPassword(request);
+    public ApiResponse<Void> forgot(@Valid @RequestBody ForgotPasswordRequest request, HttpServletRequest http) {
+        authService.forgotPassword(request, clientIp(http));
         return ApiResponse.okMessage("If the email exists, a reset link has been sent");
     }
 

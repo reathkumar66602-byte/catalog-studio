@@ -3,6 +3,7 @@ import { build, loadEnv } from "vite";
 const modeIndex = process.argv.indexOf("--mode");
 const mode = modeIndex >= 0 ? process.argv[modeIndex + 1] : "production";
 const env = loadEnv(mode, process.cwd(), "VITE_");
+const outDir = process.env.CS_EXT_OUT || "dist";
 
 const entries = ["awake", "pair", "scout", "imgsync"];
 
@@ -19,7 +20,7 @@ for (const name of entries) {
     esbuild: { minifyIdentifiers: false },
     build: {
       emptyOutDir: false,
-      outDir: "dist",
+      outDir,
       minify: false,
       lib: {
         entry: `src/content/${name}.ts`,

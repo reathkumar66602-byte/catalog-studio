@@ -35,6 +35,8 @@ uploads/
 # Extension build
 listingai-extension/dist/
 catalog-studio-extension/release/
+catalog-studio-extension/dist-local/
+catalog-studio-extension/dist-prod/
 
 # Test
 coverage/

@@ -50,6 +50,26 @@ public class TemplatedEmailService {
                 text = "New enquiry from " + vars.getOrDefault("name", "") + " (" + vars.getOrDefault("email", "") + "). "
                         + vars.getOrDefault("message", "");
                 html = "<p>" + text + "</p>";
+            } else if ("password-reset".equalsIgnoreCase(slug)) {
+                String name = vars.getOrDefault("name", "there");
+                String link = vars.getOrDefault("resetLink", "");
+                String minutes = vars.getOrDefault("expiresMinutes", "120");
+                subject = "Reset your Catalog Studio password";
+                text = "Hi " + name + ", reset your Catalog Studio password: " + link
+                        + " This link expires in " + minutes + " minutes. If you did not request it, you can ignore this email.";
+                html = "<div style=\"font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+                        + "<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;\">"
+                        + "<p style=\"margin:0 0 8px;color:#0f766e;font-size:12px;letter-spacing:.16em;text-transform:uppercase;\">Catalog Studio</p>"
+                        + "<h1 style=\"margin:0 0 16px;font-size:22px;color:#0f172a;\">Reset your password</h1>"
+                        + "<p style=\"margin:0 0 16px;color:#334155;line-height:1.6;\">Hi " + name
+                        + ", we received a request to reset the password for " + vars.getOrDefault("email", "your account")
+                        + ".</p>"
+                        + "<p style=\"margin:0 0 20px;\"><a href=\"" + link
+                        + "\" style=\"display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;"
+                        + "padding:12px 20px;border-radius:8px;font-weight:600;\">Reset password</a></p>"
+                        + "<p style=\"margin:0;color:#64748b;font-size:13px;\">This link expires in " + minutes
+                        + " minutes. If you did not request it, you can ignore this email.</p>"
+                        + "</div></div>";
             } else {
                 subject = vars.getOrDefault("subject", "Catalog Studio message");
                 text = vars.getOrDefault("message", "");

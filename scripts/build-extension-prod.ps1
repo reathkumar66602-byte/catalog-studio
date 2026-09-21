@@ -17,5 +17,5 @@ if ($LASTEXITCODE -ne 0) { throw "npm run build:prod failed" }
 $zip = Get-ChildItem -Path (Join-Path (Get-Location) "release\catalog-studio-extension-*.zip") | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 Write-Host ""
 Write-Host "Production zip: $($zip.FullName)"
-Write-Host "Test unpacked from: $(Join-Path (Get-Location) 'dist')"
+Write-Host "Test unpacked from: $(Join-Path (Get-Location) 'dist-prod')"
 Write-Host "Publish steps: docs/CHROME_EXTENSION_PUBLISH.md"

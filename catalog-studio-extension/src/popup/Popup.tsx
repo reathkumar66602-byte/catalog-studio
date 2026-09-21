@@ -79,7 +79,7 @@ export function Popup() {
         <img src={LOGO} width={36} height={36} alt="Catalog Studio" />
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 16 }}>Catalog Studio</h2>
-          <p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>{t("popup.tagline")} v1.4.0</p>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>{t("popup.tagline")} v1.4.1</p>
         </div>
       </div>
       <label style={{ display: "block", fontSize: 12, marginBottom: 10 }}>

@@ -200,6 +200,7 @@ function genericFromBlob(blob: string) {
   if (/\bkurti/.test(text)) return "Kurti";
   if (/\bkurta/.test(text)) return "Kurta";
   if (/\bt-?shirt|\btee\b/.test(text)) return "T-shirt";
+  if (/\bshirts?\b/.test(text)) return "Shirt";
   if (/\btops?\b/.test(text)) return "Top";
   if (/\bsaree/.test(text)) return "Saree";
   if (/\bdress/.test(text)) return "Dress";

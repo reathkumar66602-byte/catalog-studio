@@ -39,21 +39,22 @@ Output:
 
 | Path | Use |
 | --- | --- |
-| `catalog-studio-extension/dist/` | Load unpacked for a live-API test |
+| `catalog-studio-extension/dist/` or `dist-local/` | Load unpacked against local API |
+| `catalog-studio-extension/dist-prod/` | Load unpacked against the live API |
 | `catalog-studio-extension/release/catalog-studio-extension-1.4.0.zip` | Upload this to the Chrome Web Store |
 
-The prod zip **does not** include localhost permissions. `npm run build` still builds a localhost package for local development.
+The prod zip **does not** include localhost permissions. `npm run build` emits both a localhost unpacked folder (`dist` / `dist-local`) and a production unpacked folder plus zip (`dist-prod` / `release`).
 
 ## 3. Test the ZIP against the live site (before Google review)
 
 1. Open Chrome and go to `chrome://extensions`.
 2. Turn on **Developer mode**.
 3. Click **Load unpacked**.
-4. Select `d:\catalog-studio\catalog-studio-extension\dist` (the folder that contains `manifest.json`, not the zip, not `src`).
+4. Select `d:\catalog-studio\catalog-studio-extension\dist-prod` (the folder that contains `manifest.json`, not the zip, not `src`).
 5. Open `https://www.catalogstudio.in/login`, sign in, and open `/extension`. Pairing should happen automatically.
 6. Open Meesho **Add Single Catalog**, click the Catalog Studio button, Generate, then Fill Values for Form. Confirm it does **not** submit the listing for you.
 
-If an older unpacked build was pointing at localhost, click **Remove** first, then load this `dist` again.
+If an older unpacked build was pointing at localhost, click **Remove** first, then load this `dist-prod` again.
 
 To install from the zip itself: unzip it to a folder, then Load unpacked on that folder. Chrome cannot load a `.zip` or `.jar` directly.
 
@@ -102,9 +103,10 @@ Later updates: bump `version` in `catalog-studio-extension/package.json` **and**
 
 ## Local vs production builds
 
-| Command | API | Pairing pages | Use |
+| Command | Output | API | Use |
 | --- | --- | --- | --- |
-| `npm run build` | `http://localhost:8080/api/v1` | localhost | Daily development |
-| `npm run build:prod` | `https://www.catalogstudio.in/api/v1` | catalogstudio.in | Live test + Chrome Web Store |
+| `npm run build` | `dist` + `dist-local` (local) and `dist-prod` + `release/*.zip` (production) | localhost **and** catalogstudio.in | Daily build: both unpacked folders |
+| `npm run build:local` | `dist` + `dist-local` | `http://localhost:8080/api/v1` | Local unpacked only |
+| `npm run build:prod` | `dist-prod` + `release/*.zip` | `https://www.catalogstudio.in/api/v1` | Live test + Chrome Web Store |
 
 Do not upload the localhost zip to the store. Google will reject localhost host permissions for a public product.

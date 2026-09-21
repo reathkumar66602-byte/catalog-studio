@@ -37,6 +37,7 @@ type GeneratedState = {
   productType?: string;
   category?: string;
   subCategory?: string;
+  gender?: string;
   primaryColor?: string;
   pattern?: string;
   printType?: string;
@@ -240,8 +241,13 @@ function injectUi() {
     #cs-sidebar header .brand img { width:32px; height:32px; border-radius:9px; background:#fff; }
     #cs-sidebar header .brand small { display:block; opacity:.8; font-weight:500; font-size:11px; }
     #cs-sidebar header #cs-close { width:auto; margin:0; background:transparent; color:#fff; border-color:rgba(255,255,255,.25); }
-    #cs-sidebar header .cs-head-actions { display:flex; align-items:center; gap:6px; }
-    #cs-sidebar header #cs-locale { width:auto; max-width:7.5rem; margin:0; padding:4px 6px; font-size:12px; color:#0f172a; }
+    #cs-sidebar header .cs-head-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+    #cs-sidebar header .cs-locale-wrap { display:flex; align-items:center; height:32px; padding:0 4px 0 8px; background:#fff; border:1px solid rgba(255,255,255,.85); border-radius:999px; box-shadow:0 1px 2px rgba(15,23,42,.18); }
+    #cs-sidebar header .cs-locale-wrap:hover, #cs-sidebar header .cs-locale-wrap:focus-within { box-shadow:0 0 0 2px rgba(255,255,255,.28), 0 1px 2px rgba(15,23,42,.18); }
+    #cs-sidebar header .cs-locale-wrap::before { content:"Aअ"; display:flex; align-items:center; justify-content:center; margin-right:4px; font-size:10px; font-weight:800; letter-spacing:-.05em; color:#0f766e; line-height:1; }
+    #cs-sidebar header #cs-locale { -webkit-appearance:none; appearance:none; width:auto !important; max-width:7.2rem; min-width:4.6rem; margin:0 !important; padding:4px 22px 4px 2px !important; font:600 12px/1.2 Segoe UI,sans-serif; color:#134e4a !important; background-color:#fff !important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%230f766e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 4px center; border:0 !important; border-radius:0 !important; box-shadow:none; cursor:pointer; color-scheme:light; }
+    #cs-sidebar header #cs-locale:focus { outline:none; }
+    #cs-sidebar header #cs-locale option { color:#0f172a; background:#fff; }
     #cs-sidebar .body { padding:16px; overflow:auto; height:calc(100vh - 64px); }
     #cs-sidebar input, #cs-sidebar button, #cs-sidebar select, #cs-sidebar textarea { width:100%; margin:6px 0; padding:8px; border-radius:10px; border:1px solid #e2e8f0; box-sizing:border-box; }
     #cs-sidebar .btn { background:#0f766e; color:#fff; border:0; font-weight:600; cursor:pointer; }
@@ -289,9 +295,9 @@ function injectUi() {
   sidebar.id = "cs-sidebar";
   sidebar.innerHTML = `
     <header>
-      <div class="brand">${logoImg(32)}<div><strong>Catalog Studio</strong><small data-i18n="ext.autofill">Auto-Fill v1.4.0</small></div></div>
+      <div class="brand">${logoImg(32)}<div><strong>Catalog Studio</strong><small data-i18n="ext.autofill">Auto-Fill v1.4.1</small></div></div>
       <div class="cs-head-actions">
-        <select id="cs-locale">${localeOptionsHtml()}</select>
+        <label class="cs-locale-wrap"><select id="cs-locale" aria-label="Language">${localeOptionsHtml()}</select></label>
         <button id="cs-close" data-i18n="ext.close">Close</button>
       </div>
     </header>
@@ -466,6 +472,7 @@ function applyOverlayLocale() {
   if (sidebar) applyStaticI18n(sidebar);
   const select = document.getElementById("cs-locale") as HTMLSelectElement | null;
   if (select) {
+    select.setAttribute("aria-label", t("lang.label"));
     select.innerHTML = localeOptionsHtml();
     select.value = currentLocale();
   }
@@ -775,7 +782,9 @@ async function analyzePickedImage() {
     const keywords = String(sellerSettings.keywords || []).length
       ? ` Keywords: ${(sellerSettings.keywords as string[]).join(", ")}.`
       : "";
-    const pageCategory = readMeeshoCategoryFromPage();
+    const categoryLeaf = readMeeshoCategoryFromPage();
+    const categoryPath = readMeeshoCategoryPath().join(" / ");
+    const pageCategory = categoryPath || categoryLeaf;
     if (shopLock === "bad" && !isMeeshoPageChrome(shopLockMessage)) {
       setProgress(shopLockMessage || t("ext.shopMismatch"), true);
       return;
@@ -815,6 +824,7 @@ async function analyzePickedImage() {
       productType: product.productType,
       category: product.category,
       subCategory: product.subCategory,
+      gender: product.gender,
       primaryColor: product.primaryColor,
       pattern: split.pattern,
       printType: split.printType,
@@ -827,7 +837,7 @@ async function analyzePickedImage() {
       comboOf: combo.label,
       netQuantity: combo.quantity,
       ornamentation: detectOrnamentation(notes, product.pattern, product.productDescription, product.style),
-      genericName: pageCategory || product.productType || product.subCategory,
+      genericName: categoryLeaf || product.productType || product.subCategory,
       titles: uniqueTexts(product.suggestedTitles || []),
       descriptions: uniqueTexts([...(product.suggestedDescriptions || []), product.productDescription]),
       selectedTitle: 0,
@@ -875,6 +885,7 @@ function renderGenerated() {
   if (!panel || !generated) return;
   panel.style.display = "block";
   const attrs = [
+    ["Gender", generated.gender],
     ["Color", generated.primaryColor],
     ["Combo of", generated.comboOf],
     ["Fabric", generated.material],
@@ -882,6 +893,8 @@ function renderGenerated() {
     ["Net Quantity (N)", generated.netQuantity],
     ["Pattern", generated.pattern],
     ["Print or Pattern Type", generated.printType],
+    ["Sleeve", generated.sleeveType],
+    ["Fit", generated.fit],
     ["Country of Origin", "India"],
     ["Manufacturer", detectedStore?.name || businessProfile?.name || ""],
     ["Ornamentation", generated.ornamentation],
@@ -1097,6 +1110,7 @@ function currentListing(): MappedListing {
     || (/kurti|kurta|dress|gown|t-?shirt|tee|top|tunic/.test(`${pageCategory} ${title}`.toLowerCase()) ? "Round Neck" : "");
   return {
     title,
+    gender: generated?.gender || String(selected?.gender || ""),
     color,
     pattern,
     printType: generated?.printType || split.printType,

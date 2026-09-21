@@ -109,6 +109,15 @@ public class ExtensionFeatureService {
         boolean nameOk = namesMatch(lockedName, incoming);
         boolean uidOk = lockedUid.isEmpty() || uid.isEmpty() || lockedUid.equalsIgnoreCase(uid);
         if (nameOk && uidOk) {
+            if (lockedUid.isEmpty() && !uid.isEmpty()) {
+                settings.put("lockedShopUid", uid);
+                saveSettings(userId, settings);
+            }
+            out.put("status", "ok");
+            out.put("registered", lockedName);
+            return out;
+        }
+        if (!lockedUid.isEmpty() && !uid.isEmpty() && lockedUid.equalsIgnoreCase(uid)) {
             out.put("status", "ok");
             out.put("registered", lockedName);
             return out;
@@ -457,12 +466,30 @@ public class ExtensionFeatureService {
         if (compact.isEmpty()) {
             return false;
         }
-        return compact.contains("loginto")
+        if (compact.contains("loginto")
                 || compact.contains("signin")
                 || compact.contains("supplierpanel")
                 || compact.contains("sellerpanel")
                 || compact.equals("meesho")
-                || compact.equals("login");
+                || compact.equals("login")) {
+            return true;
+        }
+        return isListingTokenName(value);
+    }
+
+    private boolean isListingTokenName(String value) {
+        String compact = normalizeName(value);
+        return compact.equals("purple")
+                || compact.equals("navy")
+                || compact.equals("navyblue")
+                || compact.equals("maroon")
+                || compact.equals("black")
+                || compact.equals("white")
+                || compact.equals("red")
+                || compact.equals("pink")
+                || compact.equals("blue")
+                || compact.equals("green")
+                || compact.matches("[a-z]+[a-z0-9]+d?\\d{2,}");
     }
 
     private String normalizeName(String value) {

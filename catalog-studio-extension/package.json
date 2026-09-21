@@ -1,12 +1,13 @@
 {
   "name": "catalog-studio-extension",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "icons": "node generate-icons.mjs",
-    "build": "node generate-icons.mjs && vite build && vite build --config vite.content.config.ts && vite build --config vite.background.config.ts && node build-extras.mjs",
+    "build": "node build-all.mjs",
+    "build:local": "node build-local.mjs",
     "build:prod": "node build-prod.mjs",
     "test": "vitest run"
   },

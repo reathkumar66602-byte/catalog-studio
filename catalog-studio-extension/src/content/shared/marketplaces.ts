@@ -2,6 +2,7 @@ import type { SelectorHint } from "./fieldFinder";
 
 export type MappedListing = {
   title?: string;
+  gender?: string;
   color?: string;
   pattern?: string;
   printType?: string;

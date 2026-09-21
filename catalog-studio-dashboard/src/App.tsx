@@ -7,6 +7,8 @@ import { AdminRoute } from "./routes/AdminRoute";
 import { AppLayout } from "./layout/AppLayout";
 import { LoginPage } from "./features/auth/LoginPage";
 import { RegisterPage } from "./features/auth/RegisterPage";
+import { ForgotPasswordPage } from "./features/auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "./features/auth/ResetPasswordPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AnalyzePage } from "./features/analysis/AnalyzePage";
 import { ReviewPage } from "./features/analysis/ReviewPage";
@@ -59,6 +61,8 @@ export default function App() {
               </Route>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<EntitlementGate />}>
                   <Route element={<AppLayout />}>

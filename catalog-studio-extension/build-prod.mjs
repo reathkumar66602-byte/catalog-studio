@@ -4,13 +4,14 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const mode = "store";
+const out = process.env.CS_EXT_OUT || "dist-prod";
 
 function run(command, args) {
   const result = spawnSync(command, args, {
     cwd: root,
     stdio: "inherit",
     shell: process.platform === "win32",
-    env: process.env,
+    env: { ...process.env, CS_EXT_OUT: out },
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
