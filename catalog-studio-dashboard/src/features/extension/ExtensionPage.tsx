@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, apiErrorMessage } from "../../api/client";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type Device = { id: string; deviceName: string; status: string; lastActiveAt?: string };
 
@@ -16,6 +17,7 @@ type ExtSettings = {
 type Quota = { plan?: string; used?: number; limit?: number; remaining?: number; requiresRecharge?: boolean };
 
 export function ExtensionPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const devicesQuery = useQuery({
     queryKey: ["devices"],
@@ -27,14 +29,10 @@ export function ExtensionPage() {
       (await api.get("/extension/workspace")).data.data as {
         settings: ExtSettings;
         quota: Quota;
-        lastTicket?: { draft?: string; ticketNo?: string };
       },
   });
   const [key, setKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [ticket, setTicket] = useState("");
-  const [loginE, setLoginE] = useState("");
-  const [loginP, setLoginP] = useState("");
   const [confirmKey, setConfirmKey] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -45,9 +43,6 @@ export function ExtensionPage() {
     if (!workspace.data?.settings) return;
     setSettings(workspace.data.settings);
     setKeywords((workspace.data.settings.keywords || []).join(", "));
-    if (workspace.data.lastTicket?.draft) {
-      setTicket((current) => current || workspace.data.lastTicket?.draft || "");
-    }
   }, [workspace.data]);
 
   const generate = useMutation({
@@ -59,12 +54,12 @@ export function ExtensionPage() {
       setActionError("");
       qc.invalidateQueries({ queryKey: ["devices"] });
     },
-    onError: (err) => setActionError(apiErrorMessage(err, "Could not generate pairing key")),
+    onError: (err) => setActionError(apiErrorMessage(err, t("app.extGenFail"))),
   });
   const revoke = useMutation({
     mutationFn: (id: string) => api.post(`/extension/devices/${id}/revoke`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
-    onError: (err) => setActionError(apiErrorMessage(err, "Could not revoke device")),
+    onError: (err) => setActionError(apiErrorMessage(err, t("app.extRevokeFail"))),
   });
   const saveSettings = useMutation({
     mutationFn: () =>
@@ -77,10 +72,10 @@ export function ExtensionPage() {
           .filter(Boolean),
       }),
     onSuccess: async () => {
-      setActionMessage("Extension settings saved");
+      setActionMessage(t("app.extSaved"));
       await qc.invalidateQueries({ queryKey: ["extension-workspace"] });
     },
-    onError: (err) => setActionError(apiErrorMessage(err, "Could not save extension settings")),
+    onError: (err) => setActionError(apiErrorMessage(err, t("app.extSaveFail"))),
   });
 
   const devices = devicesQuery.data || [];
@@ -88,59 +83,37 @@ export function ExtensionPage() {
   const pack = settings.packaging || {};
   const price = settings.priceRule || {};
 
-  async function armTicket() {
-    setActionError("");
-    setActionMessage("");
-    const draft = ticket.slice(0, 4000);
-    try {
-      await api.post("/extension/workspace/tickets", { draft });
-      window.postMessage({ type: "CS_TICKET_MSG", msg: draft }, window.location.origin);
-      setActionMessage("Ticket draft saved and armed in this browser for 30 minutes.");
-    } catch (err) {
-      setActionError(apiErrorMessage(err, "Could not save ticket draft"));
-    }
-  }
-
-  function armLogin() {
-    window.postMessage({ type: "CS_LOGIN_FILL", e: loginE, p: loginP }, window.location.origin);
-    setLoginP("");
-    setActionMessage("Meesho login is armed in this browser for 3 minutes. Catalog Studio never stores that password.");
-    window.open("https://supplier.meesho.com/login", "_blank", "noopener,noreferrer");
-  }
-
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="text-2xl font-semibold">Chrome extension</h1>
-      <p className="text-slate-500">
-        Pair Catalog Studio Autofill with this workspace. Stay logged in here and the extension pairs itself — no key
-        paste needed. On Meesho it reads the shop name, then fills GST, HSN, manufacturer, packer, and product fields.
-        It never submits the listing for you.
-      </p>
+      <h1 className="text-2xl font-semibold">{t("app.extTitle")}</h1>
+      <p className="text-slate-500">{t("app.extBody")}</p>
       {quota && (
         <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-          Plan {quota.plan || "—"} · AI used {quota.used ?? 0}/{quota.limit ?? 0} this month · {quota.remaining ?? 0}{" "}
-          remaining
+          {t("app.extQuota", {
+            plan: quota.plan || "—",
+            used: quota.used ?? 0,
+            limit: quota.limit ?? 0,
+            remaining: quota.remaining ?? 0,
+          })}
         </p>
       )}
       {workspace.data?.settings?.lockedShopName && (
         <p className="text-sm text-slate-600">
-          Locked Meesho shop: <span className="font-medium">{workspace.data.settings.lockedShopName}</span>
+          {t("app.extLocked", { name: workspace.data.settings.lockedShopName })}
         </p>
       )}
       {actionError && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>}
       {actionMessage && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{actionMessage}</p>}
       <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-600">
-        <li>
-          Load the unpacked extension from <code>catalog-studio-extension/dist</code>.
-        </li>
-        <li>Keep this dashboard tab open while logged in. Pairing uses your short-lived JWT access token, then stores a hashed pairing key in the extension.</li>
-        <li>Optional fallback: generate a key and paste it in the extension options page.</li>
-        <li>Open Meesho Add Single Catalog. Click the Catalog Studio toolbar icon to toggle the sidebar.</li>
-        <li>Add the Front View photo, click Generate, review titles, then Fill Values for Form.</li>
+        <li>{t("app.extStep1")}</li>
+        <li>{t("app.extStep2")}</li>
+        <li>{t("app.extStep3")}</li>
+        <li>{t("app.extStep4")}</li>
+        <li>{t("app.extStep5")}</li>
       </ol>
       {!confirmKey ? (
         <button onClick={() => setConfirmKey(true)} className="rounded-xl bg-teal-700 px-4 py-2 text-white">
-          Generate pairing key
+          {t("app.extGenKey")}
         </button>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -149,10 +122,10 @@ export function ExtensionPage() {
             disabled={generate.isPending}
             className="rounded-xl bg-teal-700 px-4 py-2 text-white disabled:opacity-60"
           >
-            {generate.isPending ? "Generating..." : "Yes, create a new secret key"}
+            {generate.isPending ? t("app.extGenerating") : t("app.extGenYes")}
           </button>
           <button type="button" onClick={() => setConfirmKey(false)} className="rounded-xl border px-4 py-2">
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       )}
@@ -167,116 +140,127 @@ export function ExtensionPage() {
               setCopied(true);
             }}
           >
-            {copied ? "Copied" : "Copy key"}
+            {copied ? t("common.copied") : t("app.extCopyKey")}
           </button>
           <p className="mt-2 font-sans text-xs text-slate-400">
-            Treat this like a password. It is stored hashed on the server and will not be shown again.
+            {t("app.extSecret")}
           </p>
         </div>
       )}
       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="font-medium">Listing defaults</h2>
-        <p className="text-sm text-slate-500">Saved to your Catalog Studio account and used by the paired extension.</p>
+        <h2 className="font-medium">{t("app.extDefaults")}</h2>
+        <p className="text-sm text-slate-500">{t("app.extDefaultsHint")}</p>
+        <p className="text-sm text-slate-500">{t("ext.sellerPriceHint")}</p>
         {workspace.isError && (
-          <p className="text-sm text-rose-700">{apiErrorMessage(workspace.error, "Could not load extension settings")}</p>
+          <p className="text-sm text-rose-700">{apiErrorMessage(workspace.error, t("app.extLoadFail"))}</p>
         )}
         <div className="grid gap-3 sm:grid-cols-3">
-          <input
-            value={price.inventory ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                priceRule: { ...current.priceRule, inventory: Number(event.target.value) || 0 },
-              }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="Inventory"
-          />
-          <input
-            value={price.mrpMul ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                priceRule: { ...current.priceRule, mrpMul: Number(event.target.value) || 0 },
-              }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="MRP multiplier"
-          />
-          <input
-            value={price.retCut ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                priceRule: { ...current.priceRule, retCut: Number(event.target.value) || 0 },
-              }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="Retail cut"
-          />
+          <SettingField label={t("ext.inv")}>
+            <input
+              value={price.inventory ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  priceRule: { ...current.priceRule, inventory: Number(event.target.value) || 0 },
+                }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
+          <SettingField label={t("ext.mrpmul")}>
+            <input
+              value={price.mrpMul ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  priceRule: { ...current.priceRule, mrpMul: Number(event.target.value) || 0 },
+                }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
+          <SettingField label={t("ext.retcut")}>
+            <input
+              value={price.retCut ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  priceRule: { ...current.priceRule, retCut: Number(event.target.value) || 0 },
+                }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
         </div>
+        <p className="text-sm text-slate-500">{t("ext.sellerPackHint")}</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <input
-            value={pack.type ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({ ...current, packaging: { ...current.packaging, type: event.target.value } }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="Packaging type"
-          />
-          <input
-            value={pack.weight ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                packaging: { ...current.packaging, weight: event.target.value },
-              }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="Weight (g)"
-          />
+          <SettingField label={t("app.extPackType")}>
+            <input
+              value={pack.type ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({ ...current, packaging: { ...current.packaging, type: event.target.value } }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
+          <SettingField label={t("ext.packWt")}>
+            <input
+              value={pack.weight ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  packaging: { ...current.packaging, weight: event.target.value },
+                }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <input
-            value={pack.length ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                packaging: { ...current.packaging, length: event.target.value },
-              }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="Length"
-          />
-          <input
-            value={pack.width ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                packaging: { ...current.packaging, width: event.target.value },
-              }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="Width"
-          />
-          <input
-            value={pack.height ?? ""}
-            onChange={(event) =>
-              setSettings((current) => ({
-                ...current,
-                packaging: { ...current.packaging, height: event.target.value },
-              }))
-            }
-            className="rounded-xl border px-3 py-2"
-            placeholder="Height"
-          />
+          <SettingField label={t("ext.packL")}>
+            <input
+              value={pack.length ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  packaging: { ...current.packaging, length: event.target.value },
+                }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
+          <SettingField label={t("ext.packW")}>
+            <input
+              value={pack.width ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  packaging: { ...current.packaging, width: event.target.value },
+                }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
+          <SettingField label={t("ext.packH")}>
+            <input
+              value={pack.height ?? ""}
+              onChange={(event) =>
+                setSettings((current) => ({
+                  ...current,
+                  packaging: { ...current.packaging, height: event.target.value },
+                }))
+              }
+              className="w-full rounded-xl border px-3 py-2"
+            />
+          </SettingField>
         </div>
-        <input
-          value={keywords}
-          onChange={(event) => setKeywords(event.target.value)}
-          className="w-full rounded-xl border px-3 py-2"
-          placeholder="Keywords, comma separated"
-        />
+        <SettingField label={t("ext.keywords")}>
+          <input
+            value={keywords}
+            onChange={(event) => setKeywords(event.target.value)}
+            className="w-full rounded-xl border px-3 py-2"
+          />
+        </SettingField>
         <button
           type="button"
           disabled={saveSettings.isPending}
@@ -287,59 +271,16 @@ export function ExtensionPage() {
           }}
           className="rounded-xl bg-teal-700 px-4 py-2 text-white disabled:opacity-60"
         >
-          {saveSettings.isPending ? "Saving..." : "Save extension settings"}
+          {saveSettings.isPending ? t("app.extSaving") : t("app.extSave")}
         </button>
       </section>
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="font-medium">Support ticket helper</h2>
-        <p className="text-sm text-slate-500">
-          Draft is saved to your account and stays in this browser for 30 minutes to fill Meesho&apos;s Description box.
-          Catalog Studio never submits the ticket.
-        </p>
-        <textarea
-          value={ticket}
-          onChange={(e) => setTicket(e.target.value)}
-          rows={4}
-          className="w-full rounded-xl border px-3 py-2"
-          placeholder="Ticket description"
-        />
-        <button type="button" className="rounded-xl bg-teal-700 px-4 py-2 text-white" onClick={armTicket}>
-          Arm ticket fill
-        </button>
-      </section>
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="font-medium">Meesho login fill</h2>
-        <p className="text-sm text-slate-500">
-          Meesho credentials stay in this browser tab only. They are posted to the extension with{" "}
-          <code>window.postMessage</code> on this origin and expire in 3 minutes. Catalog Studio never sends this
-          password to the API.
-        </p>
-        <input
-          value={loginE}
-          onChange={(e) => setLoginE(e.target.value)}
-          autoComplete="off"
-          className="w-full rounded-xl border px-3 py-2"
-          placeholder="Meesho email or mobile"
-        />
-        <input
-          value={loginP}
-          onChange={(e) => setLoginP(e.target.value)}
-          type="password"
-          autoComplete="new-password"
-          className="w-full rounded-xl border px-3 py-2"
-          placeholder="Meesho password"
-        />
-        <button type="button" className="rounded-xl bg-teal-700 px-4 py-2 text-white" onClick={armLogin}>
-          Arm and open Meesho login
-        </button>
-      </section>
-      <h2 className="font-medium">Connected devices</h2>
+      <h2 className="font-medium">{t("app.extDevices")}</h2>
       {devicesQuery.isError && (
-        <p className="text-sm text-rose-700">{apiErrorMessage(devicesQuery.error, "Could not load devices")}</p>
+        <p className="text-sm text-rose-700">{apiErrorMessage(devicesQuery.error, t("app.extDevicesFail"))}</p>
       )}
-      {devicesQuery.isLoading && <p className="text-sm text-slate-500">Loading paired devices...</p>}
+      {devicesQuery.isLoading && <p className="text-sm text-slate-500">{t("app.extDevicesLoading")}</p>}
       {!devicesQuery.isLoading && devices.length === 0 && (
-        <p className="text-sm text-slate-500">No paired devices yet. Keep this tab open with the extension loaded.</p>
+        <p className="text-sm text-slate-500">{t("app.extNoDevices")}</p>
       )}
       <div className="space-y-2">
         {devices.map((d) => (
@@ -354,18 +295,27 @@ export function ExtensionPage() {
             {d.status === "ACTIVE" && (
               <button
                 onClick={() => {
-                  if (window.confirm("Revoke this device? The extension will need to pair again.")) {
+                  if (window.confirm(t("app.extRevokeAsk"))) {
                     revoke.mutate(d.id);
                   }
                 }}
                 className="text-sm text-red-600"
               >
-                Revoke
+                {t("app.extRevoke")}
               </button>
             )}
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function SettingField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block text-xs font-semibold text-slate-600">
+      {label}
+      <div className="mt-1 font-normal">{children}</div>
+    </label>
   );
 }

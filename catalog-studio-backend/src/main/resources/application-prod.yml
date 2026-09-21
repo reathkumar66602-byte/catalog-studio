@@ -24,3 +24,5 @@ catalogstudio:
     provider: ${AI_PROVIDER:openai}
   otp:
     log-code: false
+  billing:
+    whatsapp-number: ${BILLING_WHATSAPP_NUMBER:919560111849}

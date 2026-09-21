@@ -23,7 +23,19 @@ export function isMeeshoCatalogListPage(url = location.href) {
   return /\/cataloging\/[^/]+\/catalogs\/?$/.test(path);
 }
 
+export function isMeeshoSupplierLoginPage(url = location.href) {
+  const path = pagePath(url);
+  if (/\/login\b|\/signin\b|\/auth\b/.test(path)) {
+    return true;
+  }
+  const text = `${typeof document === "undefined" ? "" : document.title} ${hostPageText(1800)}`.toLowerCase();
+  return /login to your supplier panel|create your supplier account|email id or mobile number/.test(text);
+}
+
 export function isMeeshoAddCatalogFlow(url = location.href) {
+  if (isMeeshoSupplierLoginPage(url)) {
+    return false;
+  }
   const haystack = `${url} ${typeof document === "undefined" ? "" : document.title}`.toLowerCase();
   if (/add.?single|add.?catalog|single.?catalog|bulk\/add|product.?details|select.?category|\/catalogs\/(add|new|create|upload|edit)/i.test(haystack)) {
     return true;

@@ -29,6 +29,7 @@ import com.catalogstudio.site.repository.ClientPromoCodeRepository;
 import com.catalogstudio.site.repository.ClientStoreRepository;
 import com.catalogstudio.site.repository.EnquiryRepository;
 import com.catalogstudio.site.repository.SiteSettingsRepository;
+import com.catalogstudio.subscription.service.BillingSettingsService;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +63,7 @@ public class SiteService {
     private final EnquiryRepository enquiryRepository;
     private final TemplatedEmailService templatedEmailService;
     private final MailIdentityService mailIdentityService;
+    private final BillingSettingsService billingSettingsService;
 
     @Transactional(readOnly = true)
     public SitePublicResponse getPublicSite() {
@@ -76,7 +78,7 @@ public class SiteService {
         }
         return new SitePublicResponse(
                 toBranding(settings),
-                new Support(settings.getSupportEmail(), settings.getSupportPhone()),
+                new Support(settings.getSupportEmail(), settings.getSupportPhone(), billingSettingsService.resolvedWhatsappNumber()),
                 new EnquiryForm(settings.isEnquiryEnabled(), settings.getEnquiryIntro(), settings.getEnquirySuccessMessage()),
                 client == null ? null : toClientPublic(client),
                 promos

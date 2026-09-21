@@ -68,7 +68,7 @@ export function SettingsPage() {
     },
     onError: (err) => {
       setMessage("");
-      setFormError(apiErrorMessage(err, "Could not save settings"));
+      setFormError(apiErrorMessage(err, t("settings.saveFail")));
     },
   });
 
@@ -86,16 +86,16 @@ export function SettingsPage() {
     setPasswordError("");
     setPasswordMessage("");
     if (newPassword !== confirmPassword) {
-      setPasswordError("New password and confirm password do not match");
+      setPasswordError(t("settings.pwMismatch"));
       return;
     }
     try {
       await api.put("/me/password", { currentPassword, newPassword });
-      setPasswordMessage("Password updated. Please sign in again.");
+      setPasswordMessage(t("settings.pwUpdated"));
       logout();
       navigate("/login");
     } catch (err) {
-      setPasswordError(apiErrorMessage(err, "Could not update password"));
+      setPasswordError(apiErrorMessage(err, t("settings.pwFail")));
     }
   }
 
@@ -104,22 +104,22 @@ export function SettingsPage() {
     setMessage("");
     try {
       await api.post("/auth/logout-others", { refreshToken: localStorage.getItem("cs_refresh") });
-      setMessage("Other devices were signed out");
+      setMessage(t("settings.othersOut"));
       await qc.invalidateQueries({ queryKey: ["sessions"] });
     } catch (err) {
-      setFormError(apiErrorMessage(err, "Could not sign out other devices"));
+      setFormError(apiErrorMessage(err, t("settings.signOutFail")));
     }
   }
 
   if (isLoading) {
-    return <p className="text-slate-500">Loading settings...</p>;
+    return <p className="text-slate-500">{t("settings.loading")}</p>;
   }
   if (isError || !data) {
     return (
       <div className="space-y-3">
-        <p className="text-rose-700">{apiErrorMessage(error, "Could not load settings")}</p>
+        <p className="text-rose-700">{apiErrorMessage(error, t("settings.loadFail"))}</p>
         <button type="button" className="text-sm text-teal-700" onClick={() => refetch()}>
-          Retry
+          {t("common.retry")}
         </button>
       </div>
     );
@@ -148,59 +148,59 @@ export function SettingsPage() {
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm font-medium text-slate-700">
-            Username
+            {t("register.username")}
             <input value={data.username || ""} readOnly className="mt-1 w-full rounded-xl border bg-slate-50 px-3 py-2 text-slate-500" />
           </label>
           <label className="block text-sm font-medium text-slate-700">
-            Email
+            {t("enq.email")}
             <input value={data.email || ""} readOnly className="mt-1 w-full rounded-xl border bg-slate-50 px-3 py-2 text-slate-500" />
           </label>
         </div>
         <label className="block text-sm font-medium text-slate-700">
-          Mobile
+          {t("settings.mobile")}
           <input
             value={form.mobile}
             onChange={(event) => setForm((current) => ({ ...current, mobile: event.target.value }))}
             className="mt-1 w-full rounded-xl border px-3 py-2"
-            placeholder="Mobile"
+            placeholder={t("settings.mobile")}
           />
         </label>
-        <h2 className="font-medium">Business</h2>
+        <h2 className="font-medium">{t("settings.business")}</h2>
         <input
           value={form.businessName}
           onChange={(event) => setForm((current) => ({ ...current, businessName: event.target.value }))}
           className="w-full rounded-xl border px-3 py-2"
-          placeholder="Business name"
+          placeholder={t("settings.businessName")}
         />
         <input
           value={form.gstNumber}
           onChange={(event) => setForm((current) => ({ ...current, gstNumber: event.target.value }))}
           className="w-full rounded-xl border px-3 py-2"
-          placeholder="GST"
+          placeholder={t("settings.gst")}
         />
         <textarea
           value={form.address}
           onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
           className="w-full rounded-xl border px-3 py-2"
-          placeholder="Address"
+          placeholder={t("settings.address")}
         />
         <p className="text-xs text-slate-500">
-          Plan {data.plan || "—"} · {data.planStatus || "—"}
-          {data.emailVerified ? " · email verified" : " · email not verified"}
+          {t("settings.planLine", { plan: data.plan || "—", status: data.planStatus || "—" })}
+          {data.emailVerified ? ` · ${t("settings.emailOk")}` : ` · ${t("settings.emailNo")}`}
         </p>
-        <h2 className="font-medium">AI settings</h2>
+        <h2 className="font-medium">{t("settings.ai")}</h2>
         <select
           value={form.preferredAiProvider}
           onChange={(event) => setForm((current) => ({ ...current, preferredAiProvider: event.target.value }))}
           className="w-full rounded-xl border px-3 py-2"
         >
-          <option value="">Workspace default</option>
+          <option value="">{t("settings.aiDefault")}</option>
           <option value="openai">OpenAI</option>
           <option value="gemini">Gemini</option>
-          <option value="mock">Local mock (development only)</option>
+          <option value="mock">{t("settings.aiMock")}</option>
         </select>
         <Link to="/billing-address" className="block text-sm font-medium text-teal-700">
-          Edit structured billing address
+          {t("settings.billingLink")}
         </Link>
         <button disabled={saveProfile.isPending} className="rounded-xl bg-teal-700 px-4 py-2 text-white disabled:opacity-60">
           {saveProfile.isPending ? t("settings.saving") : t("settings.save")}
@@ -208,7 +208,7 @@ export function SettingsPage() {
       </form>
 
       <form onSubmit={changePassword} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="font-medium">Change password</h2>
+        <h2 className="font-medium">{t("settings.password")}</h2>
         {passwordError && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{passwordError}</p>}
         {passwordMessage && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{passwordMessage}</p>}
         <input
@@ -217,7 +217,7 @@ export function SettingsPage() {
           autoComplete="current-password"
           required
           className="w-full rounded-xl border px-3 py-2"
-          placeholder="Current password"
+          placeholder={t("settings.currentPw")}
         />
         <input
           name="newPassword"
@@ -226,7 +226,7 @@ export function SettingsPage() {
           minLength={8}
           required
           className="w-full rounded-xl border px-3 py-2"
-          placeholder="New password (min 8 characters)"
+          placeholder={t("settings.newPw")}
         />
         <input
           name="confirmPassword"
@@ -235,29 +235,29 @@ export function SettingsPage() {
           minLength={8}
           required
           className="w-full rounded-xl border px-3 py-2"
-          placeholder="Confirm new password"
+          placeholder={t("settings.confirmPw")}
         />
-        <button className="rounded-xl bg-teal-700 px-4 py-2 text-white">Update password</button>
+        <button className="rounded-xl bg-teal-700 px-4 py-2 text-white">{t("settings.updatePw")}</button>
       </form>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-medium">Active sessions</h2>
+          <h2 className="font-medium">{t("settings.sessions")}</h2>
           <button type="button" onClick={revokeOthers} className="text-sm text-teal-700">
-            Sign out other devices
+            {t("settings.signOutOthers")}
           </button>
         </div>
         {sessions.isError && (
-          <p className="mt-3 text-sm text-rose-700">{apiErrorMessage(sessions.error, "Could not load sessions")}</p>
+          <p className="mt-3 text-sm text-rose-700">{apiErrorMessage(sessions.error, t("settings.sessionsFail"))}</p>
         )}
-        {sessions.isLoading && <p className="mt-3 text-sm text-slate-500">Loading sessions...</p>}
+        {sessions.isLoading && <p className="mt-3 text-sm text-slate-500">{t("settings.loadSessions")}</p>}
         <ul className="mt-3 space-y-2 text-sm">
           {(sessions.data || []).map((session) => (
             <li key={session.id} className="rounded-xl border border-slate-100 px-3 py-2">
               <p className="font-medium">{session.deviceName}</p>
               <p className="text-xs text-slate-500">
-                {session.ipAddress || "IP hidden"}
-                {session.lastUsedAt ? ` · last used ${new Date(session.lastUsedAt).toLocaleString("en-IN")}` : ""}
+                {session.ipAddress || t("settings.ipHidden")}
+                {session.lastUsedAt ? ` · ${t("settings.lastUsed", { when: new Date(session.lastUsedAt).toLocaleString() })}` : ""}
               </p>
             </li>
           ))}
@@ -265,21 +265,21 @@ export function SettingsPage() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h2 className="font-medium">Appearance</h2>
+        <h2 className="font-medium">{t("settings.appearance")}</h2>
         <div className="mt-3 flex gap-3">
           <button
             type="button"
             onClick={() => setTheme("light")}
             className={`rounded-xl border px-4 py-2 ${theme === "light" ? "border-teal-700" : ""}`}
           >
-            Light
+            {t("settings.light")}
           </button>
           <button
             type="button"
             onClick={() => setTheme("dark")}
             className={`rounded-xl border px-4 py-2 ${theme === "dark" ? "border-teal-700" : ""}`}
           >
-            Dark
+            {t("settings.dark")}
           </button>
         </div>
       </section>

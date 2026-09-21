@@ -26,7 +26,7 @@ public record SitePublicResponse(
             String footerText
     ) {}
 
-    public record Support(String email, String phone) {}
+    public record Support(String email, String phone, String whatsapp) {}
 
     public record EnquiryForm(boolean enabled, String intro, String successMessage) {}
 

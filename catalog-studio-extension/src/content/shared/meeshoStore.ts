@@ -39,6 +39,9 @@ const NAV_NOISE = [
   "manageorder",
   "supplier panel",
   "seller panel",
+  "login to meesho supplier panel",
+  "login to your supplier panel",
+  "login to supplier panel",
   "select",
   "selected",
   "choose",
@@ -252,6 +255,10 @@ function looksLikeIdentifier(name: string) {
     && !/store|shop|mart/i.test(name);
 }
 
+export function isMeeshoPageChrome(raw: string) {
+  return /login to|sign in|(supplier|seller) panel/i.test(raw || "");
+}
+
 export function sanitizeStoreName(raw: string) {
   const first = (raw || "").split("\n")[0] || "";
   const name = first
@@ -260,6 +267,7 @@ export function sanitizeStoreName(raw: string) {
     .trim();
   if (!name || name.length < 3 || name.length > 60) return "";
   if (NAV_NOISE.includes(name.toLowerCase())) return "";
+  if (isMeeshoPageChrome(name)) return "";
   if (/https?:|www\./i.test(name)) return "";
   if (/^\d+$/.test(name)) return "";
   if (/\b\d{6}\b/.test(name)) return "";

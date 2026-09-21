@@ -2,6 +2,7 @@ package com.catalogstudio.subscription;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,18 +59,18 @@ class SubscriptionAccessServiceTest {
         pro = SubscriptionPlan.builder()
                 .id(2L)
                 .name("PRO")
-                .price(new BigDecimal("1499"))
+                .price(new BigDecimal("499"))
                 .billingCycle("MONTHLY")
                 .status("ACTIVE")
-                .featuresJson(Map.of("monthlyAiAnalyses", 500))
+                .featuresJson(Map.of("monthlyAiAnalyses", 100))
                 .build();
         basic = SubscriptionPlan.builder()
                 .id(3L)
                 .name("BASIC")
-                .price(new BigDecimal("50"))
+                .price(new BigDecimal("49"))
                 .billingCycle("MONTHLY")
                 .status("ACTIVE")
-                .featuresJson(Map.of("monthlyAiAnalyses", 20))
+                .featuresJson(Map.of("monthlyAiAnalyses", 8))
                 .build();
         billing = BillingSettings.builder()
                 .trialDays(2)
@@ -83,6 +84,8 @@ class SubscriptionAccessServiceTest {
                 .whatsappMessageTemplate("Paid {{plan}} {{amount}} {{email}}")
                 .build();
         when(billingSettingsService.current()).thenReturn(billing);
+        lenient().when(billingSettingsService.resolvedWhatsappNumber(any())).thenReturn("919560111849");
+        lenient().when(billingSettingsService.scannerImageUrl(any())).thenReturn("/payment-qr.jpg");
     }
 
     @Test

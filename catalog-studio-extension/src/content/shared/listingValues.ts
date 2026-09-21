@@ -110,9 +110,14 @@ export function matchFieldValue(label: string, values: Record<string, string>) {
   const stripped = needle.replace(/\s*\([^)]*\)/g, "").trim();
   if (stripped && stripped !== needle && values[stripped]) return values[stripped];
   const keys = Object.keys(values).sort((a, b) => b.length - a.length);
-  const prefix = keys.find((key) => needle.startsWith(`${key} `) || key.startsWith(`${needle} `));
+  const prefix = keys.find((key) => {
+    if (!(needle.startsWith(`${key} `) || key.startsWith(`${needle} `))) return false;
+    const extra = (key.startsWith(`${needle} `) ? key.slice(needle.length) : needle.slice(key.length)).trim();
+    if (/\b(cm|mm|inch|in|gms|g|grams|size|package|packaging)\b/.test(extra)) return false;
+    return true;
+  });
   if (prefix) return values[prefix];
-  const contained = keys.find((key) => key.length >= 4 && needle.includes(key));
+  const contained = keys.find((key) => key.length >= 4 && needle.includes(key) && !/\b(cm|package|packaging|size)\b/.test(key));
   return contained ? values[contained] : "";
 }
 

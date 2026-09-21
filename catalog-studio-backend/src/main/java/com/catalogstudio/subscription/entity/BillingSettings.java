@@ -42,7 +42,7 @@ public class BillingSettings {
 
     @Builder.Default
     @Column(name = "whatsapp_number", nullable = false, length = 40)
-    private String whatsappNumber = "919876543210";
+    private String whatsappNumber = "919560111849";
 
     @Column(name = "whatsapp_message_template", nullable = false, columnDefinition = "text")
     private String whatsappMessageTemplate;
@@ -100,7 +100,7 @@ public class BillingSettings {
             trialPlan = "BASIC";
         }
         if (whatsappNumber == null || whatsappNumber.isBlank()) {
-            whatsappNumber = "919876543210";
+            whatsappNumber = "919560111849";
         }
         if (upiId == null || upiId.isBlank()) {
             upiId = "catalogstudio@upi";

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, apiErrorMessage } from "../../api/client";
 import { useSite } from "./useSite";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type EnquiryFields = {
   name: string;
@@ -12,6 +13,7 @@ type EnquiryFields = {
 };
 
 type EnquiryErrors = Partial<Record<keyof EnquiryFields, string>>;
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
 const EMPTY: EnquiryFields = {
   name: "",
@@ -28,6 +30,7 @@ const PHONE_PATTERN = /^(\+91[\s-]?|91[\s-]?|0)?[6-9]\d{9}$/;
 
 export function EnquiryForm({ id = "enquiry" }: { id?: string }) {
   const site = useSite();
+  const { t } = useI18n();
   const [status, setStatus] = useState<"idle" | "saving" | "ok" | "error">("idle");
   const [message, setMessage] = useState("");
   const [values, setValues] = useState<EnquiryFields>({
@@ -39,13 +42,9 @@ export function EnquiryForm({ id = "enquiry" }: { id?: string }) {
   if (!site.enquiry.enabled) {
     return (
       <div id={id} className="rounded-3xl border border-slate-200 bg-white p-6">
-        <h2 className="text-xl font-semibold">Enquiries are paused</h2>
+        <h2 className="text-xl font-semibold">{t("enq.paused")}</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Email{" "}
-          <a className="font-medium text-teal-700" href={`mailto:${site.support.email}`}>
-            {site.support.email}
-          </a>{" "}
-          instead.
+          {t("enq.emailInstead", { email: site.support.email })}
         </p>
       </div>
     );
@@ -64,11 +63,11 @@ export function EnquiryForm({ id = "enquiry" }: { id?: string }) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextErrors = validateEnquiry(values);
+    const nextErrors = validateEnquiry(values, t);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setStatus("error");
-      setMessage("Please correct the highlighted fields.");
+      setMessage(t("enq.fix"));
       return;
     }
     setStatus("saving");
@@ -83,7 +82,7 @@ export function EnquiryForm({ id = "enquiry" }: { id?: string }) {
         message: values.message.trim(),
       });
       setStatus("ok");
-      setMessage(data.data?.message || site.enquiry.successMessage || "Thanks. We received your enquiry.");
+      setMessage(data.data?.message || site.enquiry.successMessage || t("enq.thanks"));
       setValues({ ...EMPTY, storeName: site.client?.storeName || "" });
       setErrors({});
     } catch (err) {
@@ -91,11 +90,11 @@ export function EnquiryForm({ id = "enquiry" }: { id?: string }) {
       if (Object.keys(fieldErrors).length > 0) {
         setErrors(fieldErrors);
         setStatus("error");
-        setMessage("Please correct the highlighted fields.");
+        setMessage(t("enq.fix"));
         return;
       }
       setStatus("error");
-      setMessage(apiErrorMessage(err, "Could not send your enquiry"));
+      setMessage(apiErrorMessage(err, t("enq.fail")));
     }
   }
 
@@ -106,72 +105,78 @@ export function EnquiryForm({ id = "enquiry" }: { id?: string }) {
       onSubmit={onSubmit}
       className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8"
     >
-      <h2 className="text-xl font-semibold">Enquiry form</h2>
-      <p className="mt-2 text-sm text-slate-600">{site.enquiry.intro}</p>
+      <h2 className="text-xl font-semibold">{t("enq.title")}</h2>
+      <p className="mt-2 text-sm text-slate-600">{t("enq.intro")}</p>
       <p className="mt-1 text-sm text-slate-500">
-        Support email:{" "}
+        {t("enq.supportEmail")}{" "}
         <a className="font-medium text-teal-700" href={`mailto:${site.support.email}`}>
           {site.support.email}
         </a>
       </p>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <Field
-          label="Name"
+          label={t("enq.name")}
           name="name"
           autoComplete="name"
           required
           value={values.name}
           error={errors.name}
+          placeholder={t("enq.phName")}
           onChange={(value) => setField("name", value)}
         />
         <Field
-          label="Email"
+          label={t("enq.email")}
           name="email"
           type="email"
           autoComplete="email"
           required
           value={values.email}
           error={errors.email}
+          placeholder={t("enq.phEmail")}
           onChange={(value) => setField("email", value)}
         />
         <Field
-          label="Phone"
+          label={t("enq.phone")}
           name="phone"
           type="tel"
           autoComplete="tel"
-          hint="10-digit Indian mobile"
+          hint={t("enq.phoneHint")}
           value={values.phone}
           error={errors.phone}
+          placeholder={t("enq.phPhone")}
           onChange={(value) => setField("phone", value)}
         />
         <Field
-          label="Store name"
+          label={t("enq.store")}
           name="storeName"
           autoComplete="organization"
           value={values.storeName}
           error={errors.storeName}
+          placeholder={t("enq.phStore")}
           onChange={(value) => setField("storeName", value)}
         />
       </div>
       <Field
         className="mt-3"
-        label="Subject"
+        label={t("enq.subject")}
         name="subject"
         required
         value={values.subject}
         error={errors.subject}
+        placeholder={t("enq.phSubject")}
         onChange={(value) => setField("subject", value)}
       />
       <Field
         className="mt-3"
-        label="Message"
+        label={t("enq.message")}
         name="message"
         required
         multiline
         rows={5}
-        hint="At least 20 characters"
+        hint={t("enq.messageHint")}
         value={values.message}
         error={errors.message}
+        placeholder={t("enq.phMessage")}
         onChange={(value) => setField("message", value)}
       />
       <button
@@ -179,7 +184,7 @@ export function EnquiryForm({ id = "enquiry" }: { id?: string }) {
         disabled={status === "saving"}
         className="mt-4 rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
       >
-        {status === "saving" ? "Sending..." : "Send enquiry"}
+        {status === "saving" ? t("enq.sending") : t("enq.send")}
       </button>
       {message && (
         <p className={`mt-3 text-sm ${status === "error" ? "text-red-600" : "text-teal-800"}`}>{message}</p>
@@ -198,6 +203,7 @@ function Field({
   type = "text",
   autoComplete,
   hint,
+  placeholder,
   multiline,
   rows = 4,
   className = "",
@@ -211,6 +217,7 @@ function Field({
   type?: string;
   autoComplete?: string;
   hint?: string;
+  placeholder?: string;
   multiline?: boolean;
   rows?: number;
   className?: string;
@@ -227,6 +234,7 @@ function Field({
           name={name}
           rows={rows}
           value={value}
+          placeholder={placeholder}
           aria-invalid={Boolean(error)}
           className={inputClass}
           onChange={(event) => onChange(event.target.value)}
@@ -237,6 +245,7 @@ function Field({
           type={type}
           autoComplete={autoComplete}
           value={value}
+          placeholder={placeholder}
           aria-invalid={Boolean(error)}
           className={inputClass}
           onChange={(event) => onChange(event.target.value)}
@@ -248,7 +257,7 @@ function Field({
   );
 }
 
-function validateEnquiry(values: EnquiryFields): EnquiryErrors {
+function validateEnquiry(values: EnquiryFields, t: Translate): EnquiryErrors {
   const errors: EnquiryErrors = {};
   const name = values.name.trim();
   const email = values.email.trim();
@@ -257,24 +266,22 @@ function validateEnquiry(values: EnquiryFields): EnquiryErrors {
   const subject = values.subject.trim();
   const message = values.message.trim();
 
-  if (!name) errors.name = "Enter your name";
-  else if (name.length < 2 || name.length > 120) errors.name = "Name must be between 2 and 120 characters";
-  else if (!NAME_PATTERN.test(name)) errors.name = "Name may contain letters, spaces, apostrophes, and hyphens";
+  if (!name) errors.name = t("enq.errName");
+  else if (name.length < 2 || name.length > 120) errors.name = t("enq.errNameLen");
+  else if (!NAME_PATTERN.test(name)) errors.name = t("enq.errNameChars");
 
-  if (!email) errors.email = "Enter your email address";
-  else if (!EMAIL_PATTERN.test(email) || email.length > 255) errors.email = "Enter a valid email address";
+  if (!email) errors.email = t("enq.errEmail");
+  else if (!EMAIL_PATTERN.test(email) || email.length > 255) errors.email = t("enq.errEmailValid");
 
-  if (phone && !PHONE_PATTERN.test(phone)) errors.phone = "Enter a valid 10-digit Indian mobile number";
+  if (phone && !PHONE_PATTERN.test(phone)) errors.phone = t("enq.errPhone");
 
-  if (storeName.length > 200) errors.storeName = "Store name must be 200 characters or fewer";
+  if (storeName.length > 200) errors.storeName = t("enq.errStore");
 
-  if (!subject) errors.subject = "Enter a subject";
-  else if (subject.length < 5 || subject.length > 200) errors.subject = "Subject must be between 5 and 200 characters";
+  if (!subject) errors.subject = t("enq.errSubject");
+  else if (subject.length < 5 || subject.length > 200) errors.subject = t("enq.errSubjectLen");
 
-  if (!message) errors.message = "Enter your message";
-  else if (message.length < 20 || message.length > 4000) {
-    errors.message = "Message must be between 20 and 4000 characters";
-  }
+  if (!message) errors.message = t("enq.errMsg");
+  else if (message.length < 20 || message.length > 4000) errors.message = t("enq.errMsgLen");
 
   return errors;
 }

@@ -96,7 +96,7 @@ public class SubscriptionAccessService {
                 pendingPlan,
                 new PaymentNotice(
                         billing.getPaymentProvider(),
-                        billing.getWhatsappNumber(),
+                        billingSettingsService.resolvedWhatsappNumber(billing),
                         billing.getUpiId(),
                         billing.getPayeeName(),
                         billingSettingsService.scannerImageUrl(billing),
@@ -120,7 +120,7 @@ public class SubscriptionAccessService {
         }
         PaymentProvider.CheckoutSession session = paymentGatewayService.checkout(userId, plan.getName());
         String message = renderMessage(billing.getWhatsappMessageTemplate(), user.getEmail(), plan, billing);
-        String digits = BillingSettingsService.digits(billing.getWhatsappNumber());
+        String digits = billingSettingsService.resolvedWhatsappNumber(billing);
         String whatsappUrl = "https://wa.me/" + digits + "?text=" + URLEncoder.encode(message, StandardCharsets.UTF_8);
         String scannerUrl = billingSettingsService.scannerImageUrl(billing);
         String notice = "Send the payment screenshot on WhatsApp and mention your registered email ID ("

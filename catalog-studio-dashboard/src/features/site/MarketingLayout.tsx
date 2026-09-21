@@ -13,8 +13,8 @@ export function MarketingLayout() {
   const logo = site.branding.logoUrl || "/logo.svg";
 
   useEffect(() => {
-    document.title = `${name} — crop, calculator, extension`;
-  }, [name]);
+    document.title = t("land.docTitle", { name });
+  }, [name, t]);
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
@@ -48,7 +48,7 @@ export function MarketingLayout() {
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 md:grid-cols-3">
           <div>
             <p className="font-semibold">{name}</p>
-            <p className="mt-2 text-sm text-slate-600">{site.branding.footerText}</p>
+            <p className="mt-2 text-sm text-slate-600">{t("land.footer")}</p>
           </div>
           <div className="text-sm">
             <p className="font-semibold">{t("marketing.support")}</p>
@@ -56,7 +56,7 @@ export function MarketingLayout() {
               {site.support.email}
             </a>
             {site.support.phone && <p className="mt-1 text-slate-600">{site.support.phone}</p>}
-            {site.client && <p className="mt-3 text-slate-600">Featured store: {site.client.storeName}</p>}
+            {site.client && <p className="mt-3 text-slate-600">{t("land.featuredStore", { name: site.client.storeName })}</p>}
           </div>
           <div className="text-sm">
             <p className="font-semibold">{t("marketing.account")}</p>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../api/client";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type BillingAddress = {
   businessName?: string;
@@ -32,6 +33,7 @@ type PlaceDetails = {
 };
 
 export function BillingAddressPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { data, isLoading, isError, error: loadError, refetch } = useQuery({
     queryKey: ["billing-address"],
@@ -117,23 +119,23 @@ export function BillingAddressPage() {
       setForm({ country: "India", ...saved });
       setQuery(saved.addressLine1 || query);
       await qc.invalidateQueries({ queryKey: ["billing-address"] });
-      setMessage("Billing address saved");
+      setMessage(t("bill.saved"));
     } catch (err) {
-      setError(apiErrorMessage(err, "Could not save billing address"));
+      setError(apiErrorMessage(err, t("bill.saveFail")));
     } finally {
       setSaving(false);
     }
   }
 
   if (isLoading) {
-    return <p className="text-slate-500">Loading billing address...</p>;
+    return <p className="text-slate-500">{t("bill.loading")}</p>;
   }
   if (isError) {
     return (
       <div className="space-y-3">
-        <p className="text-rose-700">{apiErrorMessage(loadError, "Could not load billing address")}</p>
+        <p className="text-rose-700">{apiErrorMessage(loadError, t("bill.loadFail"))}</p>
         <button type="button" className="text-sm text-teal-700" onClick={() => refetch()}>
-          Retry
+          {t("common.retry")}
         </button>
       </div>
     );
@@ -142,23 +144,21 @@ export function BillingAddressPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Billing address</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Start typing your address. Google Places fills city, state, PIN, and country when a suggestion is selected.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("bill.title")}</h1>
+        <p className="mt-1 text-sm text-slate-500">{t("bill.sub")}</p>
       </div>
       <form onSubmit={save} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
         {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {message && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{message}</p>}
         <label className="relative block text-sm font-medium text-slate-700">
-          Search address
+          {t("bill.search")}
           <input
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
               setField("addressLine1", event.target.value);
             }}
-            placeholder="Start typing house no, street, area..."
+            placeholder={t("bill.searchPh")}
             className="mt-1 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-teal-600"
           />
           {suggestions.length > 0 && (
@@ -181,26 +181,26 @@ export function BillingAddressPage() {
           value={form.addressLine2 || ""}
           onChange={(event) => setField("addressLine2", event.target.value)}
           className="w-full rounded-xl border px-3 py-2.5"
-          placeholder="Address line 2"
+          placeholder={t("bill.line2")}
         />
         <input
           value={form.landmark || ""}
           onChange={(event) => setField("landmark", event.target.value)}
           className="w-full rounded-xl border px-3 py-2.5"
-          placeholder="Landmark"
+          placeholder={t("bill.landmark")}
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <input
             value={form.city || ""}
             onChange={(event) => setField("city", event.target.value)}
             className="rounded-xl border px-3 py-2.5"
-            placeholder="City"
+            placeholder={t("bill.city")}
           />
           <input
             value={form.state || ""}
             onChange={(event) => setField("state", event.target.value)}
             className="rounded-xl border px-3 py-2.5"
-            placeholder="State"
+            placeholder={t("bill.state")}
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -208,24 +208,24 @@ export function BillingAddressPage() {
             value={form.postalCode || ""}
             onChange={(event) => setField("postalCode", event.target.value)}
             className="rounded-xl border px-3 py-2.5"
-            placeholder="PIN / postal code"
+            placeholder={t("bill.pin")}
           />
           <input
             value={form.country || "India"}
             onChange={(event) => setField("country", event.target.value)}
             className="rounded-xl border px-3 py-2.5"
-            placeholder="Country"
+            placeholder={t("bill.country")}
           />
         </div>
         <input
           value={form.gstNumber || ""}
           onChange={(event) => setField("gstNumber", event.target.value)}
           className="w-full rounded-xl border px-3 py-2.5"
-          placeholder="GST number"
+          placeholder={t("bill.gst")}
         />
         {composed && <p className="text-xs text-slate-500">{composed}</p>}
         <button disabled={saving} className="rounded-xl bg-teal-700 px-4 py-2 text-white disabled:opacity-60">
-          {saving ? "Saving..." : "Save billing address"}
+          {saving ? t("bill.saving") : t("bill.save")}
         </button>
       </form>
     </div>

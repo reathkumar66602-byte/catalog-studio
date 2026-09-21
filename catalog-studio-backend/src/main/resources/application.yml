@@ -112,3 +112,5 @@ catalogstudio:
     log-code: ${OTP_LOG_CODE:false}
   google:
     maps-api-key: ${GOOGLE_MAPS_API_KEY:}
+  billing:
+    whatsapp-number: ${BILLING_WHATSAPP_NUMBER:919560111849}

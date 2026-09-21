@@ -32,7 +32,7 @@ class PaymentTransactionServiceTest {
         User user = User.builder().id(11L).email("seller@example.com").build();
         SubscriptionPlan plan = SubscriptionPlan.builder()
                 .name("PRO")
-                .price(new BigDecimal("1499"))
+                .price(new BigDecimal("499"))
                 .billingCycle("MONTHLY")
                 .build();
 

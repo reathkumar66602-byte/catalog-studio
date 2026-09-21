@@ -2,33 +2,31 @@ import { Link } from "react-router-dom";
 import { EnquiryForm } from "./EnquiryForm";
 import { PublicToolShell } from "./MarketingLayout";
 import { useSite } from "./useSite";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 export function ExtensionMarketingPage() {
   const site = useSite();
+  const { t } = useI18n();
   return (
     <PublicToolShell>
       <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-        <h1 className="text-3xl font-semibold">Catalog Studio Chrome extension</h1>
+        <h1 className="text-3xl font-semibold">{t("extm.title")}</h1>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">
-          Pair the extension with your workspace to fill GST, HSN, manufacturer, packer, and product fields on Meesho.
-          {site.client ? ` ${site.client.storeName} sellers can lock the shop name after the first successful read.` : ""} Catalog
-          Studio never submits the listing for you.
+          {t("extm.body")}
+          {site.client ? ` ${site.client.storeName}` : ""}
         </p>
         <ol className="mt-5 list-decimal space-y-2 pl-5 text-sm text-slate-600">
-          <li>Create a free Catalog Studio account.</li>
-          <li>
-            Install Catalog Studio Autofill from the Chrome Web Store, or for local testing load unpacked from
-            catalog-studio-extension/dist.
-          </li>
-          <li>Stay logged in to the workspace so pairing happens automatically.</li>
-          <li>Open Meesho Add Single Catalog and use Generate, then Fill Values for Form.</li>
+          <li>{t("extm.step1")}</li>
+          <li>{t("extm.step2")}</li>
+          <li>{t("extm.step3")}</li>
+          <li>{t("extm.step4")}</li>
         </ol>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link to="/login" className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold">
-            Login
+            {t("login.submit")}
           </Link>
           <Link to="/register" className="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white">
-            Register
+            {t("register.submit")}
           </Link>
         </div>
       </div>
@@ -38,18 +36,15 @@ export function ExtensionMarketingPage() {
 
 export function ContactPage() {
   const site = useSite();
+  const { t } = useI18n();
   return (
     <PublicToolShell>
       <div className="mx-auto max-w-3xl space-y-6">
         <div>
-          <h1 className="text-3xl font-semibold">Contact and support</h1>
+          <h1 className="text-3xl font-semibold">{t("contact.title")}</h1>
           <p className="mt-2 text-slate-600">
-            Email{" "}
-            <a className="font-medium text-teal-700" href={`mailto:${site.support.email}`}>
-              {site.support.email}
-            </a>
-            {site.support.phone ? ` or call ${site.support.phone}.` : "."} Both the support email and enquiry form
-            come from the database and can be changed without a code deploy.
+            {t("contact.body", { email: site.support.email })}
+            {site.support.phone ? ` ${site.support.phone}` : ""}
           </p>
         </div>
         <EnquiryForm />

@@ -132,7 +132,7 @@ export function BillingAdminPage() {
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="font-medium">Activate a seller by email</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Replace the email and plan name (`BASIC`, `STARTER`, `PRO`, or `BUSINESS`) after you confirm the WhatsApp screenshot. Also in
+          Replace the email and plan name (`BASIC` ₹49, `STARTER` ₹99, `PRO` ₹499, or `BUSINESS` ₹999) after you confirm the WhatsApp screenshot. Also in
           {" "}
           <code>catalog-studio-backend/src/main/resources/db/scripts/activate_paid_access_by_email.sql</code>.
         </p>

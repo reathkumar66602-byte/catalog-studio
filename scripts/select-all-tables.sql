@@ -29,7 +29,6 @@ SELECT * FROM extension_devices;
 SELECT * FROM extension_activity_logs;
 SELECT * FROM extension_user_settings;
 SELECT * FROM extension_inventory_photos;
-SELECT * FROM extension_tickets;
 
 -- Billing
 SELECT * FROM subscription_plans;

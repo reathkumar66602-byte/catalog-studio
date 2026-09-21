@@ -154,6 +154,13 @@ describe("listing field aliases", () => {
     expect(matchFieldValue("Print Pattern", values)).toBe("Floral");
     expect(matchFieldValue("Breadth (cm)", values)).toBe("15");
   });
+
+  it("does not fill garment Length from package length", async () => {
+    const { listingFieldValues, matchFieldValue } = await import("../src/content/shared/listingValues");
+    const values = listingFieldValues({ packageLength: "28", packageWidth: "22" });
+    expect(matchFieldValue("Length", values)).toBe("");
+    expect(matchFieldValue("Length (cm)", values)).toBe("28");
+  });
 });
 
 describe("meesho defaults", () => {
@@ -198,6 +205,17 @@ describe("meesho defaults", () => {
     expect(deriveFabric("", "Teal Floral Embroidered Tunic")).toBe("Cotton");
     expect(deriveFabric("Rayon Blend")).toBe("Rayon");
     expect(deriveOccasion("", "casual daily wear")).toBe("Daily");
+  });
+
+  it("maps bell sleeves to Meesho Sleeve Length and keeps tunic Length", async () => {
+    const { defaultsForCategory, mapGarmentLength, mapSleeveLength, mapSleeveStyling } = await import("../src/content/shared/meeshoDefaults");
+    expect(mapSleeveLength("Bell Sleeves")).toBe("Three-Quarter Sleeves");
+    expect(mapSleeveLength("Casual V-Neck Bell Sleeve Top")).toBe("Three-Quarter Sleeves");
+    expect(mapSleeveStyling("Casual V-Neck Bell Sleeve Top", "Regular Sleeves")).toBe("Bell Sleeves");
+    expect(mapGarmentLength("Teal Floral Embroidered Tunic", "")).toBe("Regular");
+    const defaults = defaultsForCategory("Tops & Tunics Teal Floral Embroidered Tunic");
+    expect(defaults.sleeveLength).toBe("Three-Quarter Sleeves");
+    expect(defaults.garmentLength).toBe("Regular");
   });
 });
 
@@ -547,6 +565,20 @@ describe("meesho category detection", () => {
     expect(isMeeshoProductDetailsPage()).toBe(false);
   });
 
+  it("does not treat the Meesho supplier login screen as add catalog", async () => {
+    const { isMeeshoAddCatalogFlow, isMeeshoSupplierLoginPage } = await import("../src/content/shared/meeshoCatalog");
+    const loginUrl = "https://supplier.meesho.com/panel/v3/new/login";
+    document.title = "meesho";
+    document.body.innerHTML = `
+      <h1>Login to your supplier panel</h1>
+      <input placeholder="Email Id or mobile number" />
+      <button>Create your supplier account</button>
+    `;
+    expect(isMeeshoSupplierLoginPage(loginUrl)).toBe(true);
+    expect(isMeeshoAddCatalogFlow(loginUrl)).toBe(false);
+    expect(isMeeshoAddCatalogFlow("https://supplier.meesho.com/panel/v3/new/cataloging/y2ogj/catalogs/add")).toBe(false);
+  });
+
   it("recognizes Meesho bulk template upload as Meesho UI, not Catalog Studio UI", async () => {
     const { isMeeshoBulkTemplateStep } = await import("../src/content/shared/meeshoCatalog");
     document.body.innerHTML = `
@@ -562,7 +594,7 @@ describe("meesho category detection", () => {
 
 describe("meesho store detection", () => {
   it("reads the manufacturer name already on the form", async () => {
-    const { detectMeeshoStore, sanitizeStoreName } = await import("../src/content/shared/meeshoStore");
+    const { detectMeeshoStore, isMeeshoPageChrome, sanitizeStoreName } = await import("../src/content/shared/meeshoStore");
     document.body.innerHTML = `
       <div>
         <p>Manufacturer Name</p>
@@ -571,6 +603,10 @@ describe("meesho store detection", () => {
     `;
     expect(sanitizeStoreName("Home")).toBe("");
     expect(sanitizeStoreName("Supplier Panel")).toBe("");
+    expect(isMeeshoPageChrome("Login to Meesho Supplier Panel")).toBe(true);
+    expect(isMeeshoPageChrome("Krishna store")).toBe(false);
+    expect(sanitizeStoreName("Login to Meesho Supplier Panel")).toBe("");
+    expect(sanitizeStoreName("Login to your supplier panel")).toBe("");
     expect(sanitizeStoreName("Krishna store ▼")).toBe("Krishna store");
     expect(detectMeeshoStore()?.name).toBe("Krishnasrstore");
   });
@@ -604,6 +640,23 @@ describe("meesho store detection", () => {
     document.cookie = "supplier_id=y2ogj; shopName=Krishna%20store";
     expect(sanitizeStoreName("y2ogj")).toBe("");
     expect(sanitizeStoreName("Krishna store")).toBe("Krishna store");
+    expect(detectMeeshoStore()?.name).toBe("Krishna store");
+  });
+
+  it("does not treat the Meesho login title as the shop name", async () => {
+    const { detectMeeshoStore, sanitizeStoreName } = await import("../src/content/shared/meeshoStore");
+    document.title = "Login to Meesho Supplier Panel";
+    document.body.innerHTML = `
+      <header>
+        <h1>Login to Meesho Supplier Panel</h1>
+        <button>Login to Meesho Supplier Panel</button>
+      </header>
+      <div>
+        <p>Manufacturer Name</p>
+        <input value="Krishna store" />
+      </div>
+    `;
+    expect(sanitizeStoreName("Login to Meesho Supplier Panel")).toBe("");
     expect(detectMeeshoStore()?.name).toBe("Krishna store");
   });
 });

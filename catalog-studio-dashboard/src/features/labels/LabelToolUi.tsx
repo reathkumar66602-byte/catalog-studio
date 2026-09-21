@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { FlipkartLogo, MeeshoLogo, MergePdfLogo } from "./logos";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 export function ToolCard({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -35,30 +36,33 @@ function useToolPaths() {
 
 export function FlipkartToolLink() {
   const paths = useToolPaths();
+  const { t } = useI18n();
   return (
     <Link to={paths.flipkart} className={btn}>
       <FlipkartLogo className="h-8 w-8" />
-      Flipkart Label Crop
+      {t("land.fkCrop")}
     </Link>
   );
 }
 
 export function MeeshoToolLink() {
   const paths = useToolPaths();
+  const { t } = useI18n();
   return (
     <Link to={paths.meesho} className={btn}>
       <MeeshoLogo className="h-8 w-8" />
-      Meesho Label Crop
+      {t("land.meCrop")}
     </Link>
   );
 }
 
 export function MergeToolLink() {
   const paths = useToolPaths();
+  const { t } = useI18n();
   return (
     <Link to={paths.merge} className={btn}>
       <MergePdfLogo className="h-8 w-8" />
-      Merge PDF
+      {t("land.merge")}
     </Link>
   );
 }

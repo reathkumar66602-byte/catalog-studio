@@ -19,3 +19,5 @@ logging:
 catalogstudio:
   otp:
     log-code: ${OTP_LOG_CODE:false}
+  billing:
+    whatsapp-number: ${BILLING_WHATSAPP_NUMBER:919560111849}

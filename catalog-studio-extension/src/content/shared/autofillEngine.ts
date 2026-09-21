@@ -83,8 +83,18 @@ function dropdownCandidates(value: string) {
   if (/^\d+(\.\d+)?\s*%$/.test(value.trim())) {
     add(value.replace(/\s*%$/, "").trim());
   }
-  if (lower === "regular") add("Regular Fit");
-  if (lower === "regular fit") add("Regular");
+  if (lower === "regular") {
+    add("Regular Fit");
+    add("Regular Length");
+  }
+  if (lower === "regular fit" || lower === "regular length") add("Regular");
+  if (lower === "crop") add("Cropped");
+  if (lower === "cropped") add("Crop");
+  if (/bell/.test(lower)) {
+    add("Three-Quarter Sleeves");
+    add("Long Sleeves");
+    add("Bell Sleeves");
+  }
   if (lower === "casual") {
     add("Daily");
     add("Western");

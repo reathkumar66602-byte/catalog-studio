@@ -1,18 +1,17 @@
-import { DEFAULT_API_BASE } from "../config";
+﻿import { DEFAULT_API_BASE } from "../config";
 import { fillByHints, resetAutofill, stopAutofill } from "./shared/autofillEngine";
 import { syncGenerateEnabled } from "./shared/generateButton";
 import { detectMarketplace, type MappedListing } from "./shared/marketplaces";
 import { isMeeshoAddCatalogFlow, isMeeshoBulkCatalogPage, isMeeshoBulkTemplateStep, isMeeshoCatalogListPage, isMeeshoCatalogPage, isMeeshoCategoryPickerVisible, isMeeshoProductDetailsPage, readMeeshoCategoryFromPage, readMeeshoCategoryPath, shouldScanMeeshoForm, suggestedCategoryLabel } from "./shared/meeshoCatalog";
 import { captureBestPageImage, watchMeeshoPageImages, type PageImageSource } from "./shared/meeshoPageImage";
-import { detectMeeshoStore, sanitizeStoreName, type MeeshoStore } from "./shared/meeshoStore";
-import { buildStyleCode, defaultsForCategory, deriveBrand, deriveFabric, deriveGenericName, deriveMainCategory, deriveOccasion, detectOrnamentation, extractPincode, mapNeck, mapSleeveLength } from "./shared/meeshoDefaults";
+import { detectMeeshoStore, isMeeshoPageChrome, sanitizeStoreName, type MeeshoStore } from "./shared/meeshoStore";
+import { buildStyleCode, defaultsForCategory, deriveBrand, deriveFabric, deriveGenericName, deriveMainCategory, deriveOccasion, detectOrnamentation, extractPincode, mapGarmentLength, mapNeck, mapSleeveLength, mapSleeveStyling } from "./shared/meeshoDefaults";
 import { fillSizeChart, fillSizeChoices, detectPageSizes, detectSelectedPageSizes, fallbackSizesForListing, planMeeshoFill } from "./shared/meeshoFormFill";
 import { isInvalidatedContext, sendRuntimeMessage, storageGet, storageSet, watchStorageChanges } from "../services/chromeAccess";
 import { getSession } from "../services/storage";
 import { startFillSession, stopFillSession } from "./shared/fillSession";
-import { startTicketHelper } from "./shared/ticketHelper";
-import { startLoginFill } from "./shared/loginFill";
 import { meeshoUid } from "./shared/meeshoStore";
+import { applyStaticI18n, currentLocale, loadLocale, localeOptionsHtml, setLocale, t } from "../i18n/runtime";
 
 type ProductRecord = Record<string, unknown> & {
   id?: string;
@@ -73,6 +72,8 @@ let shopLockMessage = "";
 let sellerSettings: Record<string, any> = {};
 let quota: { used?: number; limit?: number; remaining?: number; plan?: string } = {};
 let categoryOptions: Array<{ id: string; name: string; path: string }> = [];
+const SIDEBAR_DISMISS_KEY = "csSidebarDismissedPath";
+let sidebarDismissedPath = "";
 
 function whenReady(fn: () => void) {
   if (document.body) {
@@ -87,8 +88,6 @@ function start() {
     injectUi();
     watchSpaNavigation();
     startPageWatchers();
-    startTicketHelper();
-    startLoginFill();
     listenRuntime();
   } catch (error) {
     console.warn("Catalog Studio could not start on this page", error);
@@ -99,7 +98,12 @@ function listenRuntime() {
   try {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg?.type === "CS_TOGGLE") {
-        document.getElementById("cs-sidebar")?.classList.toggle("open");
+        const sidebar = document.getElementById("cs-sidebar");
+        if (sidebar?.classList.contains("open")) {
+          closeSidebarByUser();
+        } else {
+          openSidebarByUser();
+        }
       }
       if (msg?.type === "CS_TICK") {
         window.postMessage({ type: "CS_TICK" }, location.origin);
@@ -107,6 +111,50 @@ function listenRuntime() {
     });
   } catch {
     // ignore
+  }
+}
+
+function pageKey() {
+  return location.pathname;
+}
+
+function rememberedDismissedPath() {
+  try {
+    sidebarDismissedPath = sessionStorage.getItem(SIDEBAR_DISMISS_KEY) || sidebarDismissedPath;
+  } catch {
+    // private mode
+  }
+  return sidebarDismissedPath;
+}
+
+function isSidebarDismissed() {
+  return rememberedDismissedPath() === pageKey();
+}
+
+function setSidebarDismissed(on: boolean) {
+  sidebarDismissedPath = on ? pageKey() : "";
+  try {
+    if (on) sessionStorage.setItem(SIDEBAR_DISMISS_KEY, sidebarDismissedPath);
+    else sessionStorage.removeItem(SIDEBAR_DISMISS_KEY);
+  } catch {
+    // private mode
+  }
+}
+
+function openSidebarByUser() {
+  setSidebarDismissed(false);
+  document.getElementById("cs-sidebar")?.classList.add("open");
+}
+
+function closeSidebarByUser() {
+  setSidebarDismissed(true);
+  document.getElementById("cs-sidebar")?.classList.remove("open");
+}
+
+function maybeAutoOpenSidebar() {
+  if (isSidebarDismissed()) return;
+  if (isMeeshoAddCatalogFlow()) {
+    document.getElementById("cs-sidebar")?.classList.add("open");
   }
 }
 
@@ -126,9 +174,7 @@ function schedulePageSync(forceFormScan = false) {
       syncCategoryFromPage();
       syncSizesFromPage();
     }
-    if (isMeeshoAddCatalogFlow()) {
-      document.getElementById("cs-sidebar")?.classList.add("open");
-    }
+    maybeAutoOpenSidebar();
   }, 400);
 }
 
@@ -139,9 +185,7 @@ function startPageWatchers() {
     if (!shouldScanMeeshoForm() && source === "page-scan") return;
     if (source === "page-scan" && pickedSource === "user-drop") return;
     previewLocalImage(file, "page", source);
-    if (isMeeshoAddCatalogFlow()) {
-      document.getElementById("cs-sidebar")?.classList.add("open");
-    }
+    maybeAutoOpenSidebar();
     if (shouldScanMeeshoForm()) syncSizesFromPage();
   });
   document.addEventListener("click", (event) => {
@@ -196,6 +240,8 @@ function injectUi() {
     #cs-sidebar header .brand img { width:32px; height:32px; border-radius:9px; background:#fff; }
     #cs-sidebar header .brand small { display:block; opacity:.8; font-weight:500; font-size:11px; }
     #cs-sidebar header #cs-close { width:auto; margin:0; background:transparent; color:#fff; border-color:rgba(255,255,255,.25); }
+    #cs-sidebar header .cs-head-actions { display:flex; align-items:center; gap:6px; }
+    #cs-sidebar header #cs-locale { width:auto; max-width:7.5rem; margin:0; padding:4px 6px; font-size:12px; color:#0f172a; }
     #cs-sidebar .body { padding:16px; overflow:auto; height:calc(100vh - 64px); }
     #cs-sidebar input, #cs-sidebar button, #cs-sidebar select, #cs-sidebar textarea { width:100%; margin:6px 0; padding:8px; border-radius:10px; border:1px solid #e2e8f0; box-sizing:border-box; }
     #cs-sidebar .btn { background:#0f766e; color:#fff; border:0; font-weight:600; cursor:pointer; }
@@ -213,7 +259,7 @@ function injectUi() {
     #cs-sidebar .cs-note { font-size:12px; color:#64748b; }
     #cs-sidebar .cs-ok { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; border-radius:10px; padding:8px 10px; font-size:13px; }
     #cs-sidebar .cs-store { display:flex; align-items:center; gap:8px; background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600; width:fit-content; }
-    #cs-sidebar .cs-store::before { content:"✓"; }
+    #cs-sidebar .cs-store::before { content:"\\2713"; }
     #cs-sidebar .cs-status { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; }
     #cs-sidebar .cs-status.ok::before { content:""; width:8px; height:8px; border-radius:99px; background:#16a34a; display:inline-block; }
     #cs-sidebar .cs-thumb { width:100%; height:140px; object-fit:cover; border-radius:10px; background:#f1f5f9; display:none; }
@@ -222,8 +268,11 @@ function injectUi() {
     #cs-sidebar .cs-attr { display:flex; justify-content:space-between; gap:8px; font-size:13px; padding:4px 0; border-bottom:1px solid #f1f5f9; }
     #cs-sidebar .cs-choice { border:1px solid #e2e8f0; border-radius:10px; padding:8px; margin:6px 0; cursor:pointer; font-size:13px; }
     #cs-sidebar .cs-choice.active { border-color:#0f766e; background:#ecfdf5; }
-    #cs-sidebar .cs-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+    #cs-sidebar .cs-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px 6px; align-items:end; }
     #cs-sidebar .cs-row input { margin-top:0; }
+    #cs-sidebar .cs-field { display:flex; flex-direction:column; gap:4px; min-width:0; margin:0; font-weight:600; color:#334155; }
+    #cs-sidebar .cs-field > span { font-size:11px; line-height:1.25; }
+    #cs-sidebar .cs-field input { margin:0; font-weight:500; }
     #cs-sidebar .cs-meter { display:flex; align-items:center; gap:8px; font-size:12px; margin:8px 0 0; }
     #cs-sidebar .cs-meter .bar { flex:1; height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden; }
     #cs-sidebar .cs-meter .bar i { display:block; height:100%; width:0; background:linear-gradient(90deg,#dc2626,#16a34a); }
@@ -240,112 +289,118 @@ function injectUi() {
   sidebar.id = "cs-sidebar";
   sidebar.innerHTML = `
     <header>
-      <div class="brand">${logoImg(32)}<div><strong>Catalog Studio</strong><small>Auto-Fill v1.4.0</small></div></div>
-      <button id="cs-close">Close</button>
+      <div class="brand">${logoImg(32)}<div><strong>Catalog Studio</strong><small data-i18n="ext.autofill">Auto-Fill v1.4.0</small></div></div>
+      <div class="cs-head-actions">
+        <select id="cs-locale">${localeOptionsHtml()}</select>
+        <button id="cs-close" data-i18n="ext.close">Close</button>
+      </div>
     </header>
     <div class="body">
       <section>
         <p id="cs-user" class="cs-status">Checking pairing...</p>
-        <div class="cs-meter"><span id="cs-meter-done">0 done</span><div class="bar"><i id="cs-meter-bar"></i></div><span id="cs-meter-left">—</span></div>
+        <div class="cs-meter"><span id="cs-meter-done">0 done</span><div class="bar"><i id="cs-meter-bar"></i></div><span id="cs-meter-left">-</span></div>
         <p id="cs-quota" class="cs-note"></p>
         <p id="cs-shop-lock" class="cs-note"></p>
         <p id="cs-store" class="cs-store" style="display:none"></p>
         <p id="cs-ai" class="cs-note"></p>
         <p id="cs-account-note" class="cs-note"></p>
-        <button class="ghost" id="cs-disconnect">Disconnect</button>
+        <button class="ghost" id="cs-disconnect" data-i18n="ext.disconnect">Disconnect</button>
       </section>
       <section>
-        <h3>This page</h3>
+        <h3 data-i18n="ext.thisPage">This page</h3>
         <p id="cs-page" class="cs-note">Detecting page...</p>
       </section>
       <section>
-        <h3>Category</h3>
-        <input id="cs-category" readonly placeholder="Detected from Meesho after you select a category" />
-        <input id="cs-cat-search" placeholder="Search Catalog Studio templates" />
+        <h3 data-i18n="ext.category">Category</h3>
+        <input id="cs-category" readonly data-i18n-placeholder="ext.catPh" placeholder="Detected from Meesho after you select a category" />
+        <input id="cs-cat-search" data-i18n-placeholder="ext.catSearch" placeholder="Search Catalog Studio templates" />
         <div id="cs-cat-results"></div>
-        <p id="cs-category-note" class="cs-note">Catalog Studio reads the category Meesho already selected.</p>
+        <p id="cs-category-note" class="cs-note" data-i18n="ext.catNote">Catalog Studio reads the category Meesho already selected.</p>
       </section>
       <section>
-        <h3>Product image</h3>
+        <h3 data-i18n="ext.image">Product image</h3>
         <p id="cs-image-status" class="cs-note">Add a photo on the Meesho form (Product 1 / Front View). Catalog Studio will pick it automatically.</p>
         <img id="cs-image" class="cs-thumb" alt="Product preview" />
-        <button class="ghost" id="cs-recapture">Capture image from this page again</button>
-        <div id="cs-drop" class="cs-drop">Or drop an image here / click to choose</div>
+        <button class="ghost" id="cs-recapture" data-i18n="ext.recapture">Capture image from this page again</button>
+        <div id="cs-drop" class="cs-drop" data-i18n="ext.drop">Or drop an image here / click to choose</div>
         <input id="cs-file" type="file" accept="image/jpeg,image/png,image/webp" hidden />
       </section>
       <section>
-        <h3>Product info</h3>
-        <p class="cs-note">The more you write, the more accurate the listing. Catalog Studio uses this with the photo.</p>
-        <textarea id="cs-notes" rows="4" placeholder="Fabric, color, single piece or set, occasion"></textarea>
-        <input id="cs-style" placeholder="Style code / Product ID (optional)" />
-        <p class="cs-note">GST, HSN, weight, and manufacturer details are filled automatically from this Meesho store and your Catalog Studio profile. Edit only if you need to override.</p>
+        <h3 data-i18n="ext.info">Product info</h3>
+        <p class="cs-note" data-i18n="ext.infoNote">The more you write, the more accurate the listing. Catalog Studio uses this with the photo.</p>
+        <textarea id="cs-notes" rows="4" data-i18n-placeholder="ext.notesPh" placeholder="Fabric, color, single piece or set, occasion"></textarea>
+        <input id="cs-style" data-i18n-placeholder="ext.stylePh" placeholder="Style code / Product ID (optional)" />
+        <p class="cs-note" data-i18n="ext.gstNote">GST, HSN, weight, and manufacturer details are filled automatically from this Meesho store and your Catalog Studio profile. Edit only if you need to override.</p>
         <details id="cs-settings">
-          <summary>Seller settings</summary>
-          <p class="cs-note">Price rule and packaging are saved to your Catalog Studio account. Existing GST/price fields above still win if you typed them.</p>
+          <summary data-i18n="ext.sellerSettings">Seller settings</summary>
+          <p class="cs-note" data-i18n="ext.sellerNote">These defaults save to your Catalog Studio account and apply on every new listing.</p>
+          <p class="cs-note" data-i18n="ext.sellerPriceHint">Return cut (₹) is rupees kept aside for returns. MRP multiplier sets MRP = selling price × this number (1.9 means ₹100 selling → ₹190 MRP). Default inventory is the stock filled when this listing's inventory is empty.</p>
           <div class="cs-row">
-            <input id="cs-retcut" type="number" placeholder="Returns − ₹" />
-            <input id="cs-mrpmul" type="number" step="0.1" placeholder="MRP ×" />
-            <input id="cs-set-inv" type="number" placeholder="Default inventory" />
+            <label class="cs-field"><span data-i18n="ext.retcut">Return cut (₹)</span><input id="cs-retcut" type="text" inputmode="decimal" /></label>
+            <label class="cs-field"><span data-i18n="ext.mrpmul">MRP multiplier</span><input id="cs-mrpmul" type="text" inputmode="decimal" /></label>
+            <label class="cs-field"><span data-i18n="ext.inv">Default inventory</span><input id="cs-set-inv" type="text" inputmode="numeric" /></label>
           </div>
+          <p class="cs-note" data-i18n="ext.sellerPackHint">Box size in centimetres (length × width × height). Pack weight is the packed parcel in grams — not the product weight below.</p>
           <div class="cs-row">
-            <input id="cs-pk-l" placeholder="Pack L" />
-            <input id="cs-pk-w" placeholder="Pack W" />
-            <input id="cs-pk-h" placeholder="Pack H" />
+            <label class="cs-field"><span data-i18n="ext.packL">Length (cm)</span><input id="cs-pk-l" type="text" inputmode="decimal" /></label>
+            <label class="cs-field"><span data-i18n="ext.packW">Width (cm)</span><input id="cs-pk-w" type="text" inputmode="decimal" /></label>
+            <label class="cs-field"><span data-i18n="ext.packH">Height (cm)</span><input id="cs-pk-h" type="text" inputmode="decimal" /></label>
           </div>
-          <input id="cs-pk-wt" placeholder="Pack weight g" />
-          <input id="cs-keywords" placeholder="Top keywords (comma separated)" />
-          <button class="ghost" id="cs-save-settings" type="button">Save settings</button>
+          <label class="cs-field"><span data-i18n="ext.packWt">Pack weight (g)</span><input id="cs-pk-wt" type="text" inputmode="decimal" /></label>
+          <label class="cs-field"><span data-i18n="ext.keywords">Top keywords (comma separated)</span><input id="cs-keywords" /></label>
+          <button class="ghost" id="cs-save-settings" type="button" data-i18n="ext.saveSettings">Save settings</button>
         </details>
+        <p class="cs-note" data-i18n="ext.listingHead">This listing — GST %, HSN, product weight, and prices. Empty price uses seller settings.</p>
         <div class="cs-row">
-          <input id="cs-gst" placeholder="GST" />
-          <input id="cs-hsn" placeholder="HSN" />
-          <input id="cs-weight" placeholder="Weight g" />
+          <label class="cs-field"><span data-i18n="ext.gst">GST (%)</span><input id="cs-gst" type="text" inputmode="decimal" /></label>
+          <label class="cs-field"><span data-i18n="ext.hsn">HSN code</span><input id="cs-hsn" type="text" inputmode="numeric" /></label>
+          <label class="cs-field"><span data-i18n="ext.weight">Product weight (g)</span><input id="cs-weight" type="text" inputmode="decimal" /></label>
         </div>
         <div class="cs-row">
-          <input id="cs-mrp" placeholder="MRP" />
-          <input id="cs-price" placeholder="Selling price" />
-          <input id="cs-inventory" placeholder="Inventory" />
+          <label class="cs-field"><span data-i18n="ext.mrp">MRP (₹)</span><input id="cs-mrp" type="text" inputmode="decimal" /></label>
+          <label class="cs-field"><span data-i18n="ext.price">Selling price (₹)</span><input id="cs-price" type="text" inputmode="decimal" /></label>
+          <label class="cs-field"><span data-i18n="ext.inventory">Inventory</span><input id="cs-inventory" type="text" inputmode="numeric" /></label>
         </div>
-        <input id="cs-address" placeholder="Manufacturer / packer address" />
-        <input id="cs-pincode" placeholder="Pincode" />
+        <label class="cs-field"><span data-i18n="ext.addr">Manufacturer / packer address</span><input id="cs-address" /></label>
+        <label class="cs-field"><span data-i18n="ext.pincode">Pincode</span><input id="cs-pincode" type="text" inputmode="numeric" /></label>
       </section>
       <section>
-        <h3>Sizes from Meesho</h3>
-        <p id="cs-size-note" class="cs-note">Sizes you pick on Meesho show here automatically.</p>
+        <h3 data-i18n="ext.sizes">Sizes from Meesho</h3>
+        <p id="cs-size-note" class="cs-note" data-i18n="ext.sizeNote">Sizes you pick on Meesho show here automatically.</p>
         <div id="cs-sizes" class="cs-sizes"></div>
       </section>
       <section class="footer-actions">
-        <button class="btn" id="cs-generate" type="button">Generate</button>
-        <button class="btn btn-fill" id="cs-fill" style="display:none">Fill Values for Form</button>
-        <button class="ghost" id="cs-reset-listing">Reset / new listing</button>
+        <button class="btn" id="cs-generate" type="button" data-i18n="ext.generate">Generate</button>
+        <button class="btn btn-fill" id="cs-fill" style="display:none" data-i18n="ext.fill">Fill Values for Form</button>
+        <button class="ghost" id="cs-reset-listing" data-i18n="ext.reset">Reset / new listing</button>
         <p id="cs-progress" class="cs-progress"></p>
       </section>
       <section id="cs-generated" style="display:none">
-        <h3>Product details</h3>
+        <h3 data-i18n="ext.details">Product details</h3>
         <div id="cs-attrs"></div>
-        <h3>Title</h3>
+        <h3 data-i18n="ext.title">Title</h3>
         <div id="cs-titles"></div>
-        <h3>Description</h3>
+        <h3 data-i18n="ext.desc">Description</h3>
         <div id="cs-descs"></div>
       </section>
       <details>
-        <summary>Saved products and extra autofill</summary>
-        <input id="cs-search" placeholder="Search saved products" />
+        <summary data-i18n="ext.saved">Saved products and extra autofill</summary>
+        <input id="cs-search" data-i18n-placeholder="ext.searchProd" placeholder="Search saved products" />
         <div id="cs-products"></div>
-        <p class="cs-note">Review every field. Fill only types into the Meesho form after you click it. Catalog Studio never submits and never adds buttons to Meesho.</p>
-        <button class="ghost" data-mode="all">Autofill all fields</button>
-        <button class="ghost" data-mode="basic">Autofill basic details</button>
-        <button class="ghost" data-mode="attributes">Autofill attributes</button>
-        <button class="ghost" id="cs-stop">Stop autofill</button>
+        <p class="cs-note" data-i18n="ext.reviewNote">Review every field. Fill only types into the Meesho form after you click it. Catalog Studio never submits and never adds buttons to Meesho.</p>
+        <button class="ghost" data-mode="all" data-i18n="ext.fillAll">Autofill all fields</button>
+        <button class="ghost" data-mode="basic" data-i18n="ext.fillBasic">Autofill basic details</button>
+        <button class="ghost" data-mode="attributes" data-i18n="ext.fillAttr">Autofill attributes</button>
+        <button class="ghost" id="cs-stop" data-i18n="ext.stop">Stop autofill</button>
       </details>
     </div>
   `;
   document.body.append(fab, sidebar);
-  fab.onclick = () => sidebar.classList.add("open");
-  sidebar.querySelector("#cs-close")?.addEventListener("click", () => sidebar.classList.remove("open"));
+  fab.onclick = () => openSidebarByUser();
+  sidebar.querySelector("#cs-close")?.addEventListener("click", () => closeSidebarByUser());
   sidebar.querySelector("#cs-stop")?.addEventListener("click", () => {
     stopAutofill();
-    setProgress("Stopped by user");
+    setProgress(t("ext.stopped"));
   });
   sidebar.querySelector("#cs-disconnect")?.addEventListener("click", async () => {
     await sendRuntimeMessage({ type: "UNPAIR" });
@@ -367,11 +422,19 @@ function injectUi() {
     sidebar.querySelector(`#${id}`)?.addEventListener("change", persistListingDefaults);
   });
   watchStorageChanges((changes, area) => {
-    if (area === "local" && (changes.pairingKey || changes.user || changes.business)) {
+    if (area !== "local") return;
+    if (changes.csLocale) {
+      void loadLocale().then(() => applyOverlayLocale());
+    }
+    if (changes.pairingKey || changes.user || changes.business) {
       void renderAccount();
       void loadProducts("");
       void loadBusinessAndProfile();
     }
+  });
+  sidebar.querySelector("#cs-locale")?.addEventListener("change", (event) => {
+    setLocale((event.target as HTMLSelectElement).value);
+    applyOverlayLocale();
   });
   window.setTimeout(() => {
     void initSidebarState(sidebar);
@@ -380,6 +443,8 @@ function injectUi() {
 
 async function initSidebarState(sidebar: HTMLElement) {
   try {
+    await loadLocale();
+    applyOverlayLocale();
     await renderAccount();
     await loadProducts("");
     await loadBusinessAndProfile();
@@ -388,9 +453,7 @@ async function initSidebarState(sidebar: HTMLElement) {
     syncStoreFromPage();
     await restoreListingDefaults();
     await loadExtensionFeatures();
-    if (isMeeshoAddCatalogFlow()) {
-      sidebar.classList.add("open");
-    }
+    maybeAutoOpenSidebar();
   } catch (error) {
     if (!isInvalidatedContext(error)) {
       console.warn("Catalog Studio UI init failed", error);
@@ -398,29 +461,48 @@ async function initSidebarState(sidebar: HTMLElement) {
   }
 }
 
+function applyOverlayLocale() {
+  const sidebar = document.getElementById("cs-sidebar");
+  if (sidebar) applyStaticI18n(sidebar);
+  const select = document.getElementById("cs-locale") as HTMLSelectElement | null;
+  if (select) {
+    select.innerHTML = localeOptionsHtml();
+    select.value = currentLocale();
+  }
+  const genBtn = document.getElementById("cs-generate") as HTMLButtonElement | null;
+  if (genBtn && genBtn.dataset.busy !== "1") genBtn.textContent = t("ext.generate");
+  const fillBtn = document.getElementById("cs-fill") as HTMLButtonElement | null;
+  if (fillBtn) fillBtn.textContent = fillButtonLabel();
+  if (!pickedFile) {
+    const status = document.getElementById("cs-image-status");
+    if (status && !status.classList.contains("cs-ok")) status.textContent = t("ext.imageNote");
+  }
+  syncPageHint();
+  void renderAccount();
+  paintQuota();
+}
+
 function syncPageHint() {
   const el = document.getElementById("cs-page");
   if (!el) return;
   if (isMeeshoCatalogListPage() && !isMeeshoAddCatalogFlow()) {
-    el.textContent = "Meesho Catalog Uploads. Open Add Single Catalog, then click Catalog Studio to fill the form.";
+    el.textContent = t("ext.pageList");
   } else if (isMeeshoBulkTemplateStep()) {
-    el.textContent = "Meesho Bulk Catalog Upload is showing Meesho's own Excel template step (Upload Template File). Catalog Studio did not add that button. Use Add Single Catalog for photo + form fill.";
+    el.textContent = t("ext.pageBulkTpl");
   } else if (isMeeshoBulkCatalogPage()) {
-    el.textContent = "Meesho Bulk Catalog Upload. Catalog Studio will not click this page. Use Add Single Catalog if you want form autofill.";
+    el.textContent = t("ext.pageBulk");
   } else if (isMeeshoCategoryPickerVisible() || /select category/i.test(document.title)) {
-    el.textContent = "Select Category is open. Catalog Studio uses the highlighted Meesho path.";
+    el.textContent = t("ext.pageCat");
   } else if (isMeeshoProductDetailsPage()) {
-    el.textContent = pickedFile
-      ? "Product detected. Select a size on Meesho, then Generate. Catalog Studio will not change this Meesho page until you click Fill Values for Form."
-      : "Product detected on Meesho. Catalog Studio will pick the product photo automatically.";
+    el.textContent = pickedFile ? t("ext.pageProductGen") : t("ext.pageProduct");
   } else if (isMeeshoAddCatalogFlow()) {
-    el.textContent = "Meesho add catalog. Add the product photo on Meesho — Catalog Studio picks it up automatically.";
+    el.textContent = t("ext.pageAdd");
   } else if (isMeeshoCatalogPage()) {
-    el.textContent = "Meesho catalog page. Open Add Single Catalog when you are ready to fill a listing.";
+    el.textContent = t("ext.pageCatalog");
   } else if (detectMarketplace() === "MEESHO") {
-    el.textContent = "Meesho supplier page. When you add a product, Catalog Studio will pick it up automatically.";
+    el.textContent = t("ext.pageSupplier");
   } else {
-    el.textContent = `${detectMarketplace()} page. Pair, pick a product, then autofill.`;
+    el.textContent = t("ext.pageOther", { name: detectMarketplace() });
   }
 }
 
@@ -435,19 +517,19 @@ function syncCategoryFromPage() {
     applyCategoryDefaults(leaf);
     if (note) {
       note.className = "cs-ok";
-      note.textContent = `Meesho category selected automatically — ${leaf}. ${path.join(" / ")}`;
+      note.textContent = t("ext.catSelected", { leaf, path: path.join(" / ") });
     }
     return;
   }
   input.value = "";
   if (note) {
     note.className = "cs-note";
-    note.textContent = "On Select Category, Catalog Studio reads the highlighted Meesho path (not a leftover category from the list).";
+    note.textContent = t("ext.catHint");
   }
 }
 
 function fillButtonLabel() {
-  return detectMarketplace() === "MEESHO" ? "Fill Values for Form" : "Fill marketplace form";
+  return detectMarketplace() === "MEESHO" ? t("ext.fill") : t("ext.fillMarket");
 }
 
 function syncSizesFromPage() {
@@ -486,10 +568,10 @@ function renderSizeOptions() {
   const note = document.getElementById("cs-size-note");
   if (!box) return;
   if (!availableSizes.length) {
-    box.innerHTML = `<p class="cs-note">Waiting for sizes on the Meesho form.</p>`;
+    box.innerHTML = `<p class="cs-note">${t("ext.waitingSizes")}</p>`;
     if (note) {
       note.className = "cs-note";
-      note.textContent = "Sizes you pick on Meesho show here automatically.";
+      note.textContent = t("ext.sizeNote");
     }
     return;
   }
@@ -566,18 +648,18 @@ async function renderAccount() {
   const ai = document.getElementById("cs-ai");
   if (!session) {
     el.className = "cs-status";
-    el.textContent = "Not paired. Open the Catalog Studio dashboard while logged in — the extension pairs itself. Or paste a cst_ key from Chrome Extension in the options page.";
-    if (note) note.textContent = "Generate will not run until the extension is paired.";
+    el.textContent = t("ext.notPaired");
+    if (note) note.textContent = t("ext.needPair");
     if (ai) ai.textContent = "";
     return;
   }
   el.className = "cs-status ok";
-  el.textContent = "Connected";
-  if (ai) ai.textContent = "AI ready";
+  el.textContent = t("ext.connected");
+  if (ai) ai.textContent = t("ext.aiReady");
   if (note) {
     note.textContent = detectedStore?.name
-      ? `Meesho store connected — ${detectedStore.name}. Manufacturer and packer will use this name.`
-      : `Paired as ${session.user?.workspace || session.user?.name || "your Catalog Studio account"}.`;
+      ? t("ext.storeConn", { name: detectedStore.name })
+      : t("ext.pairedAs", { name: session.user?.workspace || session.user?.name || "Catalog Studio" });
   }
 }
 
@@ -645,18 +727,18 @@ function previewLocalImage(file: File, source: "page" | "user-drop", pageSource?
     status.textContent =
       source === "page"
         ? pageSource === "page-upload"
-          ? "Front image captured from the Meesho form. Catalog Studio will analyze this photo."
-          : "Image picked from this page. Catalog Studio will analyze this photo."
-        : `Image ready: ${file.name}`;
+          ? t("ext.imgForm")
+          : t("ext.imgPage")
+        : t("ext.imgReady", { name: file.name });
   }
-  setProgress("Image ready. Add optional notes, then click Generate.");
+  setProgress(t("ext.imgReadyGen"));
 }
 
 async function recaptureFromPage() {
-  setProgress("Looking for the Front View image on this page...");
+  setProgress(t("ext.lookingFront"));
   const file = await captureBestPageImage();
   if (!file) {
-    setProgress("No product image found yet. Upload Front View on the Meesho form, or drop a photo here.");
+    setProgress(t("ext.noImage"));
     return;
   }
   previewLocalImage(file, "page", "recapture");
@@ -669,33 +751,33 @@ async function analyzePickedImage() {
     btn.dataset.busy = "1";
     btn.disabled = true;
     btn.classList.add("busy");
-    btn.textContent = "Generating...";
+    btn.textContent = t("ext.generating");
   }
   try {
     if (!pickedFile) {
-      setProgress("Looking for a product photo on this page...");
+      setProgress(t("ext.lookingFront"));
       const file = await captureBestPageImage();
       if (file) previewLocalImage(file, "page", "recapture");
     }
     if (!pickedFile) {
-      setProgress("Add a Front View image on the Meesho form, or drop a photo here, then click Generate.", true);
+      setProgress(t("ext.addFront"), true);
       return;
     }
     const session = await getSession();
     if (!session) {
-      setProgress("Pair the extension first: click the Catalog Studio icon, paste your cst_ key from the dashboard.", true);
+      setProgress(t("ext.pairThenGen"), true);
       void renderAccount();
       return;
     }
-    setProgress("Generating listing from the product image...");
+    setProgress(t("ext.genFromImage"));
     persistListingDefaults();
     const notes = (document.getElementById("cs-notes") as HTMLTextAreaElement | null)?.value || "";
     const keywords = String(sellerSettings.keywords || []).length
       ? ` Keywords: ${(sellerSettings.keywords as string[]).join(", ")}.`
       : "";
     const pageCategory = readMeeshoCategoryFromPage();
-    if (shopLock === "bad") {
-      setProgress(shopLockMessage || "This Meesho shop does not match the locked Catalog Studio account.", true);
+    if (shopLock === "bad" && !isMeeshoPageChrome(shopLockMessage)) {
+      setProgress(shopLockMessage || t("ext.shopMismatch"), true);
       return;
     }
     const base64 = await fileToBase64(pickedFile);
@@ -707,7 +789,7 @@ async function analyzePickedImage() {
       marketplace: detectMarketplace() === "UNKNOWN" ? "MEESHO" : detectMarketplace(),
       notes: `${notes}${keywords}`.trim(),
       categoryHint: pageCategory,
-      meeshoName: detectedStore?.name || "",
+      meeshoName: sanitizeStoreName(detectedStore?.name || ""),
       meeshoUid: meeshoUid(),
     });
     if (!data) {
@@ -782,7 +864,7 @@ async function analyzePickedImage() {
   } finally {
     if (btn) {
       btn.dataset.busy = "0";
-      btn.textContent = "Generate";
+      btn.textContent = t("ext.generate");
       syncGenerateEnabled();
     }
   }
@@ -817,7 +899,7 @@ function renderGenerated() {
   document.getElementById("cs-descs")!.innerHTML = generated.descriptions
     .map(
       (text, index) =>
-        `<div class="cs-choice ${index === generated!.selectedDesc ? "active" : ""}" data-desc="${index}">${escapeHtml(text.slice(0, 280))}${text.length > 280 ? "…" : ""} <span class="cs-note">${text.length} chars</span></div>`,
+        `<div class="cs-choice ${index === generated!.selectedDesc ? "active" : ""}" data-desc="${index}">${escapeHtml(text.slice(0, 280))}${text.length > 280 ? "..." : ""} <span class="cs-note">${text.length} chars</span></div>`,
     )
     .join("") || `<p class="cs-note">No descriptions yet.</p>`;
   document.querySelectorAll<HTMLElement>("[data-title]").forEach((el) => {
@@ -850,7 +932,7 @@ function resetListing() {
   const status = document.getElementById("cs-image-status");
   if (status) {
     status.className = "cs-note";
-    status.textContent = "Upload a Front View photo on the Meesho form. Catalog Studio will pick it automatically.";
+    status.textContent = t("ext.needPhoto");
   }
   const generatedEl = document.getElementById("cs-generated");
   if (generatedEl) generatedEl.style.display = "none";
@@ -861,7 +943,7 @@ function resetListing() {
   }
   syncSizesFromPage();
   setMeter(0, 0);
-  setProgress("Listing reset. Select a size, add a product photo, then Generate.");
+  setProgress(t("ext.resetOk"));
 }
 
 function fileToBase64(file: File) {
@@ -881,12 +963,12 @@ async function loadProducts(q: string) {
   try {
     const session = await getSession();
     if (!session) {
-      box.textContent = "Pair the extension first.";
+      box.textContent = t("ext.pairFirst");
       return;
     }
     const data = await sendRuntimeMessage<{ error?: string; data?: ProductRecord[] }>({ type: "API", path: `/extension/products?q=${encodeURIComponent(q)}` });
     if (!data) {
-      box.textContent = "Pair the extension first.";
+      box.textContent = t("ext.pairFirst");
       return;
     }
     if (data?.error) throw new Error(data.error);
@@ -894,14 +976,14 @@ async function loadProducts(q: string) {
     box.innerHTML = products
       .map(
         (p) =>
-          `<div class="cs-card" data-id="${p.id}"><strong>${escapeHtml(String(p.name || "Untitled"))}</strong><div>${escapeHtml(String(p.productType || p.category || ""))} · ${escapeHtml(String(p.primaryColor || ""))}</div></div>`,
+          `<div class="cs-card" data-id="${p.id}"><strong>${escapeHtml(String(p.name || t("ext.untitled")))}</strong><div>${escapeHtml(String(p.productType || p.category || ""))} · ${escapeHtml(String(p.primaryColor || ""))}</div></div>`,
       )
       .join("");
     box.querySelectorAll(".cs-card").forEach((card) =>
       card.addEventListener("click", () => selectProduct((card as HTMLElement).dataset.id!)),
     );
   } catch {
-    box.textContent = "Could not load products. Check pairing key.";
+    box.textContent = t("ext.loadFail");
   }
 }
 
@@ -946,7 +1028,7 @@ async function runAutofill(mode: string) {
   resetAutofill();
   startFillSession();
   const fillBtn = document.getElementById("cs-fill") as HTMLButtonElement | null;
-  if (fillBtn) fillBtn.textContent = "Filling form...";
+  if (fillBtn) fillBtn.textContent = t("ext.filling");
   try {
   const marketplace = detectMarketplace();
   if (mode === "category") {
@@ -1009,7 +1091,8 @@ function currentListing(): MappedListing {
   const pattern = ornamentation === "Embroidered" && stitchType === "Stitched"
     ? "Embroidered"
     : generated?.pattern || split.pattern;
-  const sleeveLength = mapSleeveLength(generated?.sleeveType || String(selected?.sleeveType || "")) || defaults.sleeveLength;
+  const sleeveSource = `${generated?.sleeveType || selected?.sleeveType || ""} ${title} ${description}`;
+  const sleeveLength = mapSleeveLength(sleeveSource) || defaults.sleeveLength;
   const neckType = mapNeck(generated?.neckType || String(selected?.neckType || ""))
     || (/kurti|kurta|dress|gown|t-?shirt|tee|top|tunic/.test(`${pageCategory} ${title}`.toLowerCase()) ? "Round Neck" : "");
   return {
@@ -1048,7 +1131,7 @@ function currentListing(): MappedListing {
     sellingPrice: inputValue("cs-price") || defaults.sellingPrice,
     brand: deriveBrand(title, storeName),
     stitchType,
-    garmentLength: defaults.garmentLength,
+    garmentLength: mapGarmentLength(`${title} ${pageCategory}`, defaults.garmentLength) || defaults.garmentLength,
     mainCategory: pageCategory || deriveMainCategory(title, notes),
     packOf: defaults.packOf,
     waistRise: /pant|trouser|jean/.test(`${title} ${notes}`.toLowerCase()) ? "Mid Rise" : "",
@@ -1062,7 +1145,7 @@ function currentListing(): MappedListing {
     inventory: inputValue("cs-inventory") || defaults.inventory,
     washCare: defaults.washCare,
     garmentType: defaults.garmentType,
-    sleeveStyling: defaults.sleeveStyling,
+    sleeveStyling: mapSleeveStyling(sleeveSource, defaults.sleeveStyling),
     surfaceStyling: ornamentation === "Not Applicable" ? defaults.surfaceStyling : ornamentation,
   };
 }
@@ -1154,8 +1237,8 @@ function setMeter(done: number, total: number) {
   const doneEl = document.getElementById("cs-meter-done");
   const leftEl = document.getElementById("cs-meter-left");
   const bar = document.getElementById("cs-meter-bar") as HTMLElement | null;
-  if (doneEl) doneEl.textContent = total ? `${done} done` : "0 done";
-  if (leftEl) leftEl.textContent = total ? `${Math.max(total - done, 0)} left` : "—";
+  if (doneEl) doneEl.textContent = t("ext.done", { n: total ? done : 0 });
+  if (leftEl) leftEl.textContent = total ? t("ext.left", { n: Math.max(total - done, 0) }) : "-";
   if (bar) bar.style.width = total ? `${Math.round((done / total) * 100)}%` : "0%";
 }
 
@@ -1183,7 +1266,11 @@ function paintQuota() {
     el.textContent = "";
     return;
   }
-  el.textContent = `${quota.plan || "FREE"} · ${quota.used ?? 0}/${quota.limit} AI listings this month`;
+  el.textContent = t("ext.quotaLine", {
+    plan: quota.plan || "FREE",
+    used: quota.used ?? 0,
+    limit: quota.limit,
+  });
 }
 
 function paintSettingsForm() {
@@ -1225,7 +1312,7 @@ async function saveSellerSettings() {
     return;
   }
   sellerSettings = { ...sellerSettings, ...(data?.data || body) };
-  setProgress("Seller settings saved.");
+  setProgress(t("ext.saveSettings"));
 }
 
 function applyPriceRuleToInputs() {
@@ -1239,27 +1326,50 @@ function applyPriceRuleToInputs() {
 }
 
 async function verifyShopLock() {
-  const name = detectedStore?.name || "";
-  const data = await sendRuntimeMessage<{ data?: { status?: string; error?: string; registered?: string } }>({
-    type: "API",
-    path: "/extension/verify-shop",
-    init: { method: "POST", body: JSON.stringify({ name, uid: meeshoUid() }) },
-  });
+  const name = sanitizeStoreName(detectedStore?.name || "");
+  if (detectedStore && !name) detectedStore = null;
+  else if (detectedStore && name) detectedStore = { ...detectedStore, name };
+  let data = await postVerifyShop(name);
+  if (isChromeLockMismatch(data)) {
+    await sendRuntimeMessage({
+      type: "API",
+      path: "/extension/settings",
+      init: { method: "PUT", body: JSON.stringify({ lockedShopName: name, lockedShopUid: meeshoUid() }) },
+    });
+    data = await postVerifyShop(name);
+  }
   const el = document.getElementById("cs-shop-lock");
   if (!data?.data) return;
   shopLock = (data.data.status as typeof shopLock) || "wait";
   shopLockMessage = data.data.error || "";
+  if (shopLock === "bad" && isChromeLockMismatch(data)) {
+    shopLock = name ? "ok" : "wait";
+    shopLockMessage = "";
+  }
   if (!el) return;
   if (shopLock === "ok") {
     el.className = "cs-ok";
-    el.textContent = `Shop lock OK${data.data.registered ? ` — ${data.data.registered}` : ""}.`;
+    el.textContent = t("ext.shopLockOk", { name: data.data.registered || name ? ` — ${data.data.registered || name}` : "" });
   } else if (shopLock === "bad") {
     el.className = "cs-note";
-    el.textContent = shopLockMessage || "This Meesho shop does not match the locked Catalog Studio account. Generate stays off.";
+    el.textContent = shopLockMessage || t("ext.shopMismatch");
   } else {
     el.className = "cs-note";
-    el.textContent = "Waiting for Meesho shop name. Generate still works.";
+    el.textContent = t("ext.needPair");
   }
+}
+
+function isChromeLockMismatch(data?: { data?: { status?: string; error?: string; registered?: string } }) {
+  if (data?.data?.status !== "bad") return false;
+  return isMeeshoPageChrome(data.data.registered || "") || isMeeshoPageChrome(data.data.error || "");
+}
+
+async function postVerifyShop(name: string) {
+  return sendRuntimeMessage<{ data?: { status?: string; error?: string; registered?: string } }>({
+    type: "API",
+    path: "/extension/verify-shop",
+    init: { method: "POST", body: JSON.stringify({ name, uid: meeshoUid() }) },
+  });
 }
 
 function renderCategoryResults(query: string) {

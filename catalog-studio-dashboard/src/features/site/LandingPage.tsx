@@ -4,11 +4,13 @@ import { Calculator, Chrome, Copy, Scissors } from "lucide-react";
 import { FlipkartLogo, MeeshoLogo, MergePdfLogo } from "../labels/logos";
 import { EnquiryForm } from "./EnquiryForm";
 import { HeroIllustration } from "./HeroIllustration";
-import { promoLabel } from "./format";
+import { formatMoney } from "./format";
 import { useSite } from "./useSite";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 export function LandingPage() {
   const site = useSite();
+  const { t } = useI18n();
   const heroBg = site.branding.heroBackground || "#07111f";
   const accent = site.client?.branding?.accentColor;
   const accentColor = typeof accent === "string" ? accent : site.branding.accentColor || "#38bdf8";
@@ -20,59 +22,43 @@ export function LandingPage() {
         <div className="relative mx-auto max-w-6xl px-4 py-16 lg:py-20">
           <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
             <div>
-              {site.branding.tagline && (
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-300">{site.branding.tagline}</p>
-              )}
-              <h1 className="mt-3 max-w-xl text-4xl font-semibold leading-tight tracking-tight md:text-5xl">{site.branding.heroTitle}</h1>
-              <p className="mt-5 max-w-xl text-sm leading-relaxed text-slate-300 md:text-base">{site.branding.heroSubtitle}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-300">{t("land.tagline")}</p>
+              <h1 className="mt-3 max-w-xl text-4xl font-semibold leading-tight tracking-tight md:text-5xl">{t("land.heroTitle")}</h1>
+              <p className="mt-5 max-w-xl text-sm leading-relaxed text-slate-300 md:text-base">{t("land.heroSub")}</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
                   to="/login"
                   className="rounded-full bg-teal-400 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-teal-300"
                 >
-                  Login
+                  {t("login.submit")}
                 </Link>
                 <Link
                   to="/register"
                   className="rounded-full border border-white/20 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/10"
                 >
-                  Register
+                  {t("register.submit")}
                 </Link>
               </div>
             </div>
             <HeroIllustration />
           </div>
           <div className="mt-12 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <ServiceChip logo={<FlipkartLogo className="h-11 w-11" />} label="Flipkart Label Crop" hint="Thermal or A4 shipping labels" />
-            <ServiceChip logo={<MeeshoLogo className="h-11 w-11" />} label="Meesho Label Crop" hint="Invoice off, label ready" />
-            <ServiceChip logo={<MergePdfLogo className="h-11 w-11" />} label="Merge PDF" hint="One print-ready file" />
-            <ServiceChip logo={<CalcMark />} label="Profit Calculator" hint="GST, RTO, and margin" />
-            <ServiceChip logo={<ExtMark />} label="Chrome Extension" hint="Fill GST and HSN on Meesho" />
+            <ServiceChip logo={<FlipkartLogo className="h-11 w-11" />} label={t("land.fkCrop")} hint={t("land.fkHint")} />
+            <ServiceChip logo={<MeeshoLogo className="h-11 w-11" />} label={t("land.meCrop")} hint={t("land.meHint")} />
+            <ServiceChip logo={<MergePdfLogo className="h-11 w-11" />} label={t("land.merge")} hint={t("land.mergeHint")} />
+            <ServiceChip logo={<CalcMark />} label={t("land.profit")} hint={t("land.profitHint")} />
+            <ServiceChip logo={<ExtMark />} label={t("land.extChip")} hint={t("land.extHint")} />
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-14">
-        <h2 className="text-2xl font-semibold">What Catalog Studio offers</h2>
-        <p className="mt-2 max-w-2xl text-slate-600">
-          These services are available in your seller workspace after you log in or create an account.
-        </p>
+        <h2 className="text-2xl font-semibold">{t("land.offers")}</h2>
+        <p className="mt-2 max-w-2xl text-slate-600">{t("land.offersSub")}</p>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <Feature
-            icon={Scissors}
-            title="Label crop"
-            text="Upload Flipkart or Meesho PDFs, drop the invoice, and download thermal or A4 labels in the browser."
-          />
-          <Feature
-            icon={Calculator}
-            title="Profit calculator"
-            text="Estimate commission, GST, shipping, and margin before you list."
-          />
-          <Feature
-            icon={Chrome}
-            title="Chrome extension"
-            text="Pair Catalog Studio Autofill, fill GST and HSN fields, and keep listing submit in your own hands."
-          />
+          <Feature icon={Scissors} title={t("land.featCrop")} text={t("land.featCropText")} />
+          <Feature icon={Calculator} title={t("land.featCalc")} text={t("land.featCalcText")} />
+          <Feature icon={Chrome} title={t("land.featExt")} text={t("land.featExtText")} />
         </div>
       </section>
 
@@ -80,15 +66,15 @@ export function LandingPage() {
         <section className="bg-slate-50">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 lg:grid-cols-[1.2fr_0.8fr]">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">Featured client</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">{t("land.featured")}</p>
               <h2 className="mt-2 text-3xl font-semibold">{site.client.storeName}</h2>
-              {site.client.tagline && <p className="mt-2 text-lg text-slate-600">{site.client.tagline}</p>}
-              <p className="mt-4 max-w-2xl text-slate-600">{site.client.about}</p>
+              <p className="mt-2 text-lg text-slate-600">{t("land.clientTagline")}</p>
+              <p className="mt-4 max-w-2xl text-slate-600">{t("land.clientAbout")}</p>
               <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
-                {site.client.ownerName && <Item label="Owner" value={site.client.ownerName} />}
-                {site.client.email && <Item label="Store email" value={site.client.email} />}
-                {site.client.phone && <Item label="Phone" value={site.client.phone} />}
-                {site.client.address && <Item label="Address" value={site.client.address} />}
+                {site.client.ownerName && <Item label={t("land.owner")} value={site.client.ownerName} />}
+                {site.client.email && <Item label={t("land.storeEmail")} value={site.client.email} />}
+                {site.client.phone && <Item label={t("land.phone")} value={site.client.phone} />}
+                {site.client.address && <Item label={t("land.address")} value={site.client.address} />}
               </dl>
             </div>
             <div className="space-y-3">
@@ -96,9 +82,11 @@ export function LandingPage() {
                 <PromoCard
                   key={promo.code}
                   code={promo.code}
-                  headline={promo.headline}
-                  description={promo.description}
-                  offer={promoLabel(promo.discountType, promo.discountValue, promo.trialDays)}
+                  headline={t("land.promoHeadline")}
+                  description={t("land.promoDesc")}
+                  discountType={promo.discountType}
+                  discountValue={promo.discountValue}
+                  trialDays={promo.trialDays}
                   accent={accentColor}
                 />
               ))}
@@ -157,19 +145,30 @@ function PromoCard({
   code,
   headline,
   description,
-  offer,
+  discountType,
+  discountValue,
+  trialDays = 0,
   accent,
 }: {
   code: string;
   headline?: string;
   description?: string;
-  offer: string;
+  discountType: string;
+  discountValue: number;
+  trialDays?: number;
   accent: string;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const offer =
+    discountType === "TRIAL"
+      ? t("land.promoTrial", { days: trialDays || discountValue })
+      : discountType === "FIXED"
+        ? t("land.promoFixed", { amount: formatMoney(discountValue) })
+        : t("land.promoOff", { value: discountValue });
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6" style={{ borderTopColor: accent, borderTopWidth: 4 }}>
-      <p className="text-sm font-medium text-slate-500">{headline || "Store promo"}</p>
+      <p className="text-sm font-medium text-slate-500">{headline || t("land.storePromo")}</p>
       <p className="mt-1 font-mono text-2xl font-semibold tracking-wide">{code}</p>
       <p className="mt-1 text-sm text-teal-800">{offer}</p>
       {description && <p className="mt-2 text-sm text-slate-600">{description}</p>}
@@ -182,7 +181,7 @@ function PromoCard({
         }}
       >
         <Copy size={14} />
-        {copied ? "Copied" : "Copy code"}
+        {copied ? t("land.copied") : t("land.copyCode")}
       </button>
     </div>
   );

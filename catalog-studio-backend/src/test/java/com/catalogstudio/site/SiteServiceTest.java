@@ -25,6 +25,7 @@ import com.catalogstudio.site.repository.ClientStoreRepository;
 import com.catalogstudio.site.repository.EnquiryRepository;
 import com.catalogstudio.site.repository.SiteSettingsRepository;
 import com.catalogstudio.site.service.SiteService;
+import com.catalogstudio.subscription.service.BillingSettingsService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -50,6 +51,7 @@ class SiteServiceTest {
     @Mock EnquiryRepository enquiryRepository;
     @Mock TemplatedEmailService templatedEmailService;
     @Mock MailIdentityService mailIdentityService;
+    @Mock BillingSettingsService billingSettingsService;
     @InjectMocks SiteService siteService;
 
     private SiteSettings settings;
@@ -92,12 +94,14 @@ class SiteServiceTest {
         when(clientRepository.findFirstByFeaturedTrueAndStatusIgnoreCase("ACTIVE")).thenReturn(Optional.of(krishna));
         when(promoRepository.findByClientAndStatusIgnoreCaseOrderByCreatedAtDesc(krishna, "ACTIVE"))
                 .thenReturn(List.of(promo));
+        when(billingSettingsService.resolvedWhatsappNumber()).thenReturn("919560111849");
 
         SitePublicResponse site = siteService.getPublicSite();
 
         assertThat(site.branding().siteName()).isEqualTo("Catalog Studio");
         assertThat(site.client().storeName()).isEqualTo("Krishna Store");
         assertThat(site.support().email()).isEqualTo("support@catalogstudio.local");
+        assertThat(site.support().whatsapp()).isEqualTo("919560111849");
         assertThat(site.promoCodes()).extracting(SitePublicResponse.PromoPublic::code).containsExactly("KRISHNA10");
     }
 

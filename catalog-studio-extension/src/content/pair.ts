@@ -1,9 +1,6 @@
 import { DEFAULT_API_BASE } from "../config";
 import { isExtensionAlive, storageGet, storageSet } from "../services/chromeAccess";
 
-const LOGIN_TTL = 3 * 60 * 1000;
-const TICKET_TTL = 30 * 60 * 1000;
-
 function apiBaseFromPage() {
   if (location.port === "5173" || location.port === "4173") return DEFAULT_API_BASE;
   if (/localhost|127\.0\.0\.1/.test(location.hostname)) return `${location.protocol}//${location.hostname}:8080/api/v1`;
@@ -70,39 +67,15 @@ function markPresence() {
 window.addEventListener("message", (event) => {
   if (event.source !== window || event.origin !== location.origin || !event.data) return;
   if (!isExtensionAlive()) return;
-  if (event.data.type === "CS_TICKET_MSG" && typeof event.data.msg === "string") {
-    void storageSet({ csTicketMsg: event.data.msg.slice(0, 4000), csTicketAt: Date.now() });
-  }
-  if (event.data.type === "CS_LOGIN_FILL") {
-    const email = typeof event.data.e === "string" ? event.data.e.slice(0, 191) : "";
-    const password = typeof event.data.p === "string" ? event.data.p.slice(0, 191) : "";
-    if (email || password) void storageSet({ csLoginE: email, csLoginP: password, csLoginAt: Date.now() });
-  }
   if (event.data.type === "CS_EXT_SESSION") void pairFromSession();
   if (event.data.type === "CS_LOCALE" && typeof event.data.locale === "string") {
     void storageSet({ csLocale: event.data.locale.slice(0, 16) });
   }
 });
 
-async function sweepExpired() {
-  const stored = await storageGet(["csLoginAt", "csTicketAt"]);
-  const gone: string[] = [];
-  if (stored.csLoginAt && Date.now() - Number(stored.csLoginAt) > LOGIN_TTL) gone.push("csLoginE", "csLoginP", "csLoginAt");
-  if (stored.csTicketAt && Date.now() - Number(stored.csTicketAt) > TICKET_TTL) gone.push("csTicketMsg", "csTicketAt");
-  if (gone.length && isExtensionAlive()) chrome.storage.local.remove(gone);
-}
-
 markPresence();
 if (document.readyState === "complete") {
   void pairFromSession();
-  void sweepExpired();
 } else {
-  window.addEventListener(
-    "load",
-    () => {
-      void pairFromSession();
-      void sweepExpired();
-    },
-    { once: true },
-  );
+  window.addEventListener("load", () => void pairFromSession(), { once: true });
 }

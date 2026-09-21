@@ -1,5 +1,6 @@
 package com.catalogstudio.subscription.service;
 
+import com.catalogstudio.config.CatalogStudioProperties;
 import com.catalogstudio.subscription.dto.BillingSettingsRequest;
 import com.catalogstudio.subscription.dto.BillingSettingsResponse;
 import com.catalogstudio.subscription.entity.BillingSettings;
@@ -17,6 +18,7 @@ public class BillingSettingsService {
     public static final String DEFAULT_SCANNER = "/payment-qr.jpg";
 
     private final BillingSettingsRepository repository;
+    private final CatalogStudioProperties properties;
 
     @Transactional
     public BillingSettings current() {
@@ -66,7 +68,29 @@ public class BillingSettingsService {
         if (StringUtils.hasText(request.rechargeBody())) {
             settings.setRechargeBody(request.rechargeBody().trim());
         }
+        if (StringUtils.hasText(fromProperty())) {
+            settings.setWhatsappNumber(fromProperty());
+        }
         return toView(settings);
+    }
+
+    public String resolvedWhatsappNumber() {
+        return resolvedWhatsappNumber(null);
+    }
+
+    public String resolvedWhatsappNumber(BillingSettings settings) {
+        String fromProp = fromProperty();
+        if (StringUtils.hasText(fromProp)) {
+            return fromProp;
+        }
+        return digits(settings == null ? null : settings.getWhatsappNumber());
+    }
+
+    private String fromProperty() {
+        if (properties == null || properties.billing() == null) {
+            return "";
+        }
+        return properties.billing().resolvedWhatsappNumber();
     }
 
     public static String digits(String raw) {
@@ -77,6 +101,9 @@ public class BillingSettingsService {
         if (cleaned.startsWith("00")) {
             cleaned = cleaned.substring(2);
         }
+        if (cleaned.length() == 10) {
+            return "91" + cleaned;
+        }
         return cleaned;
     }
 
@@ -85,7 +112,7 @@ public class BillingSettingsService {
                 .settingsKey(DEFAULT_KEY)
                 .trialDays(2)
                 .trialPlan("BASIC")
-                .whatsappNumber("919876543210")
+                .whatsappNumber(StringUtils.hasText(fromProperty()) ? fromProperty() : "919560111849")
                 .payeeName("VISHAL KUMAR MISHRA")
                 .qrImageUrl(DEFAULT_SCANNER)
                 .paymentProvider("MANUAL")
@@ -103,7 +130,7 @@ public class BillingSettingsService {
         return new BillingSettingsResponse(
                 settings.getTrialDays(),
                 settings.getTrialPlan(),
-                settings.getWhatsappNumber(),
+                resolvedWhatsappNumber(settings),
                 settings.getWhatsappMessageTemplate(),
                 settings.getUpiId(),
                 settings.getPayeeName(),

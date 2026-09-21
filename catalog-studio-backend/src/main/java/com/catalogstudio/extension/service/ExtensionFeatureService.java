@@ -4,13 +4,10 @@ import com.catalogstudio.analysis.repository.ProductAnalysisRepository;
 import com.catalogstudio.common.exception.ApiException;
 import com.catalogstudio.extension.dto.CompetitorAnalyzeRequest;
 import com.catalogstudio.extension.dto.FillGapsRequest;
-import com.catalogstudio.extension.dto.TicketDraftRequest;
 import com.catalogstudio.extension.dto.VerifyShopRequest;
 import com.catalogstudio.extension.entity.ExtensionInventoryPhoto;
-import com.catalogstudio.extension.entity.ExtensionTicket;
 import com.catalogstudio.extension.entity.ExtensionUserSettings;
 import com.catalogstudio.extension.repository.ExtensionInventoryPhotoRepository;
-import com.catalogstudio.extension.repository.ExtensionTicketRepository;
 import com.catalogstudio.extension.repository.ExtensionUserSettingsRepository;
 import com.catalogstudio.product.entity.ListingTemplate;
 import com.catalogstudio.product.repository.ListingTemplateRepository;
@@ -49,7 +46,6 @@ public class ExtensionFeatureService {
     private final ExtensionService extensionService;
     private final ExtensionUserSettingsRepository settingsRepository;
     private final ExtensionInventoryPhotoRepository photoRepository;
-    private final ExtensionTicketRepository ticketRepository;
     private final ListingTemplateRepository templateRepository;
     private final ProductAnalysisRepository analysisRepository;
     private final SubscriptionAccessService subscriptionAccessService;
@@ -78,12 +74,22 @@ public class ExtensionFeatureService {
     public Map<String, Object> verifyShop(String pairingKey, VerifyShopRequest request) {
         Long userId = extensionService.requireUserId(pairingKey);
         Map<String, Object> settings = settingsOf(userId);
-        String incoming = trim(request == null ? null : request.name());
+        String incoming = usableShopName(request == null ? null : request.name());
         String uid = trim(request == null ? null : request.uid());
         String lockedName = trim(str(settings.get("lockedShopName")));
         String lockedUid = trim(str(settings.get("lockedShopUid")));
+        boolean poisonedLock = isPageChromeName(lockedName);
+        if (poisonedLock) {
+            lockedName = "";
+            lockedUid = "";
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         if (incoming.isEmpty()) {
+            if (poisonedLock) {
+                settings.put("lockedShopName", "");
+                settings.put("lockedShopUid", "");
+                saveSettings(userId, settings);
+            }
             out.put("status", "wait");
             out.put("registered", lockedName);
             return out;
@@ -92,6 +98,8 @@ public class ExtensionFeatureService {
             settings.put("lockedShopName", incoming);
             if (!uid.isEmpty()) {
                 settings.put("lockedShopUid", uid);
+            } else if (poisonedLock) {
+                settings.put("lockedShopUid", "");
             }
             saveSettings(userId, settings);
             out.put("status", "ok");
@@ -114,10 +122,11 @@ public class ExtensionFeatureService {
     }
 
     public void assertShopAllowed(String pairingKey, String name, String uid) {
-        if ((name == null || name.isBlank()) && (uid == null || uid.isBlank())) {
+        String usable = usableShopName(name);
+        if (usable.isEmpty() && (uid == null || uid.isBlank())) {
             return;
         }
-        Map<String, Object> verdict = verifyShop(pairingKey, new VerifyShopRequest(name, uid));
+        Map<String, Object> verdict = verifyShop(pairingKey, new VerifyShopRequest(usable, uid));
         if ("bad".equals(verdict.get("status"))) {
             throw ApiException.forbidden(String.valueOf(verdict.get("error")));
         }
@@ -143,16 +152,6 @@ public class ExtensionFeatureService {
         applyIncoming(current, incoming);
         saveSettings(userId, current);
         return publicSettings(current);
-    }
-
-    @Transactional
-    public Map<String, Object> saveTicketForUser(Long userId, TicketDraftRequest request) {
-        ExtensionTicket ticket = ticketRepository.save(ExtensionTicket.builder()
-                .user(userRepository.getReferenceById(userId))
-                .draft(request == null ? null : request.draft())
-                .ticketNo(request == null ? null : trim(request.ticketNo()))
-                .build());
-        return Map.of("id", ticket.getUuid(), "ticketNo", str(ticket.getTicketNo()));
     }
 
     @Transactional
@@ -298,17 +297,6 @@ public class ExtensionFeatureService {
         return Map.of("created", true, "sourceId", id, "url", str(photo.getThumbUrl()));
     }
 
-    @Transactional
-    public Map<String, Object> saveTicket(String pairingKey, TicketDraftRequest request) {
-        Long userId = extensionService.requireUserId(pairingKey);
-        ExtensionTicket ticket = ticketRepository.save(ExtensionTicket.builder()
-                .user(userRepository.getReferenceById(userId))
-                .draft(request == null ? null : request.draft())
-                .ticketNo(request == null ? null : trim(request.ticketNo()))
-                .build());
-        return Map.of("id", ticket.getUuid(), "ticketNo", str(ticket.getTicketNo()));
-    }
-
     private Map<String, Object> quotaOf(Long userId) {
         SubscriptionStatusResponse access = subscriptionAccessService.statusOf(userId);
         String plan = access.plan();
@@ -333,9 +321,14 @@ public class ExtensionFeatureService {
     }
 
     private Map<String, Object> settingsOf(Long userId) {
-        return settingsRepository.findById(userId)
+        Map<String, Object> settings = settingsRepository.findById(userId)
                 .map(row -> row.getSettingsJson() == null ? defaultsSettings() : new LinkedHashMap<>(row.getSettingsJson()))
                 .orElseGet(this::defaultsSettings);
+        if (isPageChromeName(trim(str(settings.get("lockedShopName"))))) {
+            settings.put("lockedShopName", "");
+            settings.put("lockedShopUid", "");
+        }
+        return settings;
     }
 
     private void saveSettings(Long userId, Map<String, Object> settings) {
@@ -365,7 +358,7 @@ public class ExtensionFeatureService {
             current.put("mfrProfileIndex", index.intValue());
         }
         if (incoming.get("lockedShopName") instanceof String lockedShopName) {
-            current.put("lockedShopName", trim(lockedShopName));
+            current.put("lockedShopName", usableShopName(lockedShopName));
         }
         if (incoming.get("lockedShopUid") instanceof String lockedShopUid) {
             current.put("lockedShopUid", trim(lockedShopUid));
@@ -451,6 +444,25 @@ public class ExtensionFeatureService {
 
     private boolean namesMatch(String a, String b) {
         return normalizeName(a).equals(normalizeName(b));
+    }
+
+    private String usableShopName(String value) {
+        String name = trim(value);
+        return isPageChromeName(name) ? "" : name;
+    }
+
+    /** Meesho chrome like "Login to Meesho Supplier Panel" is not a shop name. */
+    private boolean isPageChromeName(String value) {
+        String compact = normalizeName(value);
+        if (compact.isEmpty()) {
+            return false;
+        }
+        return compact.contains("loginto")
+                || compact.contains("signin")
+                || compact.contains("supplierpanel")
+                || compact.contains("sellerpanel")
+                || compact.equals("meesho")
+                || compact.equals("login");
     }
 
     private String normalizeName(String value) {

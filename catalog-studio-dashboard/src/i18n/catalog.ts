@@ -1,3 +1,6 @@
+import { FORM_CATALOG } from "./catalog.forms";
+import { UI_CATALOG } from "./catalog.ui";
+
 export const LOCALES = [
   { code: "en", name: "English", native: "English", dir: "ltr" },
   { code: "hi", name: "Hindi", native: "हिन्दी", dir: "ltr" },
@@ -332,16 +335,16 @@ export const CATALOG: Catalog = {
     zh: "请为套餐充值以继续使用上架工具。在 WhatsApp 发送付款截图并附上注册邮箱。",
   },
   "dash.aiThisMonth": {
-    en: "AI analyses this month",
-    hi: "इस महीने के AI विश्लेषण",
-    bn: "এই মাসের AI বিশ্লেষণ",
-    mr: "या महिन्यातील AI विश्लेषण",
-    ta: "இந்த மாத AI பகுப்பாய்வுகள்",
-    kn: "ಈ ತಿಂಗಳ AI ವಿಶ್ಲೇಷಣೆಗಳು",
-    pa: "ਇਸ ਮਹੀਨੇ ਦੇ AI ਵਿਸ਼ਲੇਸ਼ਣ",
-    ur: "اس مہینے کے AI تجزیے",
-    ja: "今月のAI分析",
-    zh: "本月 AI 分析",
+    en: "Photo analyses this month",
+    hi: "इस महीने के फोटो विश्लेषण",
+    bn: "এই মাসের ফটো বিশ্লেষণ",
+    mr: "या महिन्यातील फोटो विश्लेषण",
+    ta: "இந்த மாத புகைப்பட பகுப்பாய்வுகள்",
+    kn: "ಈ ತಿಂಗಳ ಫೋಟೋ ವಿಶ್ಲೇಷಣೆಗಳು",
+    pa: "ਇਸ ਮਹੀਨੇ ਦੇ ਫੋਟੋ ਵਿਸ਼ਲੇਸ਼ਣ",
+    ur: "اس مہینے کے فوٹو تجزیے",
+    ja: "今月の写真分析",
+    zh: "本月照片分析",
   },
   "dash.currentPlan": {
     en: "Current plan",
@@ -958,7 +961,7 @@ export const CATALOG: Catalog = {
 };
 
 export function translate(locale: LocaleCode, key: string, vars?: Record<string, string | number>): string {
-  const row = CATALOG[key];
+  const row = CATALOG[key] || UI_CATALOG[key] || FORM_CATALOG[key];
   let text = row?.[locale] || row?.en || key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {

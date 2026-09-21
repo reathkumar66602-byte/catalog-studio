@@ -5,10 +5,13 @@ import { useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 import { useAuth } from "../../store/auth";
 import type { PaymentCheckout, PlanCard, SubscriptionStatus } from "../../types";
+import { useI18n } from "../../i18n/LanguageProvider";
+import { formatWhatsapp, whatsappDigits } from "../site/whatsapp";
 
 const DEFAULT_SCANNER = "/payment-qr.jpg";
 
 export function SubscriptionPage() {
+  const { t } = useI18n();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [params] = useSearchParams();
@@ -37,7 +40,7 @@ export function SubscriptionPage() {
   const paymentSent = useMutation({
     mutationFn: async (name: string) => api.post(`/subscriptions/plans/${name}/payment-sent`),
     onSuccess: async () => {
-      setAck("We noted that you sent the screenshot. Keep your registered email in the WhatsApp message. Access starts after confirmation.");
+      setAck(t("sub.ack"));
       await qc.invalidateQueries({ queryKey: ["sub"] });
     },
   });
@@ -47,18 +50,25 @@ export function SubscriptionPage() {
   const locked = Boolean(current?.requiresRecharge);
   const scannerSrc = payment?.qrImageUrl || current?.paymentNotice?.qrImageUrl || DEFAULT_SCANNER;
   const payee = payment?.payeeName || current?.paymentNotice?.payeeName || "VISHAL KUMAR MISHRA";
+  const whatsappNumber = payment?.whatsappNumber || current?.paymentNotice?.whatsappNumber || "";
+  const whatsappDigitsValue = whatsappDigits(whatsappNumber);
+  const whatsappDisplay = formatWhatsapp(whatsappNumber);
+  const whatsappLocal =
+    whatsappDigitsValue.startsWith("91") && whatsappDigitsValue.length === 12
+      ? whatsappDigitsValue.slice(2)
+      : whatsappDigitsValue;
 
   const statusLabel = useMemo(() => {
-    if (!current) return "Loading plan...";
+    if (!current) return t("sub.loading");
     if (current.trialActive) {
       return current.daysRemaining <= 0
-        ? "Free trial active until the end of today"
-        : `Free trial · ${current.daysRemaining} day${current.daysRemaining === 1 ? "" : "s"} remaining`;
+        ? t("sub.trialToday")
+        : t("sub.trialDays", { days: current.daysRemaining });
     }
-    if (current.accessEntitled) return `${current.plan} plan · active`;
-    if (current.effectiveStatus === "PAYMENT_PENDING") return "Payment screenshot received · awaiting confirmation";
-    return "Trial ended · recharge required";
-  }, [current]);
+    if (current.accessEntitled) return t("sub.planActive", { plan: current.plan });
+    if (current.effectiveStatus === "PAYMENT_PENDING") return t("sub.pending");
+    return t("sub.ended");
+  }, [current, t]);
 
   async function copyText(value: string, key: string) {
     try {
@@ -73,14 +83,17 @@ export function SubscriptionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Subscription</h1>
+        <h1 className="text-2xl font-semibold">{t("app.subTitle")}</h1>
         <p className="text-slate-500">{statusLabel}</p>
       </div>
 
       {current?.trialActive && (
         <div className="rounded-2xl border border-teal-200 bg-teal-50 px-5 py-4 text-sm text-teal-900">
-          You are on a {current.trialDaysConfigured}-day free trial of {current.plan}. After {current.endDate || "the trial date"},
-          the workspace asks you to recharge a paid plan.
+          {t("sub.trialBanner", {
+            days: current.trialDaysConfigured,
+            plan: current.plan,
+            end: current.endDate || t("sub.ended"),
+          })}
         </div>
       )}
 
@@ -88,7 +101,7 @@ export function SubscriptionPage() {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950">
           <p className="flex items-center gap-2 font-semibold">
             <ShieldAlert size={18} />
-            {current?.rechargeHeadline || "Recharge to keep using Catalog Studio"}
+            {current?.rechargeHeadline || t("sub.recharge")}
           </p>
           <p className="mt-2 text-sm leading-relaxed">
             {current?.rechargeBody}
@@ -111,14 +124,14 @@ export function SubscriptionPage() {
               >
                 <h3 className="font-semibold">{plan.name}</h3>
                 <p className="mt-2 text-3xl font-semibold">
-                  ₹{plan.price}
+                  ₹{Number(plan.price)}
                   <span className="ml-1 text-sm font-normal text-slate-500">/ {plan.billingCycle?.toLowerCase()}</span>
                 </p>
                 <ul className="mt-4 flex-1 space-y-1 text-sm text-slate-600">
-                  <li>{String(plan.features?.monthlyAiAnalyses ?? "—")} AI analyses / month</li>
-                  <li>{String(plan.features?.products ?? "—")} products</li>
-                  <li>{String(plan.features?.extensionDevices ?? "—")} extension devices</li>
-                  <li>{String(plan.features?.labelCrop ?? "Ultimate Flipkart and Meesho label crop")}</li>
+                  <li>{t("sub.aiMonth", { n: String(plan.features?.monthlyAiAnalyses ?? "—") })}</li>
+                  <li>{t("sub.products", { n: String(plan.features?.products ?? "—") })}</li>
+                  <li>{t("sub.devices", { n: String(plan.features?.extensionDevices ?? "—") })}</li>
+                  <li>{String(plan.features?.labelCrop ?? t("sub.labelCrop"))}</li>
                 </ul>
                 <button
                   type="button"
@@ -126,7 +139,7 @@ export function SubscriptionPage() {
                   onClick={() => checkout.mutate(plan.name)}
                   className="mt-5 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
                 >
-                  {active ? "Extend this plan" : "Recharge this plan"}
+                  {active ? t("sub.extend") : t("sub.rechargePlan")}
                 </button>
               </article>
             );
@@ -134,12 +147,12 @@ export function SubscriptionPage() {
       </div>
 
       {checkout.isError && (
-        <p className="text-sm text-red-600">{apiErrorMessage(checkout.error, "Could not start payment")}</p>
+        <p className="text-sm text-red-600">{apiErrorMessage(checkout.error, t("sub.payFail"))}</p>
       )}
 
       <section className="grid gap-6 rounded-2xl border border-slate-200 bg-white p-6 lg:grid-cols-[280px_1fr]">
         <div className="rounded-2xl bg-black p-3 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Scan to pay</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">{t("sub.scan")}</p>
           <img
             src={scannerSrc}
             alt={`Payment scanner for ${payee}`}
@@ -151,11 +164,35 @@ export function SubscriptionPage() {
           <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
             <p className="flex items-center gap-2 font-semibold text-amber-950">
               <MessageCircle size={18} />
-              Send the payment screenshot on WhatsApp
+              {t("sub.whatsapp")}
             </p>
             <p className="mt-2 text-sm leading-relaxed text-amber-950">
-              {payment?.notice || current?.paymentNotice?.instructions} Mention this registered email ID exactly:
+              {payment?.notice || current?.paymentNotice?.instructions}
             </p>
+            {whatsappDisplay && (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-medium text-amber-950">{t("sub.waNumber")}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-teal-800"
+                    href={`https://wa.me/${whatsappDigitsValue}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {whatsappDisplay}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => copyText(whatsappDigitsValue, "whatsapp")}
+                    className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium"
+                  >
+                    {copied === "whatsapp" ? <Check size={14} /> : <Copy size={14} />}
+                    {copied === "whatsapp" ? t("common.copied") : t("sub.copyNumber")}
+                  </button>
+                </div>
+                <p className="text-xs text-amber-900">{t("sub.waManual")}</p>
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <code className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-teal-800">{email}</code>
               <button
@@ -164,7 +201,7 @@ export function SubscriptionPage() {
                 className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium"
               >
                 {copied === "email" ? <Check size={14} /> : <Copy size={14} />}
-                {copied === "email" ? "Copied" : "Copy email"}
+                {copied === "email" ? t("common.copied") : t("sub.copyEmail")}
               </button>
             </div>
           </div>
@@ -172,24 +209,24 @@ export function SubscriptionPage() {
           {payment && (
             <dl className="grid gap-2 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-slate-500">Plan</dt>
+                <dt className="text-slate-500">{t("sub.plan")}</dt>
                 <dd className="font-medium">{payment.plan} · ₹{payment.amount}</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Payee</dt>
+                <dt className="text-slate-500">{t("sub.payee")}</dt>
                 <dd className="font-medium">{payment.payeeName}</dd>
               </div>
             </dl>
           )}
           <div className="flex flex-wrap gap-3">
             <a
-              href={payment?.whatsappUrl || whatsappLink(current?.paymentNotice?.whatsappNumber, email)}
+              href={payment?.whatsappUrl || whatsappLink(whatsappNumber, email)}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-xl bg-[#128C7E] px-4 py-2.5 text-sm font-medium text-white"
             >
               <Smartphone size={16} />
-              Open WhatsApp with email filled
+              {t("sub.openWa")}
             </a>
             {payment && (
               <button
@@ -198,7 +235,7 @@ export function SubscriptionPage() {
                 onClick={() => paymentSent.mutate(payment.plan)}
                 className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium"
               >
-                {paymentSent.isPending ? "Saving..." : "I have sent the screenshot"}
+                {paymentSent.isPending ? t("app.extSaving") : t("sub.sent")}
               </button>
             )}
           </div>

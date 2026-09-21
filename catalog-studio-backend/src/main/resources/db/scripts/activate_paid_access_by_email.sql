@@ -1,6 +1,6 @@
 -- After you confirm the WhatsApp payment screenshot, change ONLY these two values:
 --   email     = registered email from the WhatsApp message
---   plan_name = BASIC (₹50) | STARTER (₹499) | PRO (₹1499) | BUSINESS (₹4999)
+--   plan_name = BASIC (₹49) | STARTER (₹99) | PRO (₹499) | BUSINESS (₹999)
 --
 -- Tables:
 --   users                seller account (match by email)

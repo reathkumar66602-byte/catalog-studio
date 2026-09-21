@@ -18,8 +18,6 @@ import com.catalogstudio.extension.dto.FillGapsRequest;
 
 import com.catalogstudio.extension.dto.PairRequest;
 
-import com.catalogstudio.extension.dto.TicketDraftRequest;
-
 import com.catalogstudio.extension.dto.VerifyShopRequest;
 
 import com.catalogstudio.extension.service.ExtensionFeatureService;
@@ -137,16 +135,6 @@ public class ExtensionController {
     public ApiResponse<Map<String, Object>> workspaceSettings(@RequestBody(required = false) Map<String, Object> body) {
 
         return ApiResponse.ok(featureService.saveSettingsForUser(SecurityUtils.currentUserId(), body));
-
-    }
-
-
-
-    @PostMapping("/workspace/tickets")
-
-    public ApiResponse<Map<String, Object>> workspaceTicket(@RequestBody(required = false) TicketDraftRequest request) {
-
-        return ApiResponse.ok(featureService.saveTicketForUser(SecurityUtils.currentUserId(), request));
 
     }
 
@@ -421,22 +409,6 @@ public class ExtensionController {
     ) {
 
         return ApiResponse.ok(featureService.pushPhoto(key, sourceId, thumb));
-
-    }
-
-
-
-    @PostMapping("/tickets")
-
-    public ApiResponse<Map<String, Object>> tickets(
-
-            @RequestHeader("X-Extension-Key") String key,
-
-            @RequestBody(required = false) TicketDraftRequest request
-
-    ) {
-
-        return ApiResponse.ok(featureService.saveTicket(key, request));
 
     }
 

@@ -21,7 +21,8 @@ class LocalStorageServiceTest {
             new CatalogStudioProperties.Mail(false, "zoho", "smtp.zoho.in", 587, "", "", "", "Catalog Studio", true,
                     "https://api.zeptomail.in/v1.1/email", "", ""),
             new CatalogStudioProperties.Otp(false, 6, 10, 5, 60, true),
-            new CatalogStudioProperties.Google("")
+            new CatalogStudioProperties.Google(""),
+            new CatalogStudioProperties.Billing("919560111849")
     ));
 
     @Test

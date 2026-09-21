@@ -44,7 +44,7 @@ export type SitePromo = {
 
 export type SitePublic = {
   branding: SiteBranding;
-  support: { email: string; phone?: string };
+  support: { email: string; phone?: string; whatsapp?: string };
   enquiry: { enabled: boolean; intro?: string; successMessage?: string };
   client: SiteClient | null;
   promoCodes: SitePromo[];
@@ -89,7 +89,7 @@ export const FALLBACK_SITE: SitePublic = {
     footerText:
       "Catalog Studio helps sellers crop shipping labels, estimate profit, and autofill marketplace listings. You always submit the listing yourself.",
   },
-  support: { email: "support@catalogstudio.in", phone: "+91 98765 43210" },
+  support: { email: "support@catalogstudio.in", phone: "+91 72909 42427", whatsapp: "917290942427" },
   enquiry: {
     enabled: true,
     intro:
@@ -102,7 +102,7 @@ export const FALLBACK_SITE: SitePublic = {
     slug: "krishna-store",
     ownerName: "Krishna",
     email: "krishna.store@catalogstudio.local",
-    phone: "+91 90000 11111",
+    phone: "+917003070165",
     address: "India",
     logoUrl: "/logo.svg",
     tagline: "Marketplace-ready seller workspace",

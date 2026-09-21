@@ -129,11 +129,37 @@ export function defaultsForCategory(category: string, notes = "") {
 export function mapSleeveLength(sleeveType: string | undefined) {
   const value = (sleeveType || "").toLowerCase();
   if (!value) return "";
-  if (/full|long/.test(value)) return "Long Sleeves";
-  if (/half|short/.test(value)) return "Short Sleeves";
-  if (/three|3\/4|quarter/.test(value)) return "Three-Quarter Sleeves";
-  if (/sleeveless/.test(value)) return "Sleeveless";
-  return sleeveType || "";
+  if (/\bsleeveless\b|without sleeve/.test(value)) return "Sleeveless";
+  if (/three[-\s]?quarter|3\s*\/\s*4/.test(value)) return "Three-Quarter Sleeves";
+  if (/\bcap(\s|-)?sleeves?\b/.test(value)) return "Cap Sleeves";
+  if (/\bbell(\s|-)?sleeves?\b|\bflared(\s|-)?sleeves?\b/.test(value)) return "Three-Quarter Sleeves";
+  if (/\b(full|long)(\s|-)?sleeves?\b/.test(value)) return "Long Sleeves";
+  if (/\b(half|short|puff|flutter)(\s|-)?sleeves?\b/.test(value)) return "Short Sleeves";
+  if (/\broll-?up\b/.test(value)) return "Roll-Up Sleeves";
+  return "";
+}
+
+export function mapSleeveStyling(blob: string, fallback = "") {
+  const value = blob.toLowerCase();
+  if (/\bbell(\s|-)?sleeves?\b/.test(value)) return "Bell Sleeves";
+  if (/\bpuff(\s|-)?sleeves?\b/.test(value)) return "Puff Sleeves";
+  if (/\bflutter(\s|-)?sleeves?\b/.test(value)) return "Flutter Sleeves";
+  if (/\bcap(\s|-)?sleeves?\b/.test(value)) return "Cap Sleeves";
+  if (/\broll-?up\b/.test(value)) return "Rolled-up Sleeves";
+  return fallback;
+}
+
+export function mapGarmentLength(blob: string, fallback = "") {
+  const value = blob.toLowerCase();
+  if (/\bcrop(ped)?\b/.test(value)) return "Crop";
+  if (/\bmaxi\b|\bankle\b/.test(value)) return "Maxi";
+  if (/\bmidi\b|\bcalf\b/.test(value)) return "Calf Length";
+  if (/\bknee\b/.test(value)) return "Knee Length";
+  if (/\bfull length\b/.test(value)) return "Full Length";
+  if (/\blong(line|\s+(tunic|top|kurti|dress|gown))\b/.test(value)) return "Long";
+  if (fallback) return fallback;
+  if (/\b(tunic|top|tee|t-shirt|kurti|kurta|dress|gown|shirt)\b/.test(value)) return "Regular";
+  return "";
 }
 
 export function deriveFabric(material: string | undefined, ...parts: Array<string | undefined>) {

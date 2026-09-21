@@ -15,7 +15,8 @@ public record CatalogStudioProperties(
         Seed seed,
         @DefaultValue Mail mail,
         @DefaultValue Otp otp,
-        @DefaultValue Google google
+        @DefaultValue Google google,
+        @DefaultValue Billing billing
 ) {
     public record Jwt(String secret, long accessTokenMinutes, long refreshTokenDays) {}
 
@@ -115,4 +116,17 @@ public record CatalogStudioProperties(
     ) {}
 
     public record Google(@DefaultValue("") String mapsApiKey) {}
+
+    public record Billing(@DefaultValue("919560111849") String whatsappNumber) {
+        public String resolvedWhatsappNumber() {
+            String cleaned = whatsappNumber == null ? "" : whatsappNumber.replaceAll("[^0-9]", "");
+            if (cleaned.startsWith("00")) {
+                cleaned = cleaned.substring(2);
+            }
+            if (cleaned.length() == 10) {
+                return "91" + cleaned;
+            }
+            return cleaned;
+        }
+    }
 }

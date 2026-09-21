@@ -9,7 +9,6 @@ import com.catalogstudio.extension.dto.FillGapsRequest;
 import com.catalogstudio.extension.dto.VerifyShopRequest;
 import com.catalogstudio.extension.entity.ExtensionUserSettings;
 import com.catalogstudio.extension.repository.ExtensionInventoryPhotoRepository;
-import com.catalogstudio.extension.repository.ExtensionTicketRepository;
 import com.catalogstudio.extension.repository.ExtensionUserSettingsRepository;
 import com.catalogstudio.extension.service.ExtensionFeatureService;
 import com.catalogstudio.extension.service.ExtensionService;
@@ -37,7 +36,6 @@ class ExtensionFeatureServiceTest {
     @Mock ExtensionService extensionService;
     @Mock ExtensionUserSettingsRepository settingsRepository;
     @Mock ExtensionInventoryPhotoRepository photoRepository;
-    @Mock ExtensionTicketRepository ticketRepository;
     @Mock ListingTemplateRepository templateRepository;
     @Mock ProductAnalysisRepository analysisRepository;
     @Mock SubscriptionAccessService subscriptionAccessService;
@@ -68,6 +66,47 @@ class ExtensionFeatureServiceTest {
         Map<String, Object> bad = featureService.verifyShop("cst_x", new VerifyShopRequest("Other Shop", "u2"));
         assertThat(bad.get("status")).isEqualTo("bad");
         assertThat(bad.get("code")).isEqualTo("lock_mismatch");
+    }
+
+    @Test
+    void loginPanelChromeIsNotLockedAsAShop() {
+        Map<String, Object> first = featureService.verifyShop(
+                "cst_x", new VerifyShopRequest("Login to Meesho Supplier Panel", ""));
+        assertThat(first.get("status")).isEqualTo("wait");
+
+        Map<String, Object> real = featureService.verifyShop("cst_x", new VerifyShopRequest("Krishna Store", "u1"));
+        assertThat(real.get("status")).isEqualTo("ok");
+        assertThat(real.get("registered")).isEqualTo("Krishna Store");
+    }
+
+    @Test
+    void poisonedLoginLockIsReplacedByRealShop() {
+        ExtensionUserSettings saved = ExtensionUserSettings.builder()
+                .userId(1L)
+                .settingsJson(Map.of(
+                        "lockedShopName", "Login to Meesho Supplier Panel",
+                        "lockedShopUid", ""))
+                .build();
+        when(settingsRepository.findById(1L)).thenReturn(Optional.of(saved));
+
+        Map<String, Object> healed = featureService.verifyShop("cst_x", new VerifyShopRequest("Krishna Store", "u1"));
+        assertThat(healed.get("status")).isEqualTo("ok");
+        assertThat(healed.get("registered")).isEqualTo("Krishna Store");
+        assertThat(healed.get("code")).isNull();
+    }
+
+    @Test
+    void loginChromeDoesNotMismatchARealLock() {
+        ExtensionUserSettings saved = ExtensionUserSettings.builder()
+                .userId(1L)
+                .settingsJson(Map.of("lockedShopName", "Krishna Store", "lockedShopUid", "u1"))
+                .build();
+        when(settingsRepository.findById(1L)).thenReturn(Optional.of(saved));
+
+        Map<String, Object> wait = featureService.verifyShop(
+                "cst_x", new VerifyShopRequest("Login to Meesho Supplier Panel", ""));
+        assertThat(wait.get("status")).isEqualTo("wait");
+        assertThat(wait.get("registered")).isEqualTo("Krishna Store");
     }
 
     @Test
