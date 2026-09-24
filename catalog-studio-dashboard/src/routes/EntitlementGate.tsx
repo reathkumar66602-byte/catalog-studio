@@ -4,21 +4,23 @@ import { api } from "../api/client";
 import { useAuth } from "../store/auth";
 import type { SubscriptionStatus } from "../types";
 import { useI18n } from "../i18n/LanguageProvider";
+import { isStaff } from "./roles";
 
-const ALLOWED_WHEN_LOCKED = ["/subscription", "/settings", "/billing-address"];
+const ALLOWED_WHEN_LOCKED = ["/subscription", "/settings", "/billing-address", "/transactions"];
 
 export function EntitlementGate() {
   const { user } = useAuth();
   const { t } = useI18n();
   const location = useLocation();
+  const staff = isStaff(user?.role);
   const { data, isLoading } = useQuery({
     queryKey: ["sub"],
     queryFn: async () => (await api.get("/subscriptions/current")).data.data as SubscriptionStatus,
-    enabled: Boolean(user) && user?.role !== "ADMIN",
+    enabled: Boolean(user) && !staff,
     staleTime: 30_000,
   });
 
-  if (!user || user.role === "ADMIN") {
+  if (!user || staff) {
     return <Outlet />;
   }
   if (isLoading && !data) {

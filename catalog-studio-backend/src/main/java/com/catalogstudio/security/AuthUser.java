@@ -1,6 +1,7 @@
 package com.catalogstudio.security;
 
 import com.catalogstudio.user.entity.User;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -30,7 +31,20 @@ public record AuthUser(
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role));
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+        if (Roles.SUPERADMIN.equals(role)) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        }
+        return List.copyOf(authorities);
+    }
+
+    public boolean isStaff() {
+        return Roles.isStaff(role);
+    }
+
+    public boolean isSuperAdmin() {
+        return Roles.isSuperAdmin(role);
     }
 
     @Override

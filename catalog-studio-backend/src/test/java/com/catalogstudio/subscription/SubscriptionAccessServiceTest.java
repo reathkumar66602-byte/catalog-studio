@@ -168,4 +168,18 @@ class SubscriptionAccessServiceTest {
         assertThat(view.accessEntitled()).isTrue();
         assertThat(view.requiresRecharge()).isFalse();
     }
+
+    @Test
+    void superAdminAlwaysHasAccess() {
+        User superAdmin = User.builder()
+                .id(2L)
+                .email("vishalmishra66602@gmail.com")
+                .role(User.Role.SUPERADMIN)
+                .status(User.UserStatus.ACTIVE)
+                .build();
+        when(subscriptionRepository.findFirstByUserIdOrderByCreatedAtDesc(2L)).thenReturn(Optional.empty());
+        SubscriptionStatusResponse view = accessService.statusOf(superAdmin);
+        assertThat(view.accessEntitled()).isTrue();
+        assertThat(view.requiresRecharge()).isFalse();
+    }
 }

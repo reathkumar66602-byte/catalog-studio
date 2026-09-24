@@ -218,6 +218,95 @@ describe("meesho defaults", () => {
     expect(defaults.sleeveLength).toBe("Three-Quarter Sleeves");
     expect(defaults.garmentLength).toBe("Regular");
   });
+
+  it("uses a small listing inventory for net quantity and keeps bulk stock as one piece", async () => {
+    const { netQuantityForListing } = await import("../src/content/shared/meeshoDefaults");
+    expect(netQuantityForListing("2", "1", "200")).toBe("2");
+    expect(netQuantityForListing("200", "1", "200")).toBe("1");
+    expect(netQuantityForListing("5", "1", "5")).toBe("1");
+    expect(netQuantityForListing("9", "3", "200")).toBe("3");
+  });
+
+  it("turns the photo length into a Meesho fabric-length label", async () => {
+    const { fabricLengthFromMeters, meterAmount } = await import("../src/content/shared/meeshoDefaults");
+    expect(fabricLengthFromMeters("1.5")).toBe("1.5 Meter");
+    expect(fabricLengthFromMeters("2.5")).toBe("2.5 Meters");
+    expect(meterAmount("1.5 Meter")).toBe("1.5");
+    expect(fabricLengthFromMeters("")).toBe("");
+    expect(meterAmount("no length")).toBe("");
+    expect(fabricLengthFromMeters("5.5")).toBe("5.5 Meter");
+    expect(meterAmount("6")).toBe("6");
+  });
+
+  it("uses the Meesho category instead of a kurti word in the title", async () => {
+    const { defaultsForCategory, deriveGenericName } = await import("../src/content/shared/meeshoDefaults");
+    const shirts = defaultsForCategory("Shirts", "Women Kurti style cotton");
+    expect(shirts.sleeveLength).toBe("Long Sleeves");
+    expect(shirts.garmentLength).toBe("Regular");
+    expect(shirts.hsn).toBe("62063000");
+    expect(shirts.fabricLength).toBe("");
+
+    const tees = defaultsForCategory("T-shirts", "plain shirt");
+    expect(tees.sleeveLength).toBe("Short Sleeves");
+    expect(tees.hsn).toBe("6109");
+
+    const saree = defaultsForCategory("Sarees", "unstitched silk");
+    expect(saree.stitchType).toBe("Unstitched");
+    expect(saree.fabricLength).toBe("5.5 Meter");
+    expect(saree.hsn).toBe("54075290");
+    expect(saree.garmentLength).toBe("");
+
+    const dress = defaultsForCategory("Dresses", "floral kurti look");
+    expect(dress.hsn).toBe("6204");
+    expect(dress.sleeveLength).toBe("");
+    expect(dress.garmentLength).toBe("Regular");
+    expect(dress.fabricLength).toBe("");
+
+    const tops = defaultsForCategory("Tops & Tunics", "red kurti");
+    expect(tops.sleeveLength).toBe("Three-Quarter Sleeves");
+    expect(tops.garmentLength).toBe("Regular");
+    expect(tops.fabricLength).toBe("");
+
+    const kurti = defaultsForCategory("Kurtis", "cotton");
+    expect(kurti.sleeveLength).toBe("Long Sleeves");
+    expect(kurti.garmentLength).toBe("Knee Length");
+    expect(kurti.hsn).toBe("6104");
+
+    expect(deriveGenericName("Banarasi Silk", "Sarees", "")).toBe("Saree");
+    expect(deriveGenericName("Red Palazzo", "Palazzo", "")).toBe("Palazzo");
+    expect(deriveGenericName("Girls Top and Bottom", "Co-ord Sets", "")).toBe("Co-ord Set");
+    expect(deriveGenericName("Women's Navy Checked Shirt", "Shirts", "Shirt")).toBe("Shirt");
+  });
+
+  it("does not apply clothing defaults to grocery, home, beauty, or appliances", async () => {
+    const { defaultsForCategory, isNonApparelCatalog } = await import("../src/content/shared/meeshoDefaults");
+    const { measuresForSize, fallbackSizesForListing } = await import("../src/content/shared/meeshoFormFill");
+    for (const category of [
+      "Grocery Packaged Food Biscuits",
+      "Home Utility",
+      "Home & Kitchen",
+      "Beauty & Personal Care",
+      "Health & Wellness",
+      "Appliances",
+      "Automotive",
+      "Sweets, Chocolates & Snacks",
+    ]) {
+      const defaults = defaultsForCategory(category, "cotton kurti long sleeves");
+      expect(defaults.hsn, category).toBe("");
+      expect(defaults.gst, category).toBe("");
+      expect(defaults.fabric, category).toBe("");
+      expect(defaults.stitchType, category).toBe("");
+      expect(defaults.sleeveLength, category).toBe("");
+      expect(defaults.washCare, category).toBe("");
+      expect(defaults.fabricLength, category).toBe("");
+      expect(defaults.countryOfOrigin, category).toBe("India");
+      expect(defaults.mrp, category).toBe("999");
+    }
+    expect(isNonApparelCatalog("Women Fashion Western Wear Kurtis")).toBe(false);
+    expect(measuresForSize("M", { title: "Women Kurti", catalogPath: "Grocery Packaged Food", mainCategory: "Biscuits" })).toBeNull();
+    expect(fallbackSizesForListing({ catalogPath: "Home Utility", title: "Storage Box" })).toEqual([]);
+    expect(measuresForSize("M", { title: "Women Kurti", mainCategory: "Kurtis" })?.length).toBe("42");
+  });
 });
 
 describe("shop helpers", () => {
@@ -383,6 +472,9 @@ describe("meesho page scan", () => {
     expect(measures?.bust).toBe("36");
     expect(measuresForSize("M", { title: "Women's Checked Casual Shirt", gender: "Women" })?.length).toBe("25");
     expect(measuresForSize("M", { title: "Women Kurti" })?.length).toBe("42");
+    expect(measuresForSize("M", { title: "Women Kurti", mainCategory: "Tops & Tunics", genericName: "Top" })?.length).toBe("25");
+    expect(measuresForSize("M", { title: "Banarasi", mainCategory: "Sarees", genericName: "Saree" })).toBeNull();
+    expect(measuresForSize("XXL", { title: "Casual Top", mainCategory: "Tops & Tunics", genericName: "Top" })?.length).toBe("28");
     const chart = await fillSizeChart({
       skuId: "NS-1",
       inventory: "5",
@@ -444,6 +536,127 @@ describe("meesho page scan", () => {
     expect(first[4].value).toContain("Teal-Tunic-D123-M");
     expect(second[0].value).toBe("499");
     expect(second[4].value).toContain("Teal-Tunic-D123-L");
+  });
+
+  it("fills inventory, unique SKU, and meter length on every size row", async () => {
+    const { fillSizeChart } = await import("../src/content/shared/meeshoFormFill");
+    document.body.innerHTML = `
+      <div id="variant-grid">
+        <div>
+          <span>Size</span>
+          <span>Meesho Price</span>
+          <span>Wrong/Defective Return Price</span>
+          <span>MRP</span>
+          <span>Inventory *</span>
+          <span>SKU ID (optional)</span>
+          <span>Length Size * (METER)</span>
+        </div>
+        <div>
+          <span>28</span>
+          <input />
+          <input />
+          <input />
+          <input />
+          <input />
+          <select><option>Select</option><option>1 Meter</option><option>1.5 Meter</option><option>2 Meter</option></select>
+        </div>
+        <div>
+          <span>30</span>
+          <input />
+          <input />
+          <input />
+          <input />
+          <input />
+          <select><option>Select</option><option>1 Meter</option><option>1.5 Meter</option><option>2 Meter</option></select>
+        </div>
+      </div>
+    `;
+    await fillSizeChart({
+      skuId: "Red-Top-and-Bot",
+      inventory: "2",
+      mrp: "500",
+      sellingPrice: "200",
+      title: "Girls Red Top and Bottom",
+      selectedSizes: ["28", "30"],
+    });
+    const rows = document.querySelectorAll("#variant-grid > div");
+    const first = rows[1].querySelectorAll("input");
+    const second = rows[2].querySelectorAll("input");
+    expect(first[0].value).toBe("200");
+    expect(first[1].value).toBe("199");
+    expect(first[2].value).toBe("500");
+    expect(first[3].value).toBe("2");
+    expect(second[3].value).toBe("2");
+    expect(first[4].value).toBe("Red-Top-and-Bot-28");
+    expect(second[4].value).toBe("Red-Top-and-Bot-30");
+    expect((rows[1].querySelector("select") as HTMLSelectElement).selectedOptions[0].textContent).toBe("1 Meter");
+    expect((rows[2].querySelector("select") as HTMLSelectElement).selectedOptions[0].textContent).toBe("1 Meter");
+  });
+
+  it("fills stacked inventory, SKU, and meter columns when sizes are not table rows", async () => {
+    const { fillSizeChart } = await import("../src/content/shared/meeshoFormFill");
+    document.body.innerHTML = `
+      <div id="cols">
+        <div><span>Size</span><span>28</span><span>38</span></div>
+        <div><span>Inventory *</span><input /><input /></div>
+        <div><span>SKU ID (optional)</span><input /><input /></div>
+        <div>
+          <span>Length Size * (METER)</span>
+          <select><option>Select</option><option>1 Meter</option><option>2 Meter</option></select>
+          <select><option>Select</option><option>1 Meter</option><option>2 Meter</option></select>
+        </div>
+      </div>
+    `;
+    await fillSizeChart({
+      skuId: "Red-Top-and-Bot",
+      inventory: "2",
+      title: "Girls Red Top and Bottom",
+      selectedSizes: ["28", "38"],
+    });
+    const columns = document.querySelectorAll("#cols > div");
+    const inventory = columns[1].querySelectorAll("input");
+    const sku = columns[2].querySelectorAll("input");
+    const lengths = columns[3].querySelectorAll("select");
+    expect(inventory[0].value).toBe("2");
+    expect(inventory[1].value).toBe("2");
+    expect(sku[0].value).toBe("Red-Top-and-Bot-28");
+    expect(sku[1].value).toContain("Red-Top-and-Bot-38");
+    expect(lengths[0].selectedOptions[0].textContent).toBe("1 Meter");
+    expect(lengths[1].selectedOptions[0].textContent).toBe("1 Meter");
+  });
+
+  it("fills a flat size grid where each cell is a sibling", async () => {
+    const { fillSizeChart } = await import("../src/content/shared/meeshoFormFill");
+    document.body.innerHTML = `
+      <div id="flat">
+        <div>Size</div>
+        <div>Meesho Price</div>
+        <div>MRP</div>
+        <div>Inventory *</div>
+        <div>SKU ID (optional)</div>
+        <div>Length Size * (METER)</div>
+        <div>28</div><div><input /></div><div><input /></div><div><input /></div><div><input /></div>
+        <div><select><option>Select</option><option>1 Meter</option><option>2 Meter</option></select></div>
+        <div>30</div><div><input /></div><div><input /></div><div><input /></div><div><input /></div>
+        <div><select><option>Select</option><option>1 Meter</option><option>2 Meter</option></select></div>
+      </div>
+    `;
+    await fillSizeChart({
+      skuId: "Red-Top-and-Bot",
+      inventory: "2",
+      mrp: "500",
+      sellingPrice: "200",
+      title: "Girls Red Top and Bottom",
+      selectedSizes: ["28", "30"],
+    });
+    const inputs = document.querySelectorAll("#flat input");
+    const selects = document.querySelectorAll("#flat select");
+    expect(inputs[2].value).toBe("2");
+    expect(inputs[6].value).toBe("2");
+    expect(inputs[3].value).toBe("Red-Top-and-Bot-28");
+    expect(inputs[7].value).toBe("Red-Top-and-Bot-30");
+    expect(selects[0].selectedOptions[0].textContent).toBe("1 Meter");
+    expect(selects[1].selectedOptions[0].textContent).toBe("1 Meter");
   });
 
   it("selects inch measurements in size-row dropdowns instead of leaving Select", async () => {
@@ -555,6 +768,17 @@ describe("meesho category detection", () => {
       "Western Wear",
       "Tops, Tshirts & Shirts",
       "Shirts",
+    ]);
+    expect(categoryClickPath({ gender: "Women", productType: "Top", name: "Women Cotton Fabric Printed Top" })).toEqual([
+      "Women Fashion",
+      "Western Wear",
+      "Tops, Tshirts & Shirts",
+      "Tops & Tunics",
+    ]);
+    expect(categoryClickPath({ gender: "Women", productType: "Saree", name: "Unstitched Banarasi Saree" })).toEqual([
+      "Women Fashion",
+      "Ethnic Wear",
+      "Sarees",
     ]);
   });
 
@@ -720,6 +944,23 @@ describe("autofill engine", () => {
     const results = await fillByHints([{ hint: { labelText: "GST %" }, value: "5", type: "select" }]);
     expect(results[0].ok).toBe(true);
     expect((document.querySelector("select") as HTMLSelectElement).selectedOptions[0].textContent).toBe("5%");
+  });
+
+  it("selects net quantity 2 and does not take 12", async () => {
+    document.body.innerHTML = `
+      <label for="nq">Net Quantity (N)</label>
+      <select id="nq">
+        <option>Select</option>
+        <option>1</option>
+        <option>2</option>
+        <option>12</option>
+        <option>Pack of 2</option>
+      </select>
+    `;
+    resetAutofill();
+    const results = await fillByHints([{ hint: { labelText: "Net Quantity (N)" }, value: "2", type: "select" }]);
+    expect(results[0].ok).toBe(true);
+    expect((document.getElementById("nq") as HTMLSelectElement).value).toBe("2");
   });
 
   it("stops when the user cancels", async () => {

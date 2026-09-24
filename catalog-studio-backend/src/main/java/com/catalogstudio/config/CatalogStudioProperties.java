@@ -55,7 +55,14 @@ public record CatalogStudioProperties(
 
     public record Storage(String provider, String localPath, String publicBaseUrl) {}
 
-    public record Ai(String provider, String apiKey, String model, int timeoutSeconds, String promptPath) {}
+    public record Ai(
+            String provider,
+            String apiKey,
+            String model,
+            int timeoutSeconds,
+            String promptPath,
+            @DefaultValue("gpt-image-1") String imageModel
+    ) {}
 
     public record Upload(int maxImages, long maxFileBytes, List<String> allowedContentTypes) {}
 

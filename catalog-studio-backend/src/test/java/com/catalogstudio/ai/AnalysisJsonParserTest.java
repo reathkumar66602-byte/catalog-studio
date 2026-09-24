@@ -14,20 +14,20 @@ class AnalysisJsonParserTest {
 
     @Test
     void parsesStructuredProductJson() {
-        String json = """
-                {
-                  "productType": "Shirt",
-                  "category": "Clothing",
-                  "primaryColor": "Navy Blue",
-                  "material": null,
-                  "materialConfidence": 0.42,
-                  "overallConfidence": 0.89,
-                  "uncertainFields": ["material"],
-                  "suggestedTitles": ["Men's Navy Blue Checked Casual Shirt"]
-                }
-                """;
+        String json = "{"
+                + "\"productType\": \"Shirt\","
+                + "\"category\": \"Clothing\","
+                + "\"primaryColor\": \"Navy Blue\","
+                + "\"material\": null,"
+                + "\"materialConfidence\": 0.42,"
+                + "\"overallConfidence\": 0.89,"
+                + "\"uncertainFields\": [\"material\"],"
+                + "\"suggestedTitles\": [\"Men's Navy Blue Checked Casual Shirt\"],"
+                + "\"lengthMeters\": 1.5"
+                + "}";
         var result = parser.parse(json, "MOCK", "mock-vision-v1");
         assertThat(result.productType()).isEqualTo("Shirt");
+        assertThat(result.lengthMeters()).isEqualTo("1.5");
         assertThat(result.material()).isNull();
         assertThat(result.uncertainFields()).contains("material");
         assertThat(result.overallConfidence()).isEqualTo(0.89);

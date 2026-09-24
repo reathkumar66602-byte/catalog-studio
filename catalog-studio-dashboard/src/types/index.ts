@@ -20,6 +20,7 @@ export type UserSummary = {
   trialEndsOn?: string;
   daysRemaining?: number;
   preferredLocale?: string;
+  enabledFeatures?: string[];
 };
 
 export type AuthPayload = {
@@ -176,6 +177,7 @@ export type AccountProfile = {
   username?: string;
   email?: string;
   mobile?: string;
+  role?: string;
   businessName?: string;
   gstNumber?: string;
   address?: string;
@@ -186,6 +188,7 @@ export type AccountProfile = {
   emailVerified?: boolean;
   accessEntitled?: boolean;
   requiresRecharge?: boolean;
+  enabledFeatures?: string[];
 };
 
 export type UserSessionRow = {

@@ -29,9 +29,45 @@ export type CategoryDefaults = {
   fabric: string;
 };
 
+const NON_APPAREL_CATEGORY = /\bgrocery\b|\bdaily needs\b|\bpackaged food\b|\bbeverages?\b|\bcooking supplies\b|\bbaking supplies\b|\bfresh food\b|\bsweets?\b|\bchocolates?\b|\bhome utility\b|\bhome\s*&\s*kitchen\b|\bhome and kitchen\b|\bappliances?\b|\bautomotive\b|\bbeauty\b|\bpersonal care\b|\bhealth\b|\bwellness\b|\btoys?\b|\bstationery\b|\belectronics?\b|\bmobiles?\b/;
+
+export function isNonApparelCatalog(blob: string) {
+  return NON_APPAREL_CATEGORY.test(blob.toLowerCase());
+}
+
 export function defaultsForCategory(category: string, notes = "") {
-  const blob = `${category} ${notes}`.toLowerCase();
-  const base: CategoryDefaults = {
+  const base = baseCategoryDefaults();
+  if (isNonApparelCatalog(category)) return generalCatalogDefaults(base);
+  const fromCategory = categoryProfile(category);
+  if (fromCategory) return { ...base, ...fromCategory };
+  const fromNotes = categoryProfile(`${category} ${notes}`);
+  if (fromNotes) return { ...base, ...fromNotes };
+  return base;
+}
+
+function generalCatalogDefaults(base: CategoryDefaults): CategoryDefaults {
+  return {
+    ...base,
+    gst: "",
+    hsn: "",
+    netWeight: "",
+    size: "",
+    fabricLength: "",
+    stitchType: "",
+    sleeveLength: "",
+    garmentLength: "",
+    washCare: "",
+    garmentType: "",
+    sleeveStyling: "",
+    surfaceStyling: "",
+    fit: "",
+    occasion: "",
+    fabric: "",
+  };
+}
+
+function baseCategoryDefaults(): CategoryDefaults {
+  return {
     gst: "5",
     hsn: "61091000",
     netWeight: "250",
@@ -61,9 +97,18 @@ export function defaultsForCategory(category: string, notes = "") {
     occasion: "Casual",
     fabric: "Cotton",
   };
-  if (/kurti fabric|unstitched|semi stitched/.test(blob)) {
+}
+
+function categoryProfile(blob: string): Partial<CategoryDefaults> | null {
+  const text = blob.toLowerCase();
+  if (!text.trim()) return null;
+  const women = /\bwom[ae]n|ladies|girls?\b/.test(text);
+  const men = /\bmen\b|\bmale\b|\bboys?\b/.test(text) && !women;
+  if (/\bsaree/.test(text)) {
+    return { hsn: "54075290", netWeight: "400", stitchType: "Unstitched", fabricLength: "5.5 Meter" };
+  }
+  if (/kurti fabric|semi stitched/.test(text) || /\bunstitched\b/.test(text)) {
     return {
-      ...base,
       hsn: "61061000",
       netWeight: "200",
       size: "Semi Stitched",
@@ -71,12 +116,11 @@ export function defaultsForCategory(category: string, notes = "") {
       stitchType: "Semi Stitched",
     };
   }
-  if (/\bsaree/.test(blob)) {
-    return { ...base, hsn: "54075290", netWeight: "400", stitchType: "Unstitched" };
+  if (/\bdupatta/.test(text)) {
+    return { hsn: "6214", netWeight: "150", stitchType: "Unstitched", fabricLength: "2.5 Meters" };
   }
-  if (/kurta set|kurti set/.test(blob)) {
+  if (/kurta set|kurti set/.test(text)) {
     return {
-      ...base,
       hsn: "6104",
       netWeight: "350",
       sleeveLength: "Three-Quarter Sleeves",
@@ -87,9 +131,17 @@ export function defaultsForCategory(category: string, notes = "") {
       packageHeight: "2",
     };
   }
-  if (/\bkurti|\bkurta/.test(blob)) {
+  if (/co-?ord|top\s*(and|&)\s*bottom/.test(text)) {
     return {
-      ...base,
+      hsn: "6104",
+      netWeight: "350",
+      sleeveLength: "Three-Quarter Sleeves",
+      garmentLength: "Regular",
+      stitchType: "Stitched",
+    };
+  }
+  if (/\bkurti|\bkurta/.test(text)) {
+    return {
       hsn: "6104",
       netWeight: "350",
       sleeveLength: "Long Sleeves",
@@ -97,12 +149,24 @@ export function defaultsForCategory(category: string, notes = "") {
       stitchType: "Stitched",
     };
   }
-  if (/pant|trouser|jean/.test(blob)) {
-    return { ...base, hsn: "62034200", stitchType: "Stitched", garmentLength: "Full Length" };
+  if (/\bgown|\bjumpsuit/.test(text)) {
+    return { hsn: "6204", netWeight: "400", stitchType: "Stitched", garmentLength: "Maxi" };
   }
-  if (/\bt-?shirt|\btee\b/.test(blob)) {
+  if (/nightwear|nightdress|nighty|night dress/.test(text)) {
+    return { hsn: "6108", netWeight: "250", sleeveLength: "Short Sleeves", garmentLength: "Knee Length", stitchType: "Stitched" };
+  }
+  if (/\bdress|\bfrock/.test(text)) {
+    return { hsn: "6204", netWeight: "300", stitchType: "Stitched", garmentLength: "Regular" };
+  }
+  if (/pant|trouser|jean|palazzo|legging|capri/.test(text)) {
     return {
-      ...base,
+      hsn: women ? "62046200" : "62034200",
+      stitchType: "Stitched",
+      garmentLength: "Full Length",
+    };
+  }
+  if (/\bt[\s-]?shirts?|\btees?\b/.test(text)) {
+    return {
       hsn: "6109",
       netWeight: "200",
       stitchType: "Stitched",
@@ -112,9 +176,18 @@ export function defaultsForCategory(category: string, notes = "") {
       fit: "Regular",
     };
   }
-  if (/\btunic|\btops?\b/.test(blob)) {
+  if (/\bshirts?\b/.test(text)) {
     return {
-      ...base,
+      hsn: men ? "62052000" : "62063000",
+      netWeight: "250",
+      stitchType: "Stitched",
+      sleeveLength: "Long Sleeves",
+      garmentLength: "Regular",
+      fit: "Regular Fit",
+    };
+  }
+  if (/\btunic|\btops?\b/.test(text)) {
+    return {
       hsn: "6109",
       stitchType: "Stitched",
       sleeveLength: "Three-Quarter Sleeves",
@@ -123,7 +196,7 @@ export function defaultsForCategory(category: string, notes = "") {
       fit: "Regular Fit",
     };
   }
-  return base;
+  return null;
 }
 
 export function mapSleeveLength(sleeveType: string | undefined) {
@@ -199,11 +272,18 @@ function genericFromBlob(blob: string) {
   if (/kurti fabric/.test(text)) return "Kurti Fabric";
   if (/\bkurti/.test(text)) return "Kurti";
   if (/\bkurta/.test(text)) return "Kurta";
-  if (/\bt-?shirt|\btee\b/.test(text)) return "T-shirt";
+  if (/\bsaree/.test(text)) return "Saree";
+  if (/\bgown/.test(text)) return "Gown";
+  if (/nightwear|nightdress|nighty/.test(text)) return "Nightwear";
+  if (/\bdress|\bfrock/.test(text)) return "Dress";
+  if (/\bpalazzo/.test(text)) return "Palazzo";
+  if (/\bjeans?\b/.test(text)) return "Jeans";
+  if (/pant|trouser/.test(text)) return "Pant";
+  if (/\bdupatta/.test(text)) return "Dupatta";
+  if (/co-?ord|top\s*(and|&)\s*bottom/.test(text)) return "Co-ord Set";
+  if (/\bt[\s-]?shirts?|\btees?\b/.test(text)) return "T-shirt";
   if (/\bshirts?\b/.test(text)) return "Shirt";
   if (/\btops?\b/.test(text)) return "Top";
-  if (/\bsaree/.test(text)) return "Saree";
-  if (/\bdress/.test(text)) return "Dress";
   return "";
 }
 
@@ -245,7 +325,8 @@ export function mapNeck(neckType: string | undefined) {
   if (/round/.test(value)) return "Round Neck";
   if (/v[\s-]?neck/.test(value)) return "V-Neck";
   if (/boat/.test(value)) return "Boat Neck";
-  if (/collar|shirt/.test(value)) return "Mandarin Collar";
+  if (/mandarin/.test(value)) return "Mandarin Collar";
+  if (/collar/.test(value)) return "Collar";
   return neckType || "";
 }
 
@@ -269,6 +350,35 @@ export function buildStyleCode(color: string, productType: string, existing?: st
 export function extractPincode(address: string) {
   const match = address.match(/\b(\d{6})\b/);
   return match?.[1] || "";
+}
+
+export function netQuantityForListing(inventory: string, explicit?: string, bulkInventory?: string) {
+  const pack = String(explicit || "").trim();
+  if (pack && pack !== "1") return pack;
+  const stock = wholeCount(inventory);
+  const bulk = wholeCount(bulkInventory || "");
+  if (stock >= 1 && stock <= 10 && stock !== bulk) return String(stock);
+  return pack || "1";
+}
+
+export function fabricLengthFromMeters(value?: string) {
+  const amount = meterAmount(value);
+  if (!amount) return "";
+  if (amount === "2.5") return "2.5 Meters";
+  return `${amount} Meter`;
+}
+
+export function meterAmount(value?: string) {
+  const match = String(value || "").replace(/,/g, ".").match(/(\d+(?:\.\d+)?)/);
+  if (!match) return "";
+  const meters = Math.round(Number(match[1]) * 2) / 2;
+  if (!Number.isFinite(meters) || meters < 0.5 || meters > 6) return "";
+  return String(meters);
+}
+
+function wholeCount(value: string) {
+  const match = String(value || "").trim().match(/^(\d+)$/);
+  return match ? Number(match[1]) : 0;
 }
 
 function slugPart(value: string) {

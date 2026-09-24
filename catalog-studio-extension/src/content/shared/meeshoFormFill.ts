@@ -1,8 +1,9 @@
+import { isNonApparelCatalog } from "./meeshoDefaults";
 import { findField, visible, type SelectorHint } from "./fieldFinder";
 import { isMeasureLabel, listingFieldValues, matchFieldValue, normalizeKey } from "./listingValues";
 import type { FillStep, MappedListing } from "./marketplaces";
 import { meeshoSteps } from "./marketplaces";
-import { closeOpenMenus, isDropdownElement, selectCustomDropdown, selectNativeDropdown, setCheckbox, triggerReactInputEvents, verifyFieldValue, type FillResult } from "./autofillEngine";
+import { closeOpenMenus, isDropdownElement, optionTextMatches, selectCustomDropdown, selectNativeDropdown, setCheckbox, triggerReactInputEvents, verifyFieldValue, type FillResult } from "./autofillEngine";
 
 export type DiscoveredField = {
   label: string;
@@ -352,6 +353,9 @@ function isSizeLabel(text: string) {
 }
 
 export function fallbackSizesForListing(listing: MappedListing) {
+  if (isNonApparelCatalog(`${listing.catalogPath || ""} ${listing.mainCategory || ""}`)) {
+    return listing.size ? [listing.size] : [];
+  }
   const blob = `${listing.title || ""} ${listing.genericName || ""} ${listing.mainCategory || ""} ${listing.size || ""}`.toLowerCase();
   if (/plus size/.test(blob) && /set/.test(blob)) return ["XL", "2XL", "3XL", "4XL", "5XL", "6XL"];
   if (/plus size|3xl|4xl|5xl|6xl/.test(blob)) return ["M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "6XL"];
@@ -372,17 +376,36 @@ export function sizesForListing(listing: MappedListing) {
 }
 
 export function measuresForSize(size: string, listing: MappedListing): SizeMeasures | null {
+  if (isNonApparelCatalog(`${listing.catalogPath || ""} ${listing.mainCategory || ""}`)) return null;
   const key = chartKey(size);
-  const blob = `${listing.gender || ""} ${listing.title || ""} ${listing.genericName || ""} ${listing.mainCategory || ""}`.toLowerCase();
-  if (/pant|trouser|jean|palazzo/.test(blob) && /^\d+$/.test(size)) return pantMeasures(size);
-  if (/\bt-?shirt|\btee\b/.test(blob)) return TSHIRT_CHART[key] || numericShirtMeasures(size);
-  if (/\bshirts?\b/.test(blob) && !/\bt-?shirts?\b/.test(blob)) {
+  const categoryBlob = `${listing.mainCategory || ""} ${listing.genericName || ""}`.toLowerCase();
+  const productBlob = `${listing.gender || ""} ${listing.title || ""} ${listing.genericName || ""} ${listing.mainCategory || ""}`.toLowerCase();
+  const family = garmentFamily(categoryBlob) || garmentFamily(productBlob);
+  return measuresForFamily(family, productBlob, size, key);
+}
+
+function garmentFamily(blob: string) {
+  if (!blob.trim()) return "";
+  if (/\bsaree|\bdupatta|kurti fabric/.test(blob)) return "length-only";
+  if (/pant|trouser|jean|palazzo|legging|capri/.test(blob)) return "pant";
+  if (/\bt[\s-]?shirts?|\btees?\b/.test(blob)) return "tshirt";
+  if (/\bshirts?\b/.test(blob)) return "shirt";
+  if (/\btunic|\btops?\b/.test(blob)) return "top";
+  if (/\bkurti|\bkurta|\bdress|\bgown/.test(blob)) return "kurti";
+  return "";
+}
+
+function measuresForFamily(family: string, blob: string, size: string, key: string): SizeMeasures | null {
+  if (family === "length-only") return null;
+  if (family === "pant" && /^\d+$/.test(size)) return pantMeasures(size);
+  if (family === "tshirt") return TSHIRT_CHART[key] || numericShirtMeasures(size);
+  if (family === "shirt") {
     if (/\bwom[ae]n|ladies|girl|female/.test(blob)) return TOP_CHART[key] || TSHIRT_CHART[key] || numericShirtMeasures(size);
     return TSHIRT_CHART[key] || TOP_CHART[key] || numericShirtMeasures(size);
   }
-  if (/\btunic|\btops?\b/.test(blob)) return TOP_CHART[key] || TSHIRT_CHART[key] || numericShirtMeasures(size);
-  if (/\bkurti|\bkurta|\bsaree|\bdress|\bgown/.test(blob)) return KURTI_CHART[key] || TOP_CHART[key] || numericShirtMeasures(size);
-  return TOP_CHART[key] || TSHIRT_CHART[key] || KURTI_CHART[key] || pantMeasures(size);
+  if (family === "top" || family === "pant") return TOP_CHART[key] || TSHIRT_CHART[key] || numericShirtMeasures(size);
+  if (family === "kurti") return KURTI_CHART[key] || TOP_CHART[key] || numericShirtMeasures(size);
+  return TOP_CHART[key] || TSHIRT_CHART[key] || numericShirtMeasures(size);
 }
 
 function chartKey(size: string) {
@@ -442,6 +465,8 @@ export async function fillSizeChart(listing: MappedListing, onProgress?: (messag
     onProgress?.(`Filling size ${row.size}...`);
     results.push(...(await fillVariationRow(row.element, row.headers, listing, row.size, skuBase)));
   }
+  results.push(...(await fillStackedVariantColumns(listing)));
+  results.push(...(await fillFlatVariantGrid(listing)));
   closeOpenMenus();
   return results.filter((item) => item.field);
 }
@@ -522,15 +547,29 @@ function closestSingleSizeRow(el: HTMLElement) {
   let best: HTMLElement | null = null;
   for (let i = 0; i < 12 && node; i++) {
     if (node.id === "cs-sidebar") break;
+    if (sizeLabelCount(node) > 1) break;
     const prices = node.querySelectorAll("[id='meesho_price']").length;
     const mrps = node.querySelectorAll("[id='product_mrp']").length;
     const measures = node.querySelectorAll("[id$='_size']").length;
     if (prices > 1 || mrps > 1 || measures > 6) break;
-    const inputs = node.querySelectorAll("input").length;
+    const inputs = node.querySelectorAll("input, select").length;
     if ((prices === 1 || mrps === 1 || inputs >= 3) && inputs >= 2) best = node;
     node = node.parentElement;
   }
   return best;
+}
+
+function sizeLabelCount(root: HTMLElement) {
+  const found = new Set<string>();
+  for (const el of root.querySelectorAll<HTMLElement>("p, span, div, h6, td, th, label")) {
+    if (el.closest("#cs-sidebar") || el.querySelector("input, select, textarea")) continue;
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (!isSizeLabel(text)) continue;
+    const nested = Array.from(el.querySelectorAll("p, span, div, h6, td, th, label")).some((child) => (child.textContent || "").replace(/\s+/g, " ").trim() === text);
+    if (nested) continue;
+    found.add(normalizeKey(text));
+  }
+  return found.size;
 }
 
 function sizeLabelIn(row: HTMLElement) {
@@ -544,25 +583,43 @@ function sizeLabelIn(row: HTMLElement) {
 
 async function fillVariationRow(row: Element, headers: Map<number, string>, listing: MappedListing, size: string, skuBase: string) {
   const results: FillResult[] = [];
+  const resolved = headers.size ? headers : siblingHeaderMap(row);
   const measures = measuresForSize(size, listing);
   const money = sizeMoney(listing);
-  const sku = `${skuBase}-${chartKey(size)}`.slice(0, 40);
-  results.push(await fillRowField(row, headers, { ids: ["meesho_price"], names: ["listing price", "meesho price", "selling price"], fallbackIndex: 0, value: money.selling, field: "meesho price" }));
-  results.push(await fillRowField(row, headers, { ids: ["only_wrong_return_price"], names: ["wrong", "defective", "returns price", "return price"], fallbackIndex: 1, value: money.returns, field: "returns price" }));
-  results.push(await fillRowField(row, headers, { ids: ["product_mrp"], names: ["mrp", "maximum retail"], fallbackIndex: 2, value: money.mrp, field: "mrp" }));
-  results.push(await fillRowField(row, headers, { ids: ["inventory"], names: ["inventory", "qty", "quantity", "stock"], fallbackIndex: 3, value: listing.inventory || "5", field: "inventory" }));
-  results.push(await fillRowField(row, headers, { ids: ["supplier_sku_id"], names: ["sku id", "sku", "style code"], value: sku, field: "sku id" }));
-  if (!headerHas(headers, ["listing price", "meesho price", "selling price"]) && !row.querySelector("[id='meesho_price']")) {
-    results.push(await fillRowField(row, headers, { ids: [], names: ["price"], value: money.selling, field: "price" }));
+  const sku = skuForSize(skuBase, size);
+  results.push(await fillRowField(row, resolved, { ids: ["meesho_price"], names: ["listing price", "meesho price", "selling price"], fallbackIndex: 0, value: money.selling, field: "meesho price" }));
+  results.push(await fillRowField(row, resolved, { ids: ["only_wrong_return_price"], names: ["wrong", "defective", "returns price", "return price"], fallbackIndex: 1, value: money.returns, field: "returns price" }));
+  results.push(await fillRowField(row, resolved, { ids: ["product_mrp"], names: ["mrp", "maximum retail"], fallbackIndex: 2, value: money.mrp, field: "mrp" }));
+  results.push(await fillRowField(row, resolved, { ids: ["inventory"], names: ["inventory", "qty", "quantity", "stock"], fallbackIndex: 3, value: listing.inventory || "5", field: "inventory" }));
+  results.push(await fillRowField(row, resolved, { ids: ["supplier_sku_id"], names: ["sku id", "sku"], value: sku, field: "sku id" }));
+  if (!headerHas(resolved, ["listing price", "meesho price", "selling price"]) && !row.querySelector("[id='meesho_price']")) {
+    results.push(await fillRowField(row, resolved, { ids: [], names: ["price"], value: money.selling, field: "price" }));
   }
   if (measures) {
-    results.push(await fillRowField(row, headers, { ids: ["shoulder_size"], names: ["shoulder size", "shoulder"], value: measures.shoulder, field: "shoulder" }));
-    results.push(await fillRowField(row, headers, { ids: ["length_size"], names: ["size length", "length size", "length"], value: measures.length, field: "length" }));
-    results.push(await fillRowField(row, headers, { ids: ["bust_size", "top_chest_size"], names: ["breast", "bust", "chest"], value: measures.bust, field: "bust" }));
-    results.push(await fillRowField(row, headers, { ids: ["waist_size"], names: ["waist size", "waist"], value: measures.waist, field: "waist" }));
-    results.push(await fillRowField(row, headers, { ids: ["hip_size"], names: ["hip size", "hip", "hips"], value: measures.hip, field: "hip" }));
+    const lengthHeader = [...resolved.values()].find((label) => /length size|size length/.test(label)) || "";
+    const lengthValue = /meter|metre/.test(lengthHeader) ? lengthValueForUnit(listing, size, "meter") : measures.length;
+    results.push(await fillRowField(row, resolved, { ids: ["shoulder_size"], names: ["shoulder size", "shoulder"], value: measures.shoulder, field: "shoulder" }));
+    results.push(await fillRowField(row, resolved, { ids: ["length_size"], names: ["size length", "length size", "length"], value: lengthValue, field: "length" }));
+    results.push(await fillRowField(row, resolved, { ids: ["bust_size", "top_chest_size"], names: ["breast", "bust", "chest"], value: measures.bust, field: "bust" }));
+    results.push(await fillRowField(row, resolved, { ids: ["waist_size"], names: ["waist size", "waist"], value: measures.waist, field: "waist" }));
+    results.push(await fillRowField(row, resolved, { ids: ["hip_size"], names: ["hip size", "hip", "hips"], value: measures.hip, field: "hip" }));
   }
   return results;
+}
+
+function skuForSize(skuBase: string, size: string, index = 0) {
+  const base = skuBase.replace(/-+$/, "") || "SKU";
+  const key = (size || String(index + 1)).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || String(index + 1);
+  if (base.toUpperCase().endsWith(`-${key.toUpperCase()}`)) return base.slice(0, 40);
+  return `${base}-${key}`.slice(0, 40);
+}
+
+export function metersFromInches(inches: string) {
+  const value = Number(inches);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const meters = Math.round(value * 0.0254 * 2) / 2;
+  if (meters <= 0) return "0.5";
+  return String(meters);
 }
 
 function sizeMoney(listing: MappedListing) {
@@ -605,16 +662,86 @@ function findRowInput(row: Element, headers: Map<number, string>, options: { ids
   }
   const byName = controlMatchingNames(row, options.names);
   if (byName) return byName;
-  const exact = [...headers.entries()].find(([, label]) => options.names.some((name) => label === name));
-  const fuzzy = [...headers.entries()].find(([, label]) => options.names.some((name) => label.includes(name)));
-  const index = (exact || fuzzy)?.[0];
+  const index = headerIndex(headers, options.names);
   if (index != null) {
     const cell = row.children[index] as HTMLElement | undefined;
-    const input = cell?.querySelector<HTMLElement>("input, textarea, select, [role='combobox']");
+    const input = controlInCell(cell);
     if (input) return input;
   }
+  const byLabel = controlBySiblingLabel(row, options.names);
+  if (byLabel) return byLabel;
   if (options.fallbackIndex == null || headers.size) return null;
   return numberedRowInputs(row)[options.fallbackIndex] || null;
+}
+
+function headerIndex(headers: Map<number, string>, names: string[]) {
+  const entries = [...headers.entries()];
+  const ranked = [...names].sort((a, b) => b.length - a.length);
+  for (const name of ranked) {
+    const exact = entries.find(([, label]) => label === name);
+    if (exact) return exact[0];
+  }
+  for (const name of ranked) {
+    const fuzzy = entries.find(([, label]) => label.includes(name));
+    if (fuzzy) return fuzzy[0];
+  }
+  return null;
+}
+
+function siblingHeaderMap(row: Element) {
+  let parent = row.parentElement;
+  for (let depth = 0; depth < 4 && parent; depth++) {
+    for (const child of Array.from(parent.children)) {
+      if (child === row || child.contains(row) || child.querySelector("input, select, textarea")) continue;
+      const map = new Map<number, string>();
+      Array.from(child.children).forEach((cell, index) => {
+        const text = normalizeKey(cell.textContent || "");
+        if (text) map.set(index, text);
+      });
+      const labels = [...map.values()];
+      const useful = labels.some((label) => /inventory|sku id|length size|size length|meesho price|\bmrp\b/.test(label));
+      if (useful && map.size === row.children.length) return map;
+    }
+    parent = parent.parentElement;
+  }
+  return new Map<number, string>();
+}
+
+function controlInCell(cell: HTMLElement | null | undefined) {
+  if (!cell) return null;
+  if (isRowControl(cell)) return cell;
+  const nested = cell.querySelector<HTMLElement>("input, textarea, select, [role='combobox'], [aria-haspopup='listbox']");
+  if (nested && isRowControl(nested)) return nested;
+  if (isDropdownElement(cell)) return cell;
+  return Array.from(cell.querySelectorAll<HTMLElement>("div, span, button")).find((el) => isDropdownElement(el) && !el.closest("#cs-sidebar")) || null;
+}
+
+function controlBySiblingLabel(row: Element, names: string[]) {
+  const ranked = [...names].sort((a, b) => b.length - a.length);
+  const labels = Array.from(row.querySelectorAll<HTMLElement>("label, p, span"));
+  for (const name of ranked) {
+    for (const label of labels) {
+      if (label.closest("#cs-sidebar") || label.querySelector("input, select, textarea")) continue;
+      const text = normalizeKey((label.textContent || "").split("\n")[0] || "");
+      if (!text || text.length > 48 || !(text === name || text.includes(name))) continue;
+      const next = label.nextElementSibling as HTMLElement | null;
+      if (next && isRowControl(next)) return next;
+      const nested = next?.querySelector<HTMLElement>("input, textarea, select, [role='combobox'], [aria-haspopup='listbox']");
+      if (nested && isRowControl(nested)) return nested;
+      const parent = label.parentElement;
+      if (parent && parent.querySelectorAll("input, select, textarea").length <= 2) {
+        const inParent = controlInCell(parent);
+        if (inParent && inParent !== label) return inParent;
+      }
+    }
+  }
+  return null;
+}
+
+function isRowControl(el: Element | null | undefined): el is HTMLElement {
+  if (!(el instanceof HTMLElement) || el.closest("#cs-sidebar")) return false;
+  if (el instanceof HTMLInputElement && el.type === "hidden") return false;
+  return el.matches("input, textarea, select, [role='combobox'], [aria-haspopup='listbox']");
 }
 
 function controlMatchingNames(row: Element, names: string[]) {
@@ -640,6 +767,230 @@ export async function fillSelectedSize(listing: MappedListing, size: string, onP
   const scoped = { ...listing, selectedSizes: [size], size };
   const chart = await fillSizeChart(scoped, onProgress);
   return [{ field: `Size ${size}`, ok: selected, message: selected ? "Selected" : "Size control not found" }, ...chart];
+}
+
+const VARIANT_HEADER = [
+  { kind: "inventory" as const, test: /^inventory\b/ },
+  { kind: "sku" as const, test: /^sku id\b/ },
+  { kind: "length" as const, test: /^(length size|size length)\b/ },
+];
+
+async function fillStackedVariantColumns(listing: MappedListing) {
+  const results: FillResult[] = [];
+  const headers = variantHeaderElements();
+  const written = new Set<HTMLElement>();
+  for (const header of headers) {
+    const controls = stackedControls(header, headers);
+    if (!controls?.length) continue;
+    const kind = headerKind(header);
+    if (!kind) continue;
+    const unit = /meter|metre/.test(normalizeKey(header.textContent || "")) ? "meter" : /inch|\bin\b/.test(normalizeKey(header.textContent || "")) ? "inch" : "";
+    const sizes = sizesBeside(header, controls.length, listing);
+    for (let index = 0; index < controls.length; index++) {
+      const control = controls[index];
+      if (written.has(control)) continue;
+      const size = sizes[index] || "";
+      const value = kind === "inventory"
+        ? listing.inventory || "5"
+        : kind === "sku"
+          ? skuForSize((listing.skuId || listing.styleCode || "SKU").replace(/\s+/g, "-"), size, index)
+          : lengthValueForUnit(listing, size, unit);
+      if (!value) continue;
+      if (controlAlreadySet(control, value)) {
+        written.add(control);
+        continue;
+      }
+      written.add(control);
+      results.push(await writeVariantControl(control, value, kind === "sku" ? "sku id" : kind));
+    }
+  }
+  return results;
+}
+
+function lengthValueForUnit(listing: MappedListing, size: string, unit: "meter" | "inch" | "") {
+  if (unit === "meter" && listing.lengthSize) return listing.lengthSize;
+  if (unit === "meter" && /^\d{2}$/.test(size)) return metersFromInches("39");
+  const measures = size ? measuresForSize(size, listing) : null;
+  if (unit === "meter") return metersFromInches(measures?.length || "");
+  return measures?.length || "";
+}
+
+function controlAlreadySet(el: HTMLElement, value: string) {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.value.trim() === value;
+  if (el instanceof HTMLSelectElement) {
+    const text = el.selectedOptions[0]?.textContent || el.value || "";
+    return Boolean(text) && !/^select|choose$/i.test(text.trim()) && optionTextMatches(text, value);
+  }
+  const text = (el.innerText || "").trim().split("\n")[0] || "";
+  return Boolean(text) && !/^select|choose$/i.test(text) && optionTextMatches(text, value);
+}
+
+async function writeVariantControl(el: HTMLElement, value: string, field: string): Promise<FillResult> {
+  if (el instanceof HTMLSelectElement) return selectNativeDropdown({ labelText: field }, value, el);
+  if (el.getAttribute("role") === "combobox" || isDropdownElement(el)) return selectCustomDropdown({ labelText: field }, value, el);
+  if (el instanceof HTMLInputElement && el.type === "number" && !/^-?\d+(\.\d+)?$/.test(value)) {
+    return { field, ok: false, message: "Skipped non-numeric value" };
+  }
+  triggerReactInputEvents(el, value);
+  const ok = verifyFieldValue(el, value);
+  return { field, ok, message: ok ? "Filled" : "Value not accepted" };
+}
+
+function variantHeaderElements() {
+  const found: HTMLElement[] = [];
+  for (const el of document.querySelectorAll<HTMLElement>("p, span, th, label, div, h6")) {
+    if (el.closest("#cs-sidebar") || el.querySelector("input, select, textarea, [role='combobox']")) continue;
+    const text = normalizeKey((el.innerText || el.textContent || "").split("\n")[0] || "");
+    if (!text || text.length > 40 || !headerKind(el)) continue;
+    const childSame = Array.from(el.children).some((child) => headerKind(child as HTMLElement));
+    if (childSame) continue;
+    found.push(el);
+  }
+  return found;
+}
+
+function headerKind(el: HTMLElement | null | undefined) {
+  if (!el) return "";
+  const text = normalizeKey((el.innerText || el.textContent || "").split("\n")[0] || "");
+  return VARIANT_HEADER.find((item) => item.test.test(text))?.kind || "";
+}
+
+function stackedControls(header: HTMLElement, headers: HTMLElement[]) {
+  let node = header.parentElement;
+  for (let depth = 0; depth < 6 && node && node !== document.body; depth++) {
+    if (node.closest("#cs-sidebar") || node.matches("table, tbody, thead, tr")) return null;
+    if (isMixedVariantGrid(node)) return null;
+    const inside = headers.filter((item) => node!.contains(item) && !headers.some((other) => other !== item && item.contains(other)));
+    if (inside.length > 1) return null;
+    const controls = columnControls(node);
+    if (inside.length === 1 && controls.length >= 2) return controls;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function isMixedVariantGrid(node: HTMLElement) {
+  const text = normalizeKey(node.innerText || "").slice(0, 500);
+  const kinds = ["meesho price", "mrp", "inventory", "sku id", "length size", "size length"].filter((name) => text.includes(name));
+  return kinds.length > 1;
+}
+
+async function fillFlatVariantGrid(listing: MappedListing) {
+  const results: FillResult[] = [];
+  const seen = new Set<HTMLElement>();
+  for (const grid of document.querySelectorAll<HTMLElement>("div, section, form")) {
+    if (grid.closest("#cs-sidebar") || seen.has(grid)) continue;
+    const children = Array.from(grid.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
+    if (children.length < 8) continue;
+    let width = 0;
+    for (const child of children) {
+      if (child.querySelector("input, select, textarea") || isSizeLabel((child.innerText || child.textContent || "").trim().split("\n")[0] || "")) break;
+      const text = normalizeKey(child.innerText || child.textContent || "");
+      if (!text || text.length > 48) break;
+      width++;
+    }
+    if (width < 3 || width > 12) continue;
+    const data = children.slice(width);
+    if (data.length < width) continue;
+    const rows = Math.floor(data.length / width);
+    const sized = Array.from({ length: rows }, (_, row) => sizeTextIn(data.slice(row * width, row * width + width))).filter(Boolean);
+    if (!sized.length) continue;
+    seen.add(grid);
+    for (let row = 0; row < rows; row++) {
+      const cells = data.slice(row * width, row * width + width);
+      const size = sizeTextIn(cells) || sized[row] || "";
+      for (let column = 0; column < width; column++) {
+        const spec = flatField(children[column], listing, size, row);
+        if (!spec?.value) continue;
+        const control = controlInCell(cells[column]);
+        if (!control || controlAlreadySet(control, spec.value)) continue;
+        results.push(await writeVariantControl(control, spec.value, spec.field));
+      }
+    }
+  }
+  return results;
+}
+
+function sizeTextIn(cells: HTMLElement[]) {
+  for (const cell of cells) {
+    const direct = (cell.innerText || cell.textContent || "").trim().split("\n")[0]?.trim() || "";
+    if (isSizeLabel(direct)) return direct;
+    const nested = orderedSizeLabels(cell)[0];
+    if (nested) return nested;
+  }
+  return "";
+}
+
+function flatField(header: HTMLElement, listing: MappedListing, size: string, index: number) {
+  const text = normalizeKey(header.innerText || header.textContent || "");
+  const money = sizeMoney(listing);
+  if (/^inventory\b|^quantity\b|^stock\b/.test(text)) return { field: "inventory", value: listing.inventory || "5" };
+  if (/^sku id\b/.test(text)) return { field: "sku id", value: skuForSize((listing.skuId || listing.styleCode || "SKU").replace(/\s+/g, "-"), size, index) };
+  if (/^(length size|size length)\b/.test(text)) {
+    const unit = /meter|metre/.test(text) ? "meter" as const : /inch|\bin\b/.test(text) ? "inch" as const : "" as const;
+    return { field: "length", value: lengthValueForUnit(listing, size, unit) };
+  }
+  if (/wrong|defective|return price/.test(text)) return { field: "returns price", value: money.returns };
+  if (/meesho price|listing price|selling price/.test(text)) return { field: "meesho price", value: money.selling };
+  if (/^mrp\b|maximum retail/.test(text)) return { field: "mrp", value: money.mrp };
+  return null;
+}
+
+function columnControls(root: HTMLElement) {
+  const all = Array.from(root.querySelectorAll<HTMLElement>("input, select, [role='combobox'], [aria-haspopup='listbox']")).filter((el) => {
+    if (el.closest("#cs-sidebar") || !visibleControl(el)) return false;
+    if (el instanceof HTMLInputElement && el.type === "hidden") return false;
+    return true;
+  });
+  return all.filter((el) => {
+    if (!(el instanceof HTMLInputElement)) return true;
+    const combo = el.closest<HTMLElement>("[role='combobox'], [aria-haspopup='listbox']");
+    return !combo || combo === el || !all.includes(combo);
+  });
+}
+
+function visibleControl(el: HTMLElement) {
+  try {
+    const style = window.getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+function sizesBeside(header: HTMLElement, count: number, listing: MappedListing) {
+  let column: HTMLElement | null = header.parentElement;
+  for (let depth = 0; depth < 6 && column && column !== document.body; depth++) {
+    const own = orderedSizeLabels(column);
+    if (own.length >= 2) return own.slice(0, count);
+    const grid = column.parentElement;
+    if (grid) {
+      for (const sibling of Array.from(grid.children)) {
+        if (sibling === column) continue;
+        const labels = orderedSizeLabels(sibling as HTMLElement);
+        if (labels.length) return labels.slice(0, count);
+      }
+    }
+    column = column.parentElement;
+  }
+  return (listing.selectedSizes || []).slice(0, count);
+}
+
+function orderedSizeLabels(root: HTMLElement) {
+  const found: string[] = [];
+  const seen = new Set<string>();
+  for (const el of root.querySelectorAll<HTMLElement>("p, span, div, td, th, label, h6")) {
+    if (el.closest("#cs-sidebar") || el.querySelector("input, select, textarea")) continue;
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (!isSizeLabel(text)) continue;
+    const nested = Array.from(el.querySelectorAll("p, span, div, td, th, label, h6")).some((child) => (child.textContent || "").replace(/\s+/g, " ").trim() === text);
+    if (nested) continue;
+    const key = normalizeKey(text);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    found.push(text);
+  }
+  return found;
 }
 
 function headerHas(headers: Map<number, string>, names: string[]) {

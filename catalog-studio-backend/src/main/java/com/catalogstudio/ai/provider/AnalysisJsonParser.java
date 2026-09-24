@@ -48,7 +48,8 @@ public class AnalysisJsonParser {
                     number(node, "overallConfidence"),
                     stringList(node, "uncertainFields"),
                     provider,
-                    model
+                    model,
+                    text(node, "lengthMeters")
             );
         } catch (Exception ex) {
             throw ApiException.badRequest("AI returned invalid JSON");

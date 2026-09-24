@@ -41,6 +41,7 @@ public interface AIProductAnalysisService {
             Double overallConfidence,
             List<String> uncertainFields,
             String provider,
-            String model
+            String model,
+            String lengthMeters
     ) {}
 }

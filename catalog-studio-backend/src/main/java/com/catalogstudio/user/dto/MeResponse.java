@@ -1,5 +1,6 @@
 package com.catalogstudio.user.dto;
 
+import java.util.List;
 import java.util.UUID;
 
 public record MeResponse(
@@ -22,5 +23,6 @@ public record MeResponse(
         boolean accessEntitled,
         boolean requiresRecharge,
         String trialEndsOn,
-        long daysRemaining
+        long daysRemaining,
+        List<String> enabledFeatures
 ) {}

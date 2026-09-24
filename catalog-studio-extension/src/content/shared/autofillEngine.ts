@@ -196,7 +196,8 @@ export async function selectNativeDropdown(hint: SelectorHint, value: string, el
   if (!(match.element instanceof HTMLSelectElement)) {
     return selectCustomDropdown(hint, value, match.element);
   }
-  const option = Array.from(match.element.options).find((o) => optionTextMatches(o.text || o.value, value));
+  const options = Array.from(match.element.options);
+  const option = options.find((o) => optionTextMatches(o.text || o.value, value)) || nearestSelectOption(options, value);
   if (!option) {
     return { field: match.label, ok: false, message: "Dropdown value is unavailable" };
   }
@@ -306,15 +307,32 @@ function nearestNumericOption(nodes: HTMLElement[], value: string) {
     })
     .filter((item): item is { el: HTMLElement; dist: number } => Boolean(item))
     .sort((a, b) => a.dist - b.dist);
-  return scored[0] && scored[0].dist <= 2 ? scored[0].el : undefined;
+  if (!scored[0]) return undefined;
+  const limit = target <= 12 ? 0.5 : 2;
+  return scored[0].dist <= limit ? scored[0].el : undefined;
 }
 
 function parseInch(text: string) {
-  const match = text.replace(/,/g, "").match(/^(\d+(?:\.\d+)?)(\s*(in|inch|inches)?)?$/i);
-  return match ? Number(match[1]) : null;
+  return leadingMeasure(normalize(text));
 }
 
-function optionTextMatches(optionText: string, value: string) {
+function nearestSelectOption(options: HTMLOptionElement[], value: string) {
+  const target = leadingMeasure(normalize(value));
+  if (target == null) return undefined;
+  const limit = target <= 12 ? 0.5 : 2;
+  let best: { option: HTMLOptionElement; dist: number } | undefined;
+  for (const option of options) {
+    const text = normalize(option.text || option.value);
+    if (!text || /^select|choose$/.test(text)) continue;
+    const parsed = leadingMeasure(text);
+    if (parsed == null) continue;
+    const dist = Math.abs(parsed - target);
+    if (!best || dist < best.dist) best = { option, dist };
+  }
+  return best && best.dist <= limit ? best.option : undefined;
+}
+
+export function optionTextMatches(optionText: string, value: string) {
   const a = normalize(optionText);
   const b = normalize(value);
   if (!a || !b) return false;
@@ -322,7 +340,18 @@ function optionTextMatches(optionText: string, value: string) {
   const aRate = parseRate(a);
   const bRate = parseRate(b);
   if (aRate != null && bRate != null) return aRate === bRate;
+  const aNum = leadingMeasure(a);
+  const bNum = leadingMeasure(b);
+  if (aNum != null && bNum != null) return aNum === bNum;
+  if (/^\d/.test(a) && /^\d/.test(b)) return false;
   return a.includes(b) || b.includes(a);
+}
+
+function leadingMeasure(value: string) {
+  const pack = value.match(/^(?:pack of|set of)\s*(\d+(?:\.\d+)?)$/);
+  if (pack) return Number(pack[1]);
+  const match = value.match(/^(\d+(?:\.\d+)?)(?:\s*(?:%|m|meter|meters|metre|metres|in|inch|inches|n|gm|gms|grams?))?$/);
+  return match ? Number(match[1]) : null;
 }
 
 function parseRate(value: string) {

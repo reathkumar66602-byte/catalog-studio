@@ -6,7 +6,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 10MB
-      max-request-size: 50MB
+      max-request-size: 70MB
   jackson:
     default-property-inclusion: non_null
     serialization:
@@ -73,6 +73,7 @@ catalogstudio:
     provider: ${AI_PROVIDER:openai}
     api-key: ${AI_API_KEY:}
     model: ${AI_MODEL:gpt-4o-mini}
+    image-model: ${AI_IMAGE_MODEL:gpt-image-1}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:60}
     prompt-path: classpath:prompts/product-analysis.txt
   upload:

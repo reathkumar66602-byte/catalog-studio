@@ -1,13 +1,15 @@
 package com.catalogstudio.user.repository;
 
 import com.catalogstudio.user.entity.User;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
     Optional<User> findByEmailIgnoreCase(String email);
     Optional<User> findByUsernameIgnoreCase(String username);
     Optional<User> findByUuid(UUID uuid);
@@ -16,4 +18,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByMobile(String mobile);
     Page<User> findByRole(User.Role role, Pageable pageable);
     long countByStatus(User.UserStatus status);
+    long countByRole(User.Role role);
+    long countByRoleIn(Collection<User.Role> roles);
 }

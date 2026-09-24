@@ -1,5 +1,6 @@
 package com.catalogstudio.auth.dto;
 
+import java.util.List;
 import java.util.UUID;
 
 public record AuthResponse(
@@ -22,6 +23,7 @@ public record AuthResponse(
             boolean requiresRecharge,
             String trialEndsOn,
             long daysRemaining,
-            String preferredLocale
+            String preferredLocale,
+            List<String> enabledFeatures
     ) {}
 }

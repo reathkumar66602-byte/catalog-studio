@@ -1,5 +1,6 @@
 package com.catalogstudio.user.controller;
 
+import com.catalogstudio.access.service.FeatureAccessService;
 import com.catalogstudio.analysis.repository.ProductAnalysisRepository;
 import com.catalogstudio.auth.entity.UserSession;
 import com.catalogstudio.auth.repository.UserSessionRepository;
@@ -57,6 +58,7 @@ public class AccountController {
     private final ExtensionDeviceRepository deviceRepository;
     private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final FeatureAccessService featureAccessService;
 
     @GetMapping("/me")
     @Transactional
@@ -77,7 +79,8 @@ public class AccountController {
                 access.accessEntitled(),
                 access.requiresRecharge(),
                 access.endDate(),
-                access.daysRemaining()
+                access.daysRemaining(),
+                featureAccessService.enabledKeys(user)
         ));
     }
 

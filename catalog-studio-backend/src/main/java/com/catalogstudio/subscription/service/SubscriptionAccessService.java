@@ -38,7 +38,7 @@ public class SubscriptionAccessService {
 
     @Transactional
     public void ensureTrialOnLogin(User user) {
-        if (user == null || user.getRole() == User.Role.ADMIN) {
+        if (user == null || user.isStaff()) {
             return;
         }
         Subscription subscription = latest(user.getId());
@@ -73,7 +73,7 @@ public class SubscriptionAccessService {
     public SubscriptionStatusResponse statusOf(User user) {
         BillingSettings billing = billingSettingsService.current();
         Subscription subscription = latest(user.getId());
-        boolean admin = user.getRole() == User.Role.ADMIN;
+        boolean admin = user.isStaff();
         Snapshot snapshot = snapshot(user, subscription, billing, admin);
         String pendingPlan = subscription == null || subscription.getPendingPlan() == null
                 ? null

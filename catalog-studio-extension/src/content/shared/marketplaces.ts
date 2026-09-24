@@ -38,6 +38,7 @@ export type MappedListing = {
   stitchType?: string;
   garmentLength?: string;
   mainCategory?: string;
+  catalogPath?: string;
   packOf?: string;
   waistRise?: string;
   closure?: string;

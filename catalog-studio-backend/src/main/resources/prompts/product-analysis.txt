@@ -22,12 +22,28 @@ COLOR (critical — never default to Navy Blue):
 - If the garment is checked, primaryColor is the dominant ground color; put the check color in secondaryColors.
 - Return null when the color is not clear.
 
+NON-CLOTHING PRODUCTS:
+- Grocery, home utility, kitchen, beauty, health, appliances, automotive, toys, and similar products are not garments.
+- Set gender, sleeveType, neckType, collarType, fit, occasion, and lengthMeters to null.
+- productType is the item itself, such as Tea, Mug, Soap, or Bottle.
+- Titles name that item. Do not add Women's or Men's unless the photo shows clothing.
+
 OTHER ATTRIBUTES:
 - Identify product type, category, subcategory, age group, pattern, sleeve, neck, collar, fit, occasion, and style when visible.
 - Estimate visible material ONLY when reasonably identifiable from the images. Return null when uncertain.
 - Return null for any field you cannot determine with reasonable confidence.
 - Return a confidence score between 0 and 1 for color, pattern, material, and overall.
-- Never invent a brand name, certifications, fabric composition percentages, size, measurements, or dimensions.
+
+GARMENT LENGTH (Meesho Fabric Length and Length Size in meters):
+- If the product is not clothing or fabric, return null.
+- From the photo, estimate how far the main garment hangs.
+- Top, dress, kurti, or tunic: shoulder to hem. Bottom: waist to hem. A top-and-bottom set: use the longer piece.
+- Snap a stitched garment to 0.5, 1, 1.5, 2, 2.5, or 3.
+- Crop or waist length = 0.5. Hip-length top or short tunic = 1. Knee-length kurti or dress = 1.5. Calf or midi = 2. Ankle or gown = 2.5. Floor length that pools = 3.
+- Saree: 5.5 or 6. Dupatta or kurti fabric piece: 2 or 2.5. Do not shorten a full saree to 3.
+- Return null when the hem is cut off or not visible. Put the snapped number in lengthMeters.
+- Never invent a brand name, certifications, fabric composition percentages, or bust/waist/chest inches.
+- lengthMeters is allowed. Estimate only the visible garment length, then snap it. Do not invent a tape measurement.
 - If multiple images are provided, use all of them together to improve accuracy.
 
 TITLES AND DESCRIPTIONS:
@@ -66,5 +82,6 @@ Return JSON in this exact shape:
   "suggestedDescriptions": ["string", "string"],
   "keywords": ["string"],
   "overallConfidence": 0.0,
-  "uncertainFields": ["string"]
+  "uncertainFields": ["string"],
+  "lengthMeters": 1.5
 }

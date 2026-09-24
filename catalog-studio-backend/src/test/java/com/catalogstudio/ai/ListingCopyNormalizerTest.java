@@ -65,7 +65,7 @@ class ListingCopyNormalizerTest {
         return new ProductAnalysisResponse(
                 type, "Clothing", type, gender, "Adult", color, List.of(), 0.9, pattern, 0.9,
                 null, 0.4, "Full Sleeve", null, "Shirt Collar", "Regular Fit", "Casual", "Casual",
-                descriptions.getFirst(), titles, descriptions, List.of(), 0.8, List.of(), "OPENAI", "gpt-4o-mini"
+                descriptions.getFirst(), titles, descriptions, List.of(), 0.8, List.of(), "OPENAI", "gpt-4o-mini", "1.5"
         );
     }
 }

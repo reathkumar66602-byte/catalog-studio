@@ -54,6 +54,44 @@ public class LocalStorageService implements StorageService {
     }
 
     @Override
+    public StoredFile storeBytes(byte[] bytes, String contentType) {
+        if (bytes == null || bytes.length == 0) {
+            throw ApiException.badRequest("Generated image was empty");
+        }
+        if (bytes.length > properties.upload().maxFileBytes()) {
+            throw ApiException.badRequest("Generated image is too large to store");
+        }
+        String type = contentType == null || contentType.isBlank() ? "image/png" : contentType;
+        String key = UUID.randomUUID() + extension(type);
+        Path dir = storageDir();
+        try {
+            Files.createDirectories(dir);
+            Files.write(dir.resolve(key), bytes);
+        } catch (IOException e) {
+            log.warn("Could not write generated image to {}: {}", dir, e.toString());
+            throw ApiException.badRequest("Could not store generated image");
+        }
+        String url = properties.storage().publicBaseUrl().replaceAll("/$", "") + "/" + key;
+        return new StoredFile(key, url, type, bytes.length, bytes);
+    }
+
+    @Override
+    public byte[] read(String storageKey) {
+        if (storageKey == null || !storageKey.matches("[a-fA-F0-9\\-]{36}\\.(jpg|png|webp)")) {
+            throw ApiException.notFound("Image not found");
+        }
+        Path path = storageDir().resolve(storageKey).normalize();
+        if (!path.startsWith(storageDir())) {
+            throw ApiException.notFound("Image not found");
+        }
+        try {
+            return Files.readAllBytes(path);
+        } catch (IOException e) {
+            throw ApiException.notFound("Image not found");
+        }
+    }
+
+    @Override
     public void delete(String storageKey) {
         try {
             Files.deleteIfExists(storageDir().resolve(storageKey));

@@ -1,5 +1,6 @@
 package com.catalogstudio.auth.service;
 
+import com.catalogstudio.access.service.FeatureAccessService;
 import com.catalogstudio.audit.service.AuditService;
 import com.catalogstudio.auth.dto.AuthFlowResponse;
 import com.catalogstudio.auth.dto.AuthResponse;
@@ -64,6 +65,7 @@ public class AuthService {
     private final AuditService auditService;
     private final OtpService otpService;
     private final TemplatedEmailService templatedEmailService;
+    private final FeatureAccessService featureAccessService;
 
     @Transactional
     public AuthFlowResponse register(RegisterRequest request, String ip, String userAgent) {
@@ -369,7 +371,8 @@ public class AuthService {
                         subscription.daysRemaining(),
                         user.getPreferredLocale() == null || user.getPreferredLocale().isBlank()
                                 ? "en"
-                                : com.catalogstudio.user.SupportedLocales.normalize(user.getPreferredLocale())
+                                : com.catalogstudio.user.SupportedLocales.normalize(user.getPreferredLocale()),
+                        featureAccessService.enabledKeys(user)
                 )
         );
     }

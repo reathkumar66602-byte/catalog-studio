@@ -25,6 +25,7 @@ public class SubscriptionAccessFilter extends OncePerRequestFilter {
             "/api/v1/auth",
             "/api/v1/me",
             "/api/v1/subscriptions",
+            "/api/v1/transactions",
             "/api/v1/site",
             "/api/v1/files",
             "/api/v1/referrals",
@@ -50,7 +51,7 @@ public class SubscriptionAccessFilter extends OncePerRequestFilter {
             return;
         }
         AuthUser user = SecurityUtils.optionalUser().orElse(null);
-        if (user == null || "ADMIN".equals(user.role())) {
+        if (user == null || user.isStaff()) {
             filterChain.doFilter(request, response);
             return;
         }

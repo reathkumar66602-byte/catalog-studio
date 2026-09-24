@@ -18,6 +18,7 @@ class MockVisionProviderTest {
         assertThat(result.uncertainFields()).contains("material");
         assertThat(result.suggestedTitles()).isNotEmpty();
         assertThat(result.provider()).isEqualTo("MOCK");
+        assertThat(result.lengthMeters()).isEqualTo("1");
     }
 
     @Test

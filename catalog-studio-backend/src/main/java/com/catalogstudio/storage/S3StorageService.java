@@ -14,6 +14,16 @@ public class S3StorageService implements StorageService {
     }
 
     @Override
+    public StoredFile storeBytes(byte[] bytes, String contentType) {
+        throw new UnsupportedOperationException("S3 storage is not configured yet. Set catalogstudio.storage.provider=local.");
+    }
+
+    @Override
+    public byte[] read(String storageKey) {
+        throw new UnsupportedOperationException("S3 storage is not configured yet.");
+    }
+
+    @Override
     public void delete(String storageKey) {
         throw new UnsupportedOperationException("S3 storage is not configured yet.");
     }

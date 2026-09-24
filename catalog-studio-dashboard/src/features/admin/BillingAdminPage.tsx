@@ -135,6 +135,7 @@ export function BillingAdminPage() {
           Replace the email and plan name (`BASIC` ₹49, `STARTER` ₹99, `PRO` ₹499, or `BUSINESS` ₹999) after you confirm the WhatsApp screenshot. Also in
           {" "}
           <code>catalog-studio-backend/src/main/resources/db/scripts/activate_paid_access_by_email.sql</code>.
+          Live operators should use the Users menu instead: select the seller, choose the plan, and click Activate so Catalog Studio writes the Transactions row automatically.
         </p>
         <pre className="mt-4 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">{ACTIVATE_SQL}</pre>
       </section>

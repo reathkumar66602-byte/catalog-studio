@@ -14,7 +14,7 @@ class LocalStorageServiceTest {
             new CatalogStudioProperties.Jwt("secret-secret-secret-secret-secret-12", 15, 7),
             new CatalogStudioProperties.Cors(List.of("http://localhost:5173")),
             new CatalogStudioProperties.Storage("local", "./target/test-uploads", "http://localhost:8080/api/v1/files"),
-            new CatalogStudioProperties.Ai("mock", "", "mock", 30, "classpath:prompts/product-analysis.txt"),
+            new CatalogStudioProperties.Ai("mock", "", "mock", 30, "classpath:prompts/product-analysis.txt", "gpt-image-1"),
             new CatalogStudioProperties.Upload(5, 10_485_760, List.of("image/jpeg", "image/png", "image/webp")),
             new CatalogStudioProperties.Security(60, 10),
             new CatalogStudioProperties.Seed("a@test.local", "x", "s@test.local", "y"),

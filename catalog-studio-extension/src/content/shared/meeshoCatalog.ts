@@ -303,7 +303,10 @@ export function categoryClickPath(product: ProductLike): string[] {
     .join(" ")
     .toLowerCase();
 
-  if (/\bfabric|unstitched|kurti fabric/.test(blob)) {
+  if (/\bsaree/.test(blob)) {
+    return CATEGORY_PATHS.Sarees;
+  }
+  if (/kurti fabric|\bunstitched\b/.test(blob)) {
     return CATEGORY_PATHS["Kurti Fabrics"];
   }
   if (/\btunic|\btops?\b/.test(blob)) {
@@ -314,9 +317,6 @@ export function categoryClickPath(product: ProductLike): string[] {
       return ["Men Fashion", "Ethnic Wear", "Kurtas"];
     }
     return CATEGORY_PATHS.Kurtis;
-  }
-  if (/\bsaree/.test(blob)) {
-    return CATEGORY_PATHS.Sarees;
   }
   if (/\bt-?shirt|\btee\b/.test(blob)) {
     if (isMenAudience(blob)) {

@@ -106,8 +106,32 @@ public class User {
         return status == UserStatus.ACTIVE;
     }
 
+    public boolean isStaff() {
+        return role != null && role.isStaff();
+    }
+
+    public boolean isSuperAdmin() {
+        return role != null && role.isSuperAdmin();
+    }
+
+    public boolean isWorkspaceUser() {
+        return role != null && role.isWorkspaceUser();
+    }
+
     public enum Role {
-        ADMIN, SELLER, TEAM_MEMBER
+        SUPERADMIN, ADMIN, USER, SELLER, TEAM_MEMBER;
+
+        public boolean isStaff() {
+            return this == SUPERADMIN || this == ADMIN;
+        }
+
+        public boolean isSuperAdmin() {
+            return this == SUPERADMIN;
+        }
+
+        public boolean isWorkspaceUser() {
+            return this == USER || this == SELLER || this == TEAM_MEMBER;
+        }
     }
 
     public enum UserStatus {

@@ -5,7 +5,7 @@ import { detectMarketplace, type MappedListing } from "./shared/marketplaces";
 import { isMeeshoAddCatalogFlow, isMeeshoBulkCatalogPage, isMeeshoBulkTemplateStep, isMeeshoCatalogListPage, isMeeshoCatalogPage, isMeeshoCategoryPickerVisible, isMeeshoProductDetailsPage, readMeeshoCategoryFromPage, readMeeshoCategoryPath, shouldScanMeeshoForm, suggestedCategoryLabel } from "./shared/meeshoCatalog";
 import { captureBestPageImage, watchMeeshoPageImages, type PageImageSource } from "./shared/meeshoPageImage";
 import { detectMeeshoStore, isMeeshoPageChrome, sanitizeStoreName, type MeeshoStore } from "./shared/meeshoStore";
-import { buildStyleCode, defaultsForCategory, deriveBrand, deriveFabric, deriveGenericName, deriveMainCategory, deriveOccasion, detectOrnamentation, extractPincode, mapGarmentLength, mapNeck, mapSleeveLength, mapSleeveStyling } from "./shared/meeshoDefaults";
+import { buildStyleCode, defaultsForCategory, deriveBrand, deriveFabric, deriveGenericName, deriveMainCategory, deriveOccasion, detectOrnamentation, extractPincode, fabricLengthFromMeters, isNonApparelCatalog, mapGarmentLength, mapNeck, mapSleeveLength, mapSleeveStyling, meterAmount, netQuantityForListing } from "./shared/meeshoDefaults";
 import { fillSizeChart, fillSizeChoices, detectPageSizes, detectSelectedPageSizes, fallbackSizesForListing, planMeeshoFill } from "./shared/meeshoFormFill";
 import { isInvalidatedContext, sendRuntimeMessage, storageGet, storageSet, watchStorageChanges } from "../services/chromeAccess";
 import { getSession } from "../services/storage";
@@ -51,6 +51,7 @@ type GeneratedState = {
   netQuantity?: string;
   ornamentation?: string;
   genericName?: string;
+  lengthMeters?: string;
   titles: string[];
   descriptions: string[];
   selectedTitle: number;
@@ -240,14 +241,15 @@ function injectUi() {
     #cs-sidebar header .brand { display:flex; align-items:center; gap:10px; }
     #cs-sidebar header .brand img { width:32px; height:32px; border-radius:9px; background:#fff; }
     #cs-sidebar header .brand small { display:block; opacity:.8; font-weight:500; font-size:11px; }
-    #cs-sidebar header #cs-close { width:auto; margin:0; background:transparent; color:#fff; border-color:rgba(255,255,255,.25); }
+    #cs-sidebar header #cs-close { width:auto; margin:0; background:transparent; color:#fff !important; -webkit-text-fill-color:#fff; border-color:rgba(255,255,255,.45); }
     #cs-sidebar header .cs-head-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-    #cs-sidebar header .cs-locale-wrap { display:flex; align-items:center; height:32px; padding:0 4px 0 8px; background:#fff; border:1px solid rgba(255,255,255,.85); border-radius:999px; box-shadow:0 1px 2px rgba(15,23,42,.18); }
-    #cs-sidebar header .cs-locale-wrap:hover, #cs-sidebar header .cs-locale-wrap:focus-within { box-shadow:0 0 0 2px rgba(255,255,255,.28), 0 1px 2px rgba(15,23,42,.18); }
-    #cs-sidebar header .cs-locale-wrap::before { content:"Aअ"; display:flex; align-items:center; justify-content:center; margin-right:4px; font-size:10px; font-weight:800; letter-spacing:-.05em; color:#0f766e; line-height:1; }
-    #cs-sidebar header #cs-locale { -webkit-appearance:none; appearance:none; width:auto !important; max-width:7.2rem; min-width:4.6rem; margin:0 !important; padding:4px 22px 4px 2px !important; font:600 12px/1.2 Segoe UI,sans-serif; color:#134e4a !important; background-color:#fff !important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%230f766e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 4px center; border:0 !important; border-radius:0 !important; box-shadow:none; cursor:pointer; color-scheme:light; }
+    #cs-sidebar header .cs-locale-wrap { display:flex; align-items:center; height:32px; padding:0 4px 0 8px; background:transparent; border:1px solid rgba(255,255,255,.45); border-radius:999px; }
+    #cs-sidebar header .cs-locale-wrap:hover, #cs-sidebar header .cs-locale-wrap:focus-within { border-color:#fff; background:rgba(255,255,255,.08); }
+    #cs-sidebar header .cs-locale-wrap::before { content:"Aअ"; display:flex; align-items:center; justify-content:center; margin-right:4px; font-size:10px; font-weight:800; letter-spacing:-.05em; color:#fff; line-height:1; }
+    #cs-sidebar header #cs-locale,
+    #cs-sidebar header .cs-locale-wrap select#cs-locale { -webkit-appearance:none; appearance:none; width:auto !important; max-width:7.2rem; min-width:4.6rem; margin:0 !important; padding:4px 22px 4px 2px !important; font:600 12px/1.2 Segoe UI,sans-serif; color:#fff !important; -webkit-text-fill-color:#fff !important; background-color:transparent !important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23ffffff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 4px center; border:0 !important; border-radius:0 !important; box-shadow:none; cursor:pointer; color-scheme:dark; }
     #cs-sidebar header #cs-locale:focus { outline:none; }
-    #cs-sidebar header #cs-locale option { color:#0f172a; background:#fff; }
+    #cs-sidebar header #cs-locale option { color:#0f172a !important; -webkit-text-fill-color:#0f172a !important; background:#fff !important; }
     #cs-sidebar .body { padding:16px; overflow:auto; height:calc(100vh - 64px); }
     #cs-sidebar input, #cs-sidebar button, #cs-sidebar select, #cs-sidebar textarea { width:100%; margin:6px 0; padding:8px; border-radius:10px; border:1px solid #e2e8f0; box-sizing:border-box; }
     #cs-sidebar .btn { background:#0f766e; color:#fff; border:0; font-weight:600; cursor:pointer; }
@@ -285,6 +287,8 @@ function injectUi() {
     #cs-sidebar .footer-actions { position:sticky; bottom:0; background:#fff; padding-top:10px; border-top:1px solid #f1f5f9; }
     #cs-sidebar details { margin:10px 0; }
     #cs-sidebar summary { cursor:pointer; color:#334155; font-weight:600; }
+    #cs-sidebar header .cs-locale-wrap select#cs-locale { color:#fff !important; -webkit-text-fill-color:#fff !important; background-color:transparent !important; }
+    #cs-sidebar header .cs-locale-wrap select#cs-locale option { color:#0f172a !important; -webkit-text-fill-color:#0f172a !important; background:#fff !important; }
   `;
   document.documentElement.appendChild(style);
 
@@ -295,7 +299,7 @@ function injectUi() {
   sidebar.id = "cs-sidebar";
   sidebar.innerHTML = `
     <header>
-      <div class="brand">${logoImg(32)}<div><strong>Catalog Studio</strong><small data-i18n="ext.autofill">Auto-Fill v1.4.1</small></div></div>
+      <div class="brand">${logoImg(32)}<div><strong>Catalog Studio</strong><small data-i18n="ext.autofill">Auto-Fill v1.4.2</small></div></div>
       <div class="cs-head-actions">
         <label class="cs-locale-wrap"><select id="cs-locale" aria-label="Language">${localeOptionsHtml()}</select></label>
         <button id="cs-close" data-i18n="ext.close">Close</button>
@@ -427,6 +431,9 @@ function injectUi() {
   ["cs-gst", "cs-hsn", "cs-weight", "cs-style", "cs-pincode", "cs-address", "cs-mrp", "cs-price", "cs-inventory"].forEach((id) => {
     sidebar.querySelector(`#${id}`)?.addEventListener("change", persistListingDefaults);
   });
+  sidebar.querySelector("#cs-inventory")?.addEventListener("input", () => {
+    if (generated) renderGenerated();
+  });
   watchStorageChanges((changes, area) => {
     if (area !== "local") return;
     if (changes.csLocale) {
@@ -521,7 +528,7 @@ function syncCategoryFromPage() {
   if (!input) return;
   if (leaf) {
     input.value = leaf;
-    applyCategoryDefaults(leaf);
+    applyCategoryDefaults(path.join(" "));
     if (note) {
       note.className = "cs-ok";
       note.textContent = t("ext.catSelected", { leaf, path: path.join(" / ") });
@@ -838,6 +845,7 @@ async function analyzePickedImage() {
       netQuantity: combo.quantity,
       ornamentation: detectOrnamentation(notes, product.pattern, product.productDescription, product.style),
       genericName: categoryLeaf || product.productType || product.subCategory,
+      lengthMeters: product.lengthMeters == null ? "" : String(product.lengthMeters),
       titles: uniqueTexts(product.suggestedTitles || []),
       descriptions: uniqueTexts([...(product.suggestedDescriptions || []), product.productDescription]),
       selectedTitle: 0,
@@ -890,7 +898,8 @@ function renderGenerated() {
     ["Combo of", generated.comboOf],
     ["Fabric", generated.material],
     ["Generic Name", generated.genericName],
-    ["Net Quantity (N)", generated.netQuantity],
+    ["Fabric Length", fabricLengthFromMeters(generated.lengthMeters)],
+    ["Net Quantity (N)", netQuantityForListing(inputValue("cs-inventory"), generated.netQuantity, String(sellerSettings.priceRule?.inventory ?? ""))],
     ["Pattern", generated.pattern],
     ["Print or Pattern Type", generated.printType],
     ["Sleeve", generated.sleeveType],
@@ -1085,8 +1094,11 @@ function currentListing(): MappedListing {
   const description = generated?.descriptions[generated.selectedDesc] || String(selected?.description || "");
   const combo = parseCombo(notes);
   const split = splitPattern(generated?.pattern || String(selected?.pattern || ""), notes);
-  const pageCategory = readMeeshoCategoryFromPage() || generated?.genericName || "";
-  const defaults = defaultsForCategory(`${pageCategory} ${title}`, notes);
+  const categoryPath = readMeeshoCategoryPath();
+  const pageCategory = categoryPath[categoryPath.length - 1] || generated?.genericName || "";
+  const catalogPath = categoryPath.join(" ") || pageCategory;
+  const nonApparel = isNonApparelCatalog(catalogPath);
+  const defaults = defaultsForCategory(catalogPath, `${title} ${notes}`);
   const color = generated?.primaryColor || String(selected?.primaryColor || "");
   const productType = generated?.productType || String(selected?.productType || pageCategory);
   const storeName = detectedStore?.name || businessProfile?.name || "";
@@ -1098,40 +1110,54 @@ function currentListing(): MappedListing {
   if (!inputValue("cs-price")) setInput("cs-price", defaults.sellingPrice);
   if (!inputValue("cs-inventory")) setInput("cs-inventory", String(sellerSettings.priceRule?.inventory || defaults.inventory));
   applyPriceRuleToInputs();
+  const inventory = inputValue("cs-inventory") || defaults.inventory;
   const pack = sellerSettings.packaging || {};
-  const ornamentation = generated?.ornamentation || detectOrnamentation(notes, description);
+  const ornamentation = nonApparel ? "" : generated?.ornamentation || detectOrnamentation(notes, description);
   const stitchType = defaults.stitchType;
-  const pattern = ornamentation === "Embroidered" && stitchType === "Stitched"
-    ? "Embroidered"
-    : generated?.pattern || split.pattern;
+  const pattern = nonApparel
+    ? generated?.pattern || split.pattern
+    : ornamentation === "Embroidered" && stitchType === "Stitched"
+      ? "Embroidered"
+      : generated?.pattern || split.pattern;
   const sleeveSource = `${generated?.sleeveType || selected?.sleeveType || ""} ${title} ${description}`;
-  const sleeveLength = mapSleeveLength(sleeveSource) || defaults.sleeveLength;
-  const neckType = mapNeck(generated?.neckType || String(selected?.neckType || ""))
-    || (/kurti|kurta|dress|gown|t-?shirt|tee|top|tunic/.test(`${pageCategory} ${title}`.toLowerCase()) ? "Round Neck" : "");
+  const sleeveLength = nonApparel ? "" : mapSleeveLength(sleeveSource) || defaults.sleeveLength;
+  const neckBlob = `${pageCategory} ${title}`.toLowerCase();
+  const isTee = /\bt[\s-]?shirts?|\btees?\b/.test(neckBlob);
+  const isShirt = /\bshirts?\b/.test(neckBlob) && !isTee;
+  const neckType = nonApparel
+    ? ""
+    : mapNeck(generated?.neckType || String(selected?.neckType || ""))
+      || (isShirt ? "Collar" : (/kurti|kurta|dress|gown|\btees?\b|\bt[\s-]?shirts?|\btop|\btunic/.test(neckBlob) ? "Round Neck" : ""));
+  const photoLength = nonApparel ? "" : fabricLengthFromMeters(generated?.lengthMeters) || defaults.fabricLength;
   return {
     title,
-    gender: generated?.gender || String(selected?.gender || ""),
+    gender: nonApparel ? "" : generated?.gender || String(selected?.gender || ""),
     color,
     pattern,
-    printType: generated?.printType || split.printType,
-    material: deriveFabric(generated?.material || String(selected?.material || ""), title, notes, description, defaults.fabric),
+    printType: nonApparel ? "" : generated?.printType || split.printType,
+    material: nonApparel
+      ? String(generated?.material || selected?.material || "")
+      : deriveFabric(generated?.material || String(selected?.material || ""), title, notes, description, defaults.fabric),
     description,
     hsn: inputValue("cs-hsn") || defaults.hsn,
     gst: inputValue("cs-gst") || defaults.gst,
     netWeight: inputValue("cs-weight") || defaults.netWeight,
     styleCode,
-    genericName: deriveGenericName(title, pageCategory, generated?.genericName, generated?.productType || String(selected?.productType || "")),
+    genericName: nonApparel
+      ? pageCategory || generated?.productType || ""
+      : deriveGenericName(title, pageCategory, generated?.genericName, generated?.productType || String(selected?.productType || "")),
     comboOf: generated?.comboOf || combo.label || defaults.comboOf,
-    netQuantity: generated?.netQuantity || combo.quantity || defaults.netQuantity,
+    netQuantity: netQuantityForListing(inventory, generated?.netQuantity || combo.quantity || defaults.netQuantity, String(sellerSettings.priceRule?.inventory ?? "")),
     ornamentation,
-    sleeveType: generated?.sleeveType || String(selected?.sleeveType || ""),
+    sleeveType: nonApparel ? "" : generated?.sleeveType || String(selected?.sleeveType || ""),
     sleeveLength,
     neckType,
-    fit: generated?.fit || String(selected?.fit || "") || defaults.fit,
-    occasion: deriveOccasion(generated?.occasion || String(selected?.occasion || ""), notes, description, title) || defaults.occasion,
+    fit: nonApparel ? "" : generated?.fit || String(selected?.fit || "") || defaults.fit,
+    occasion: nonApparel ? "" : deriveOccasion(generated?.occasion || String(selected?.occasion || ""), notes, description, title) || defaults.occasion,
     size: [...selectedSizes][0] || defaults.size,
     selectedSizes: [...selectedSizes],
-    fabricLength: defaults.fabricLength,
+    fabricLength: photoLength,
+    catalogPath,
     countryOfOrigin: defaults.countryOfOrigin,
     manufacturerName: storeName,
     manufacturerAddress: address,
@@ -1140,27 +1166,27 @@ function currentListing(): MappedListing {
     packerAddress: address,
     packerPincode: pincode,
     skuId: styleCode,
-    lengthSize: defaults.fabricLength.replace(/ meters/i, ""),
+    lengthSize: meterAmount(photoLength),
     mrp: inputValue("cs-mrp") || defaults.mrp,
     sellingPrice: inputValue("cs-price") || defaults.sellingPrice,
     brand: deriveBrand(title, storeName),
     stitchType,
-    garmentLength: mapGarmentLength(`${title} ${pageCategory}`, defaults.garmentLength) || defaults.garmentLength,
+    garmentLength: nonApparel ? "" : mapGarmentLength(`${title} ${pageCategory}`, defaults.garmentLength) || defaults.garmentLength,
     mainCategory: pageCategory || deriveMainCategory(title, notes),
     packOf: defaults.packOf,
-    waistRise: /pant|trouser|jean/.test(`${title} ${notes}`.toLowerCase()) ? "Mid Rise" : "",
-    closure: /pant|trouser|jean/.test(`${title} ${notes}`.toLowerCase()) ? "Elasticated" : "",
+    waistRise: nonApparel ? "" : /pant|trouser|jean/.test(`${title} ${notes}`.toLowerCase()) ? "Mid Rise" : "",
+    closure: nonApparel ? "" : /pant|trouser|jean/.test(`${title} ${notes}`.toLowerCase()) ? "Elasticated" : "",
     packageWeight: String(pack.weight || defaults.packageWeight),
     packageLength: String(pack.length || defaults.packageLength),
     packageWidth: String(pack.width || defaults.packageWidth),
     packageHeight: String(pack.height || defaults.packageHeight),
     packagingType: String(pack.type || defaults.packagingType),
     packagingUnit: defaults.packagingUnit,
-    inventory: inputValue("cs-inventory") || defaults.inventory,
+    inventory,
     washCare: defaults.washCare,
     garmentType: defaults.garmentType,
-    sleeveStyling: mapSleeveStyling(sleeveSource, defaults.sleeveStyling),
-    surfaceStyling: ornamentation === "Not Applicable" ? defaults.surfaceStyling : ornamentation,
+    sleeveStyling: nonApparel ? "" : mapSleeveStyling(sleeveSource, defaults.sleeveStyling),
+    surfaceStyling: nonApparel ? "" : ornamentation === "Not Applicable" ? defaults.surfaceStyling : ornamentation,
   };
 }
 

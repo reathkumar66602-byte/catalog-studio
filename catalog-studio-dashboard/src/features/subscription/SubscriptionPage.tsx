@@ -109,7 +109,7 @@ export function SubscriptionPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {(plans || [])
           .filter((plan) => plan.purchasable)
           .map((plan) => {
@@ -129,8 +129,8 @@ export function SubscriptionPage() {
                 </p>
                 <ul className="mt-4 flex-1 space-y-1 text-sm text-slate-600">
                   <li>{t("sub.aiMonth", { n: String(plan.features?.monthlyAiAnalyses ?? "—") })}</li>
-                  <li>{t("sub.products", { n: String(plan.features?.products ?? "—") })}</li>
-                  <li>{t("sub.devices", { n: String(plan.features?.extensionDevices ?? "—") })}</li>
+                  <li>{t("sub.shootMonth", { n: String(plan.features?.monthlyShootPhotos ?? "—") })}</li>
+                  <li>{t("sub.trendingMonth", { n: String(plan.features?.monthlyTrendingProducts ?? "—") })}</li>
                   <li>{String(plan.features?.labelCrop ?? t("sub.labelCrop"))}</li>
                 </ul>
                 <button

@@ -67,8 +67,18 @@ public class MockVisionProvider implements VisionModelClient {
                 0.35,
                 List.of("material", "image"),
                 "MOCK",
-                "mock-vision-v1"
+                "mock-vision-v1",
+                inferLength(blob, type)
         );
+    }
+
+    private static String inferLength(String blob, String type) {
+        if (blob.contains("crop")) return "0.5";
+        if (blob.contains("saree")) return "5.5";
+        if (blob.contains("gown") || blob.contains("maxi")) return "2.5";
+        if (blob.contains("knee") || blob.contains("kurti") || blob.contains("dress")) return "1.5";
+        if (type.equals("Top") || type.equals("Tunic") || type.equals("Shirt")) return "1";
+        return null;
     }
 
     private static String inferType(String blob, String hint) {

@@ -40,6 +40,7 @@ public record AnalysisResultResponse(
             List<String> keywords,
             Double overallConfidence,
             List<String> uncertainFields,
+            String lengthMeters,
             List<ImagePayload> images
     ) {}
 

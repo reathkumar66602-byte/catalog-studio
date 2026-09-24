@@ -104,7 +104,7 @@ public class PaymentTransaction {
     }
 
     public enum TransactionType {
-        TRIAL, CHECKOUT, PAYMENT_SENT, ACTIVATION
+        TRIAL, CHECKOUT, PAYMENT_SENT, ACTIVATION, PLAN_CHANGE, DEACTIVATION
     }
 
     public enum TransactionStatus {

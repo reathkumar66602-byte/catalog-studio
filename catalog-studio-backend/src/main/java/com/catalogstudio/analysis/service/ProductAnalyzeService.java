@@ -196,7 +196,8 @@ public class ProductAnalyzeService {
                         ai.primaryColor(), ai.secondaryColors(), ai.colorConfidence(), ai.pattern(), ai.patternConfidence(),
                         ai.material(), ai.materialConfidence(), ai.sleeveType(), ai.neckType(), ai.collarType(),
                         ai.fit(), ai.occasion(), ai.style(), ai.productDescription(), ai.suggestedTitles(),
-                        ai.suggestedDescriptions(), ai.keywords(), ai.overallConfidence(), ai.uncertainFields(), images
+                        ai.suggestedDescriptions(), ai.keywords(), ai.overallConfidence(), ai.uncertainFields(),
+                        ai.lengthMeters(), images
                 );
         return new AnalysisResultResponse(
                 analysis.getUuid(),

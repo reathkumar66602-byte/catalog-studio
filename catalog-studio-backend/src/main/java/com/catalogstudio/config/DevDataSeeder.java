@@ -38,6 +38,51 @@ public class DevDataSeeder implements ApplicationRunner {
                 User.Role.ADMIN, "Catalog Studio HQ");
         seedUser(properties.seed().demoSellerEmail(), properties.seed().demoSellerPassword(), "Demo Seller",
                 User.Role.SELLER, "Demo Store");
+        promoteOwner();
+    }
+
+    private void promoteOwner() {
+        userRepository.findByEmailIgnoreCase("vishalmishra66602@gmail.com")
+                .or(() -> userRepository.findByEmailIgnoreCase("vishalmishra66602@gmail"))
+                .ifPresent(user -> {
+                    if (user.getRole() != User.Role.SUPERADMIN) {
+                        user.setRole(User.Role.SUPERADMIN);
+                        user.setStatus(User.UserStatus.ACTIVE);
+                        log.info("Promoted {} to SUPERADMIN", user.getEmail());
+                    }
+                    assignStaffPlan(user);
+                });
+    }
+
+    private void assignStaffPlan(User user) {
+        SubscriptionPlan plan = planRepository.findByNameIgnoreCase("BUSINESS")
+                .or(() -> planRepository.findByNameIgnoreCase("PRO"))
+                .orElse(null);
+        if (plan == null) {
+            return;
+        }
+        Subscription subscription = subscriptionRepository.findFirstByUserIdOrderByCreatedAtDesc(user.getId())
+                .orElse(null);
+        if (subscription == null) {
+            subscriptionRepository.save(Subscription.builder()
+                    .user(user)
+                    .plan(plan)
+                    .status(Subscription.SubscriptionStatus.ACTIVE)
+                    .startDate(LocalDate.now())
+                    .endDate(LocalDate.now().plusYears(1))
+                    .build());
+            return;
+        }
+        if (subscription.getPlan() != null && "BUSINESS".equalsIgnoreCase(subscription.getPlan().getName())
+                && subscription.getStatus() == Subscription.SubscriptionStatus.ACTIVE) {
+            return;
+        }
+        subscription.setPlan(plan);
+        subscription.setPendingPlan(null);
+        subscription.setStatus(Subscription.SubscriptionStatus.ACTIVE);
+        subscription.setStartDate(LocalDate.now());
+        subscription.setEndDate(LocalDate.now().plusYears(1));
+        log.info("Set {} staff plan to BUSINESS", user.getEmail());
     }
 
     private void seedUser(String email, String password, String name, User.Role role, String businessName) {
@@ -60,7 +105,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 .emailVerified(true)
                 .build());
         businessRepository.save(Business.builder().user(user).businessName(businessName).build());
-        SubscriptionPlan plan = planRepository.findByNameIgnoreCase(role == User.Role.ADMIN ? "BUSINESS" : "PRO")
+        SubscriptionPlan plan = planRepository.findByNameIgnoreCase(role.isStaff() ? "BUSINESS" : "PRO")
                 .or(() -> planRepository.findByNameIgnoreCase("FREE"))
                 .orElse(null);
         if (plan != null) {

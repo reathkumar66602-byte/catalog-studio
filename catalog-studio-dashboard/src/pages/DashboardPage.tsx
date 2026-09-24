@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { Calculator, Chrome, History, MapPin, Scissors } from "lucide-react";
+import { Calculator, Camera, Chrome, History, MapPin, Scissors, TrendingUp } from "lucide-react";
 import { useI18n } from "../i18n/LanguageProvider";
+import { useAuth } from "../store/auth";
+import { hasFeature } from "../routes/roles";
 
 export function DashboardPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => (await api.get("/dashboard")).data.data,
@@ -15,6 +18,15 @@ export function DashboardPage() {
     { label: t("dash.aiThisMonth"), value: data?.aiAnalysesThisMonth ?? 0 },
     { label: t("dash.currentPlan"), value: data?.currentPlan ?? "FREE" },
   ];
+  const actions = [
+    { to: "/trending", icon: TrendingUp, label: t("nav.trending"), feature: "trending" },
+    { to: "/shoot", icon: Camera, label: t("nav.shoot"), feature: "shoot" },
+    { to: "/tools/labels", icon: Scissors, label: t("nav.labels"), feature: "labels" },
+    { to: "/tools/meesho-calculator", icon: Calculator, label: t("nav.calculator"), feature: "meesho_calculator" },
+    { to: "/extension", icon: Chrome, label: t("dash.extension"), feature: "extension" },
+    { to: "/analysis", icon: History, label: t("nav.analysis"), feature: "analysis" },
+    { to: "/billing-address", icon: MapPin, label: t("nav.billing"), feature: "billing_address" },
+  ].filter((item) => hasFeature(user, item.feature));
 
   return (
     <div className="space-y-8">
@@ -36,11 +48,9 @@ export function DashboardPage() {
       <div>
         <h2 className="mb-3 font-medium">{t("dash.quickActions")}</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Action to="/tools/labels" icon={Scissors} label={t("nav.labels")} />
-          <Action to="/tools/meesho-calculator" icon={Calculator} label={t("nav.calculator")} />
-          <Action to="/extension" icon={Chrome} label={t("dash.extension")} />
-          <Action to="/analysis" icon={History} label={t("nav.analysis")} />
-          <Action to="/billing-address" icon={MapPin} label={t("nav.billing")} />
+          {actions.map((item) => (
+            <Action key={item.to} to={item.to} icon={item.icon} label={item.label} />
+          ))}
         </div>
       </div>
     </div>

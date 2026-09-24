@@ -51,7 +51,8 @@ public final class ListingCopyNormalizer {
                 ai.overallConfidence(),
                 ai.uncertainFields(),
                 ai.provider(),
-                ai.model()
+                ai.model(),
+                ai.lengthMeters()
         );
     }
 
