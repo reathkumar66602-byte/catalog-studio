@@ -7,6 +7,8 @@ import com.catalogstudio.admin.dto.AdminUserRow;
 import com.catalogstudio.admin.dto.StaffRoleActionRequest;
 import com.catalogstudio.audit.service.AuditService;
 import com.catalogstudio.common.exception.ApiException;
+import com.catalogstudio.config.CatalogStudioProperties;
+import com.catalogstudio.email.service.TemplatedEmailService;
 import com.catalogstudio.security.Roles;
 import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionStatus;
@@ -21,14 +23,18 @@ import com.catalogstudio.subscription.service.SubscriptionAccessService;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
 import com.catalogstudio.user.repository.UserSpecifications;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminWorkspaceService {
@@ -45,6 +52,7 @@ public class AdminWorkspaceService {
     private static final List<User.Role> WORKSPACE_ROLES = List.of(User.Role.USER, User.Role.SELLER, User.Role.TEAM_MEMBER);
     private static final List<User.Role> ADMIN_ROLES = List.of(User.Role.ADMIN, User.Role.SUPERADMIN);
     private static final String OWNER_EMAIL = "vishalmishra66602@gmail.com";
+    private static final DateTimeFormatter ACCESS_DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
 
     private final UserRepository userRepository;
     private final SubscriptionRepository subscriptionRepository;
@@ -53,6 +61,8 @@ public class AdminWorkspaceService {
     private final PaymentTransactionService paymentTransactionService;
     private final FeatureAccessService featureAccessService;
     private final AuditService auditService;
+    private final TemplatedEmailService templatedEmailService;
+    private final CatalogStudioProperties properties;
 
     @Transactional(readOnly = true)
     public Page<AdminUserRow> listWorkspaceUsers(String query, int page, int size, String sort) {
@@ -165,6 +175,7 @@ public class AdminWorkspaceService {
                 "MANUAL", reference, notes);
         auditService.log(actor, "SUBSCRIPTION_ACTIVATED", "USER", target.getUuid().toString(), null,
                 Map.of("plan", plan.getName(), "reference", reference));
+        sendActivationEmail(target, plan, subscription.getEndDate(), reference);
         return toRow(target, subscription, featureAccessService.mapFor(target));
     }
 
@@ -226,6 +237,40 @@ public class AdminWorkspaceService {
         auditService.log(actor, "SUBSCRIPTION_PLAN_CHANGED", "USER", target.getUuid().toString(), null,
                 Map.of("from", currentPlan, "to", plan.getName()));
         return toRow(target, subscription, featureAccessService.mapFor(target));
+    }
+
+    private void sendActivationEmail(User target, SubscriptionPlan plan, LocalDate accessUntil, String reference) {
+        if (!StringUtils.hasText(target.getEmail())) {
+            return;
+        }
+        try {
+            String origin = properties.cors() == null ? "https://catalogstudio.in" : properties.cors().publicAppOrigin();
+            Map<String, String> vars = new LinkedHashMap<>();
+            vars.put("name", StringUtils.hasText(target.getName()) ? target.getName().trim() : "there");
+            vars.put("username", StringUtils.hasText(target.getUsername()) ? target.getUsername().trim() : target.getName());
+            vars.put("email", target.getEmail().trim());
+            vars.put("appName", "Catalog Studio");
+            vars.put("plan", plan.getName());
+            vars.put("price", formatPrice(plan.getPrice()));
+            vars.put("accessUntil", accessUntil == null ? "" : ACCESS_DATE.format(accessUntil));
+            vars.put("reference", reference == null ? "" : reference);
+            vars.put("loginLink", origin + "/login");
+            boolean sent = templatedEmailService.send("plan-activated", target.getEmail().trim(), vars);
+            if (sent) {
+                log.info("Plan activation email queued for {}", target.getEmail());
+            } else {
+                log.warn("Plan activation email was not delivered to {}", target.getEmail());
+            }
+        } catch (RuntimeException ex) {
+            log.error("Plan activation email failed for {}", target.getEmail(), ex);
+        }
+    }
+
+    private static String formatPrice(BigDecimal price) {
+        if (price == null) {
+            return "";
+        }
+        return "₹" + price.stripTrailingZeros().toPlainString();
     }
 
     private Subscription ensureSubscription(User target, SubscriptionPlan plan) {

@@ -53,6 +53,11 @@ export function isMeeshoBulkTemplateStep() {
   return /upload template file|generate prefilled template|download empty template/i.test(text);
 }
 
+/** Excel template step only. A bulk page that already shows the product form is filled the same way as single catalog. */
+export function isMeeshoBulkExcelOnly() {
+  return isMeeshoBulkTemplateStep() && !isMeeshoProductDetailsPage();
+}
+
 export function isMeeshoCatalogPage(url = location.href) {
   const haystack = `${url} ${pagePath(url)} ${typeof document === "undefined" ? "" : document.title}`.toLowerCase();
   if (!/meesho\.com/i.test(haystack)) {

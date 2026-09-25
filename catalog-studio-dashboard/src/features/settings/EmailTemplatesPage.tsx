@@ -46,7 +46,7 @@ export function EmailTemplatesPage() {
       });
     },
     onSuccess: async () => {
-      setMessage("Template saved. OTP emails will use this content.");
+      setMessage("Template saved. Emails that use this template will use this content.");
       setError("");
       await queryClient.invalidateQueries({ queryKey: ["email-templates"] });
     },
@@ -64,8 +64,9 @@ export function EmailTemplatesPage() {
       <div>
         <h1 className="text-2xl font-semibold">Email templates</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Stored in the database. Use placeholders like <code>{"{{otp}}"}</code>, <code>{"{{name}}"}</code>,{" "}
-          <code>{"{{email}}"}</code>, <code>{"{{expiresMinutes}}"}</code>.
+          Stored in the database. Each template can be edited here. Use placeholders such as <code>{"{{otp}}"}</code>,{" "}
+          <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code>, <code>{"{{plan}}"}</code>, <code>{"{{price}}"}</code>,{" "}
+          <code>{"{{accessUntil}}"}</code>, and <code>{"{{loginLink}}"}</code>.
         </p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">

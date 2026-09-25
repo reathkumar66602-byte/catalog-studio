@@ -119,6 +119,24 @@ function categoryProfile(blob: string): Partial<CategoryDefaults> | null {
   if (/\bdupatta/.test(text)) {
     return { hsn: "6214", netWeight: "150", stitchType: "Unstitched", fabricLength: "2.5 Meters" };
   }
+  if (/bodysuit|romper|onesie/.test(text)) {
+    return {
+      hsn: "6111",
+      netWeight: "200",
+      stitchType: "Stitched",
+      sleeveLength: "Sleeveless",
+      garmentLength: "Regular",
+    };
+  }
+  if (/\binfant|\bbaby|\b\d+\s*-\s*\d+\s*months?\b|\b\d+\s*months?\b/.test(text)) {
+    return {
+      hsn: "6111",
+      netWeight: "250",
+      stitchType: "Stitched",
+      sleeveLength: "Short Sleeves",
+      garmentLength: "Regular",
+    };
+  }
   if (/kurta set|kurti set/.test(text)) {
     return {
       hsn: "6104",
@@ -195,6 +213,18 @@ function categoryProfile(blob: string): Partial<CategoryDefaults> | null {
       garmentType: "Regular",
       fit: "Regular Fit",
     };
+  }
+  if (/lehenga/.test(text)) {
+    return { hsn: "6204", netWeight: "500", stitchType: "Stitched", sleeveLength: "Sleeveless", garmentLength: "Floor Length" };
+  }
+  if (/\bblouse\b/.test(text)) {
+    return { hsn: "6106", netWeight: "200", stitchType: "Stitched", sleeveLength: "Short Sleeves", garmentLength: "Regular" };
+  }
+  if (/sweater|hoodie|sweatshirt/.test(text)) {
+    return { hsn: "6110", netWeight: "350", stitchType: "Stitched", sleeveLength: "Long Sleeves", garmentLength: "Regular" };
+  }
+  if (/jacket|shrug/.test(text)) {
+    return { hsn: "6201", netWeight: "400", stitchType: "Stitched", sleeveLength: "Long Sleeves", garmentLength: "Regular" };
   }
   return null;
 }
@@ -302,15 +332,17 @@ export function deriveOccasion(occasion: string | undefined, ...parts: Array<str
 }
 
 export function deriveBrand(title: string, storeName: string) {
-  if (!title) return storeName;
-  const stop = /^(kurti|saree|dress|shirt|top|fabric|cotton|embroidered|printed|women|womens|men|mens|plus|size)$/i;
+  const shop = (storeName || "").trim();
+  if (shop) return shop;
+  if (!title) return "";
+  const stop = /^(kurti|saree|dress|shirt|top|fabric|cotton|embroidered|printed|women|womens|men|mens|plus|size|girls?|boys?|infant|kids?)$/i;
   const words = title.split(/\s+/);
   const kept: string[] = [];
   for (const word of words) {
     if (stop.test(word) && kept.length) break;
     if (!stop.test(word)) kept.push(word);
   }
-  return kept.slice(0, 4).join(" ") || storeName;
+  return kept.slice(0, 3).join(" ");
 }
 
 export function deriveMainCategory(title: string, notes: string) {

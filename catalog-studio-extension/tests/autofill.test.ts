@@ -1,4 +1,30 @@
 import { describe, expect, it } from "vitest";
+
+function installMenuOptions() {
+  if (document.body.dataset.menuOptions === "1") return;
+  document.body.dataset.menuOptions = "1";
+  document.body.addEventListener("click", (event) => {
+    const el = event.target;
+    if (!(el instanceof HTMLInputElement) || !el.hasAttribute("menuoptions")) return;
+    document.querySelector("[role='listbox']")?.remove();
+    const box = document.createElement("div");
+    box.setAttribute("role", "listbox");
+    box.className = "MuiPopover-root";
+    for (const raw of (el.getAttribute("menuoptions") || "").split(",")) {
+      const option = document.createElement("li");
+      option.setAttribute("role", "option");
+      option.textContent = raw.trim();
+      option.addEventListener("click", () => {
+        el.value = raw.trim();
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        box.remove();
+      });
+      box.appendChild(option);
+    }
+    document.body.appendChild(box);
+  });
+}
 import { findField } from "../src/content/shared/fieldFinder";
 import { fillByHints, resetAutofill, stopAutofill, verifyFieldValue } from "../src/content/shared/autofillEngine";
 
@@ -306,6 +332,86 @@ describe("meesho defaults", () => {
     expect(measuresForSize("M", { title: "Women Kurti", catalogPath: "Grocery Packaged Food", mainCategory: "Biscuits" })).toBeNull();
     expect(fallbackSizesForListing({ catalogPath: "Home Utility", title: "Storage Box" })).toEqual([]);
     expect(measuresForSize("M", { title: "Women Kurti", mainCategory: "Kurtis" })?.length).toBe("42");
+  });
+
+  it("uses Manage Order size families for women, men, kids, sets, bottoms, and sarees", async () => {
+    const { defaultsForCategory } = await import("../src/content/shared/meeshoDefaults");
+    const { measuresForSize } = await import("../src/content/shared/meeshoFormFill");
+    const cases = [
+      { title: "Women Cotton Kurti", mainCategory: "Kurtis", size: "M", length: "42", bust: "36" },
+      { title: "Women Printed Top", mainCategory: "Tops & Tunics", size: "L", length: "26", bust: "38" },
+      { title: "Men Casual Shirt", mainCategory: "Shirts", size: "M", length: "27", bust: "38" },
+      { title: "Women Checked Shirt", mainCategory: "Shirts", size: "S", length: "24", bust: "34" },
+      { title: "Boys Cotton T-shirt", mainCategory: "T-shirts", size: "XL", length: "29", bust: "42" },
+      { title: "Girls Frock", mainCategory: "Dresses", size: "M", length: "42", bust: "36" },
+      { title: "Women Kurta Set", mainCategory: "Kurta Sets", size: "M", top: "36", bottom: "30" },
+      { title: "Men Jeans", mainCategory: "Jeans", size: "34", waist: "34", hip: "42" },
+    ];
+    for (const item of cases) {
+      const measures = measuresForSize(item.size, { title: item.title, mainCategory: item.mainCategory });
+      expect(measures, item.title).not.toBeNull();
+      if (item.length) expect(measures?.length, item.title).toBe(item.length);
+      if (item.bust) expect(measures?.bust, item.title).toBe(item.bust);
+      if (item.top) expect(measures?.top_chest, item.title).toBe(item.top);
+      if (item.bottom) expect(measures?.bottom_waist, item.title).toBe(item.bottom);
+      if (item.waist) expect(measures?.waist, item.title).toBe(item.waist);
+      if (item.hip) expect(measures?.hip, item.title).toBe(item.hip);
+    }
+    expect(measuresForSize("2-3 Years", { title: "Kids Clothing", mainCategory: "Kids" })?.weight).toBe("12-14");
+    expect(measuresForSize("Free Size", { title: "Banarasi Saree", mainCategory: "Sarees" })).toBeNull();
+    expect(measuresForSize("M", { title: "Storage Box", mainCategory: "Home Utility" })).toBeNull();
+    expect(defaultsForCategory("Men Shirts").hsn).toBe("62052000");
+    expect(defaultsForCategory("Women Shirts").sleeveLength).toBe("Long Sleeves");
+    expect(defaultsForCategory("Palazzo").garmentLength).toBe("Full Length");
+    expect(defaultsForCategory("Nightwear").hsn).toBe("6108");
+    expect(defaultsForCategory("Sarees").stitchType).toBe("Unstitched");
+    expect(defaultsForCategory("Kids Clothing Boys T-shirts").sleeveLength).toBe("Short Sleeves");
+    expect(defaultsForCategory("Kids Clothing Boys T-shirts").hsn).toBe("6109");
+    expect(defaultsForCategory("Infant Bodysuit Girls").hsn).toBe("6111");
+    expect(defaultsForCategory("Lehenga Choli").hsn).toBe("6204");
+    expect(defaultsForCategory("Women Blouse").hsn).toBe("6106");
+  });
+});
+
+describe("live readiness vs manage order", () => {
+  it("maps importer Not Required, sustainable No, and brand aliases", async () => {
+    const { listingFieldValues } = await import("../src/content/shared/listingValues");
+    const values = listingFieldValues({
+      title: "Girls White Casual Bodysuit",
+      brand: "MyShopBrand",
+      manufacturerName: "Acme Mfr",
+      manufacturerAddress: "Delhi",
+      manufacturerPincode: "110001",
+    } as never);
+    expect(values.brand).toBe("MyShopBrand");
+    expect(values["brand name"]).toBe("MyShopBrand");
+    expect(values.sustainable).toBe("No");
+    expect(values["importer name"]).toBe("Not Required");
+    expect(values["importer address"]).toBe("Not Required");
+    expect(values["importer pincode"]).toBe("Not Required");
+  });
+
+  it("prefers store brand over title words", async () => {
+    const { deriveBrand } = await import("../src/content/shared/meeshoDefaults");
+    expect(deriveBrand("Girls White Casual Bodysuit", "Krishnasrstore")).toBe("Krishnasrstore");
+    expect(deriveBrand("Navy Embroidered Kurti", "")).not.toMatch(/Kurti/i);
+  });
+
+  it("fills Brand only on exact menu option like Manage Order", async () => {
+    installMenuOptions();
+    document.body.innerHTML = `
+      <label>Brand</label>
+      <input readonly menuoptions="ALPHA BRAND,BETA BRAND" value="Select" />
+    `;
+    resetAutofill();
+    const miss = await fillByHints([{ hint: { labelText: "Brand" }, value: "NOT ON LIST", type: "select", exact: true }]);
+    expect(miss[0].ok).toBe(false);
+    expect((document.querySelector("input") as HTMLInputElement).value).toMatch(/Select|^$/i);
+
+    resetAutofill();
+    const hit = await fillByHints([{ hint: { labelText: "Brand" }, value: "ALPHA BRAND", type: "select", exact: true }]);
+    expect(hit[0].ok).toBe(true);
+    expect((document.querySelector("input") as HTMLInputElement).value).toBe("ALPHA BRAND");
   });
 });
 
@@ -689,6 +795,103 @@ describe("meesho page scan", () => {
     expect((document.getElementById("waist_size") as HTMLSelectElement).value).toBe("30");
     expect((document.getElementById("length_size") as HTMLSelectElement).value).toBe("25");
     expect((document.getElementById("hip_size") as HTMLSelectElement).value).toBe("38");
+  }, 15000);
+
+  it("fills Meesho readonly size dropdowns from menuoptions, including weight", async () => {
+    const { fillSizeChart } = await import("../src/content/shared/meeshoFormFill");
+    document.body.innerHTML = `
+      <label><input type="checkbox" checked /> <span>Copy price details to all sizes</span></label>
+      <div id="size-row">
+        <p>M</p>
+        <input id="meesho_price" type="number" />
+        <input id="only_wrong_return_price" type="number" />
+        <input id="product_mrp" type="number" />
+        <input id="inventory" type="number" />
+        <input id="bust_size" readonly placeholder="Select" menuoptions="34,36.0,38" />
+        <input id="length_size" readonly placeholder="Select" menuoptions="24,25,26" />
+        <input id="weight" readonly placeholder="Select" menuoptions="3-5,35-40;Not Available" />
+        <input id="shoulder_size" readonly placeholder="Select" menuoptions="13.5,14,14.5" />
+      </div>
+    `;
+    installMenuOptions();
+    const chart = await fillSizeChart({
+      title: "Women White Rayon Printed Top",
+      sellingPrice: "499",
+      mrp: "999",
+      inventory: "5",
+      selectedSizes: ["M"],
+    });
+    expect(chart.some((item) => item.ok && item.field === "bust")).toBe(true);
+    expect(chart.some((item) => item.ok && item.field === "weight")).toBe(true);
+    expect((document.getElementById("bust_size") as HTMLInputElement).value).toBe("36.0");
+    expect((document.getElementById("length_size") as HTMLInputElement).value).toBe("25");
+    expect((document.getElementById("shoulder_size") as HTMLInputElement).value).toBe("14");
+    expect((document.getElementById("weight") as HTMLInputElement).value).toMatch(/Not Available/);
+    expect((document.getElementById("meesho_price") as HTMLInputElement).value).toBe("499");
+    expect((document.querySelector("input[type='checkbox']") as HTMLInputElement).checked).toBe(false);
+    expect(document.querySelector("[role='listbox']")).toBeNull();
+  });
+
+  it("fills kids age rows and clothing-set measurement columns", async () => {
+    const { fillSizeChart, measuresForSize } = await import("../src/content/shared/meeshoFormFill");
+    expect(measuresForSize("4-5 Years", { title: "Boys Cotton Shirt", mainCategory: "Kids" })?.weight).toBe("15-16");
+    expect(measuresForSize("M", { title: "Girls Top and Bottom", genericName: "Co-ord Set" })?.top_chest).toBe("36");
+    document.body.innerHTML = `
+      <div>
+        <p>4-5 Years</p>
+        <input id="meesho_price" type="number" />
+        <input id="bust_size" readonly menuoptions="22,23,24" />
+        <input id="weight" readonly menuoptions="14-15,15-16,Not Available" />
+      </div>
+    `;
+    installMenuOptions();
+    await fillSizeChart({
+      title: "Boys Cotton Shirt",
+      mainCategory: "Kids",
+      selectedSizes: ["4-5 Years"],
+    });
+    expect((document.querySelector("[id='bust_size']") as HTMLInputElement).value).toBe("22");
+    expect((document.querySelector("[id='weight']") as HTMLInputElement).value).toBe("15-16");
+    document.body.innerHTML = `
+      <div>
+        <p>M</p>
+        <input id="top_chest_size" readonly menuoptions="34,36,38" />
+        <input id="bottom_waist_size" readonly menuoptions="28,30,32" />
+      </div>
+    `;
+    document.body.dataset.menuOptions = "";
+    installMenuOptions();
+    await fillSizeChart({
+      title: "Girls Top and Bottom",
+      genericName: "Co-ord Set",
+      selectedSizes: ["M"],
+    });
+    expect((document.querySelector("[id='top_chest_size']") as HTMLInputElement).value).toBe("36");
+    expect((document.querySelector("[id='bottom_waist_size']") as HTMLInputElement).value).toBe("30");
+  });
+
+  it("fills a still-blank product dropdown from the listing without opening a missing option", async () => {
+    const { fillBlankDropdowns } = await import("../src/content/shared/meeshoFormFill");
+    const { snapToOptions } = await import("../src/content/shared/autofillEngine");
+    document.body.innerHTML = `
+      <div>
+        <p>Fabric</p>
+        <input readonly placeholder="Select" menuoptions="Cotton,Rayon,Silk" />
+      </div>
+      <div>
+        <p>Neck</p>
+        <input readonly placeholder="Select" menuoptions="Collar,V-Neck" />
+      </div>
+    `;
+    installMenuOptions();
+    expect(snapToOptions("99", ["34", "36.0"])).toBeNull();
+    expect(snapToOptions("36", ["34", "36.0", "120"])).toBe("36.0");
+    const results = await fillBlankDropdowns({ material: "Cotton", neckType: "Round Neck" });
+    const inputs = document.querySelectorAll<HTMLInputElement>("input");
+    expect(inputs[0].value).toBe("Cotton");
+    expect(inputs[1].value).toBe("");
+    expect(results.some((item) => item.ok && item.field === "Fabric")).toBe(true);
+    expect(results.some((item) => item.field === "Neck" && !item.ok)).toBe(true);
   });
 
   it("does not write Regular into a number input", async () => {
@@ -824,7 +1027,7 @@ describe("meesho category detection", () => {
   });
 
   it("recognizes Meesho bulk template upload as Meesho UI, not Catalog Studio UI", async () => {
-    const { isMeeshoBulkTemplateStep } = await import("../src/content/shared/meeshoCatalog");
+    const { isMeeshoBulkTemplateStep, isMeeshoBulkExcelOnly } = await import("../src/content/shared/meeshoCatalog");
     document.body.innerHTML = `
       <h1>Bulk Catalog Upload</h1>
       <p>Already have your Tops &amp; Tunics template filled?</p>
@@ -833,6 +1036,80 @@ describe("meesho category detection", () => {
       <a>Download Empty Template</a>
     `;
     expect(isMeeshoBulkTemplateStep()).toBe(true);
+    expect(isMeeshoBulkExcelOnly()).toBe(true);
+  });
+
+  it("fills infant month size dropdowns by snapping to Meesho menuoptions", async () => {
+    const { fillSizeChart, measuresForSize } = await import("../src/content/shared/meeshoFormFill");
+    expect(measuresForSize("6-9 Months", { title: "Infant Bodysuit", mainCategory: "Bodysuit" })?.bust).toBe("17");
+    document.body.innerHTML = `
+      <div>
+        <h6>Bust Size (INCH)</h6>
+        <h6>Waist Size (INCH)</h6>
+        <h6>Length Size (INCH)</h6>
+        <h6>Hip Size (INCH)</h6>
+        <p>6-9 Months</p>
+        <input id="meesho_price" type="number" />
+        <input id="bust_size" readonly menuoptions="16,16.5,17,17.5,18" />
+        <input id="waist_size" readonly menuoptions="15,15.5,16,16.5,17" />
+        <input id="length_size" readonly menuoptions="15,15.5,16,16.5" />
+        <input id="hip_size" readonly menuoptions="17,17.5,18,18.5" />
+      </div>
+    `;
+    installMenuOptions();
+    const chart = await fillSizeChart({
+      title: "Infant Cotton Printed White Bodysuit",
+      mainCategory: "Bodysuit",
+      sellingPrice: "250",
+      mrp: "599",
+      inventory: "5",
+      selectedSizes: ["6-9 Months"],
+    });
+    expect(chart.some((item) => item.ok && item.field === "bust")).toBe(true);
+    expect((document.getElementById("bust_size") as HTMLInputElement).value).toBe("17");
+    expect((document.getElementById("waist_size") as HTMLInputElement).value).toBe("16");
+    expect((document.getElementById("length_size") as HTMLInputElement).value).toBe("15.5");
+    expect((document.getElementById("hip_size") as HTMLInputElement).value).toBe("18");
+    expect(chart.some((item) => item.ok && /meesho price|mrp|inventory/i.test(item.field))).toBe(true);
+  });
+
+  it("fills a bulk catalog page once the product form is on screen", async () => {
+    const { isMeeshoBulkExcelOnly, isMeeshoBulkCatalogPage } = await import("../src/content/shared/meeshoCatalog");
+    const { fillSizeChart, measuresForSize } = await import("../src/content/shared/meeshoFormFill");
+    document.title = "Bulk Catalog Upload";
+    document.body.innerHTML = `
+      <h1>Bulk Catalog Upload</h1>
+      <p>Upload Template File</p>
+      <p>Product Name</p>
+      <input />
+      <p>GST %</p>
+      <select><option>5%</option></select>
+      <p>HSN Code</p>
+      <input />
+      <section>
+        <p>32</p>
+        <input id="meesho_price" type="number" />
+        <input id="only_wrong_return_price" type="number" />
+        <input id="product_mrp" type="number" />
+        <input id="waist_size" />
+        <input id="hip_size" />
+      </section>
+    `;
+    const bulkUrl = "https://supplier.meesho.com/panel/v3/new/cataloging/y2ogj/catalogs/bulk/add";
+    expect(isMeeshoBulkCatalogPage(bulkUrl)).toBe(true);
+    expect(isMeeshoBulkExcelOnly()).toBe(false);
+    expect(measuresForSize("32", { title: "Women Palazzo", mainCategory: "Palazzo" })?.waist).toBe("32");
+    await fillSizeChart({
+      title: "Women Palazzo",
+      mainCategory: "Palazzo",
+      sellingPrice: "399",
+      mrp: "799",
+      inventory: "8",
+      selectedSizes: ["32"],
+    });
+    expect((document.getElementById("meesho_price") as HTMLInputElement).value).toBe("399");
+    expect((document.getElementById("waist_size") as HTMLInputElement).value).toBe("32");
+    expect((document.getElementById("hip_size") as HTMLInputElement).value).toBe("40");
   });
 });
 
@@ -903,6 +1180,105 @@ describe("meesho store detection", () => {
     expect(sanitizeStoreName("Login to Meesho Supplier Panel")).toBe("");
     expect(detectMeeshoStore()?.name).toBe("Krishna store");
   });
+});
+
+describe("single and bulk category autofill", () => {
+  const categories = [
+    { category: "Kurtis", title: "Women Cotton Kurti", size: "M", hsn: "6104", bust: "36", length: "42" },
+    { category: "Tops & Tunics", title: "Women Printed Top", size: "L", hsn: "6109", bust: "38", length: "26" },
+    { category: "Men Shirts", title: "Men Casual Shirt", size: "M", hsn: "62052000", bust: "38", length: "27" },
+    { category: "Women Shirts", title: "Women Checked Shirt", size: "S", hsn: "62063000", bust: "34", length: "24" },
+    { category: "T-shirts", title: "Boys Cotton T-shirt", size: "XL", hsn: "6109", bust: "42", length: "29" },
+    { category: "Dresses", title: "Girls Frock", size: "M", hsn: "6204", bust: "36", length: "42" },
+    { category: "Kurta Sets", title: "Women Kurta Set", size: "M", hsn: "6104", top: "36", bottom: "30" },
+    { category: "Jeans", title: "Men Jeans", size: "34", hsn: "62034200", waist: "34" },
+    { category: "Palazzo", title: "Women Palazzo", size: "32", hsn: "62046200", waist: "32" },
+    { category: "Kids Clothing", title: "Kids Clothing", size: "2-3 Years", hsn: "61091000", weight: "12-14" },
+    { category: "Sarees", title: "Banarasi Saree", size: "Free Size", hsn: "54075290", bust: "" },
+    { category: "Nightwear", title: "Women Nighty", size: "M", hsn: "6108", bust: "36" },
+    { category: "Dupatta", title: "Women Dupatta", size: "Free Size", hsn: "6214", bust: "" },
+    { category: "Home Utility", title: "Storage Box", size: "M", hsn: "", bust: "" },
+    { category: "Grocery Packaged Food", title: "Biscuits", size: "M", hsn: "", bust: "" },
+  ];
+
+  function catalogShell(mode: "single" | "bulk", size: string) {
+    document.title = mode === "bulk" ? "Bulk Catalog Upload" : "Add Single Catalog";
+    document.body.innerHTML = `
+      <h1>${mode === "bulk" ? "Bulk Catalog Upload" : "Add Single Catalog"}</h1>
+      <p>Product Name</p><input id="product_name" />
+      <p>GST %</p><select id="gst"><option>5%</option></select>
+      <p>HSN Code</p><input id="hsn" />
+      <select id="packaging_type"><option>Loose Packaging</option><option>Box</option></select>
+      <select id="packaging_unit"><option>cm</option><option>inch</option></select>
+      <input id="packaging_length" />
+      <input id="packaging_breadth" />
+      <input id="packaging_height" />
+      <input id="packaging_weight" />
+      <section>
+        <p>${size}</p>
+        <input id="meesho_price" type="number" />
+        <input id="product_mrp" type="number" />
+        <input id="inventory" type="number" />
+        <input id="bust_size" />
+        <input id="length_size" />
+        <input id="waist_size" />
+        <input id="weight" />
+        <input id="top_chest_size" />
+        <input id="bottom_waist_size" />
+      </section>
+    `;
+  }
+
+  for (const mode of ["single", "bulk"] as const) {
+    it(`fills every category on ${mode} upload the same way`, async () => {
+      const { defaultsForCategory } = await import("../src/content/shared/meeshoDefaults");
+      const { fillPackagingFields, fillSizeChart, planMeeshoFill } = await import("../src/content/shared/meeshoFormFill");
+      const { isMeeshoBulkExcelOnly } = await import("../src/content/shared/meeshoCatalog");
+      for (const item of categories) {
+        const defaults = defaultsForCategory(`${item.category} ${item.title}`);
+        catalogShell(mode, item.size);
+        expect(isMeeshoBulkExcelOnly(), item.category).toBe(false);
+        const steps = planMeeshoFill({
+          title: item.title,
+          mainCategory: item.category,
+          hsn: defaults.hsn,
+          gst: defaults.gst,
+          material: defaults.fabric,
+          sleeveLength: defaults.sleeveLength,
+          stitchType: defaults.stitchType,
+          fabricLength: defaults.fabricLength,
+        });
+        const hsn = steps.find((step) => step.hint.labelText === "HSN Code")?.value || "";
+        expect(hsn, `${mode} ${item.category}`).toBe(item.hsn);
+        await fillPackagingFields({
+          packagingType: defaults.packagingType,
+          packagingUnit: defaults.packagingUnit,
+          packageLength: defaults.packageLength,
+          packageWidth: defaults.packageWidth,
+          packageHeight: defaults.packageHeight,
+          packageWeight: defaults.packageWeight,
+        });
+        expect((document.getElementById("packaging_type") as HTMLSelectElement).value, item.category).toBe("Loose Packaging");
+        expect((document.getElementById("packaging_length") as HTMLInputElement).value, item.category).toBe(defaults.packageLength || "24");
+        await fillSizeChart({
+          title: item.title,
+          mainCategory: item.category,
+          sellingPrice: defaults.sellingPrice,
+          mrp: defaults.mrp,
+          inventory: defaults.inventory,
+          selectedSizes: [item.size],
+        });
+        if (item.bust) expect((document.getElementById("bust_size") as HTMLInputElement).value, `${mode} ${item.category}`).toBe(item.bust);
+        if (item.length) expect((document.getElementById("length_size") as HTMLInputElement).value, `${mode} ${item.category}`).toBe(item.length);
+        if (item.waist) expect((document.getElementById("waist_size") as HTMLInputElement).value, `${mode} ${item.category}`).toBe(item.waist);
+        if (item.weight) expect((document.getElementById("weight") as HTMLInputElement).value, `${mode} ${item.category}`).toBe(item.weight);
+        if (item.top) expect((document.getElementById("top_chest_size") as HTMLInputElement).value, `${mode} ${item.category}`).toBe(item.top);
+        if (item.bottom) expect((document.getElementById("bottom_waist_size") as HTMLInputElement).value, `${mode} ${item.category}`).toBe(item.bottom);
+        if (item.bust === "") expect((document.getElementById("bust_size") as HTMLInputElement).value, `${mode} ${item.category}`).toBe("");
+        expect((document.getElementById("meesho_price") as HTMLInputElement).value, `${mode} ${item.category}`).toBe(defaults.sellingPrice || "499");
+      }
+    }, 30000);
+  }
 });
 
 describe("checkbox fill", () => {

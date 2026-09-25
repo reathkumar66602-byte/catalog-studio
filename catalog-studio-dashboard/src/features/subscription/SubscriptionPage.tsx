@@ -10,6 +10,11 @@ import { formatWhatsapp, whatsappDigits } from "../site/whatsapp";
 
 const DEFAULT_SCANNER = "/payment-qr.jpg";
 
+function quota(value: unknown) {
+  const count = Number(value);
+  return Number.isFinite(count) ? count.toLocaleString("en-IN") : "—";
+}
+
 export function SubscriptionPage() {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -128,10 +133,10 @@ export function SubscriptionPage() {
                   <span className="ml-1 text-sm font-normal text-slate-500">/ {plan.billingCycle?.toLowerCase()}</span>
                 </p>
                 <ul className="mt-4 flex-1 space-y-1 text-sm text-slate-600">
-                  <li>{t("sub.aiMonth", { n: String(plan.features?.monthlyAiAnalyses ?? "—") })}</li>
-                  <li>{t("sub.shootMonth", { n: String(plan.features?.monthlyShootPhotos ?? "—") })}</li>
-                  <li>{t("sub.trendingMonth", { n: String(plan.features?.monthlyTrendingProducts ?? "—") })}</li>
-                  <li>{String(plan.features?.labelCrop ?? t("sub.labelCrop"))}</li>
+                  <li>{t("sub.aiMonth", { n: quota(plan.features?.monthlyAiAnalyses) })}</li>
+                  <li>{t("sub.shootMonth", { n: quota(plan.features?.monthlyShootPhotos) })}</li>
+                  <li>{t("sub.trendingMonth", { n: quota(plan.features?.monthlyTrendingProducts) })}</li>
+                  <li>{t("sub.labelUnlimited")}</li>
                 </ul>
                 <button
                   type="button"

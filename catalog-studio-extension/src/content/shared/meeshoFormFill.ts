@@ -3,7 +3,7 @@ import { findField, visible, type SelectorHint } from "./fieldFinder";
 import { isMeasureLabel, listingFieldValues, matchFieldValue, normalizeKey } from "./listingValues";
 import type { FillStep, MappedListing } from "./marketplaces";
 import { meeshoSteps } from "./marketplaces";
-import { closeOpenMenus, isDropdownElement, optionTextMatches, selectCustomDropdown, selectNativeDropdown, setCheckbox, triggerReactInputEvents, verifyFieldValue, type FillResult } from "./autofillEngine";
+import { closeOpenMenus, isDropdownElement, menuOptionsOf, optionTextMatches, selectCustomDropdown, selectNativeDropdown, setCheckbox, setNumberCell, snapToOptions, type FillResult } from "./autofillEngine";
 
 export type DiscoveredField = {
   label: string;
@@ -11,7 +11,22 @@ export type DiscoveredField = {
   type: FillStep["type"];
 };
 
-export type SizeMeasures = { length: string; bust: string; waist: string; hip: string; shoulder: string };
+export type SizeMeasures = {
+  length: string;
+  bust: string;
+  waist: string;
+  hip: string;
+  shoulder: string;
+  weight?: string;
+  top_chest?: string;
+  top_length?: string;
+  top_waist?: string;
+  top_hip?: string;
+  bottom_waist?: string;
+  bottom_length?: string;
+  bottom_hip?: string;
+  dupatta_length?: string;
+};
 
 const SKIP_LABELS = /required|optional|guidelines|characters|discard|save|submit|product 1|front view|add product|add images|select category/i;
 
@@ -177,11 +192,17 @@ export function planMeeshoFill(listing: MappedListing): FillStep[] {
     if (normalizeKey(field.label) === "size" && detectSelectedPageSizes().length > 1) continue;
     const value = matchFieldValue(field.label, values);
     if (!value) continue;
+    const brandExact = /^brand(\s*name)?$/i.test(field.label.trim());
+    if (brandExact) {
+      const options = menuOptionsOf(field.element);
+      if (options && !snapToOptions(value, options, true)) continue;
+    }
     used.add(field.element);
     steps.push({
       hint: { labelText: field.label } satisfies SelectorHint,
       value,
       type: field.type === "select" && !looksLikeDropdown(field.element) ? "text" : field.type,
+      exact: brandExact,
       element: field.element,
     });
   }
@@ -190,6 +211,11 @@ export function planMeeshoFill(listing: MappedListing): FillStep[] {
     if (steps.some((step) => normalizeKey(step.hint.labelText || "") === key)) continue;
     if (extra.type === "checkbox") continue;
     if (key === "size" && detectSelectedPageSizes().length > 1) continue;
+    if (extra.exact) {
+      const foundFirst = findField(extra.hint);
+      const options = foundFirst ? menuOptionsOf(foundFirst.element) : null;
+      if (options && !snapToOptions(extra.value, options, true)) continue;
+    }
     const found = findField(extra.hint);
     if (!found || used.has(found.element) || found.element.closest("table") || isSizeGridField(found.element)) continue;
     used.add(found.element);
@@ -346,10 +372,13 @@ export function detectSizeChips() {
 }
 
 function isSizeLabel(text: string) {
-  if (!text || text.length > 18) return false;
-  if (SIZE_TOKEN.has(text)) return true;
-  return /^(XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|6XL|7XL|8XL|Free Size|Semi Stitched)(\s*\(\d+\))?$/i.test(text)
-    || /^(2[8-9]|3[0-9]|4[0-6])$/.test(text);
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned || cleaned.length > 24) return false;
+  if (SIZE_TOKEN.has(cleaned)) return true;
+  return /^(XXXL|XXXXL|XS|S|M|L|XL|XXL|2XL|3XL|4XL|5XL|6XL|7XL|8XL|Free Size|Semi Stitched)(\s*\(\d+\))?$/i.test(cleaned)
+    || /^(2[4-9]|3\d|4[0-8])$/.test(cleaned)
+    || /^\d+\s*-\s*\d+\s*(years?|months?|yrs?)$/i.test(cleaned)
+    || /^\d+\s*(years?|months?)$/i.test(cleaned);
 }
 
 export function fallbackSizesForListing(listing: MappedListing) {
@@ -387,16 +416,35 @@ export function measuresForSize(size: string, listing: MappedListing): SizeMeasu
 function garmentFamily(blob: string) {
   if (!blob.trim()) return "";
   if (/\bsaree|\bdupatta|kurti fabric/.test(blob)) return "length-only";
+  if (/co-?ord|kurta set|clothing set|top and bottom|top & bottom/.test(blob)) return "set";
+  if (/bodysuit|romper|infant|\bkids?\b|\bbaby|\b\d+\s*-\s*\d+\s*(months?|years?)|\b\d+\s*(months?|years?)/.test(blob)) return "kids";
   if (/pant|trouser|jean|palazzo|legging|capri/.test(blob)) return "pant";
   if (/\bt[\s-]?shirts?|\btees?\b/.test(blob)) return "tshirt";
   if (/\bshirts?\b/.test(blob)) return "shirt";
   if (/\btunic|\btops?\b/.test(blob)) return "top";
   if (/\bkurti|\bkurta|\bdress|\bgown/.test(blob)) return "kurti";
+  if (/\b(boys?|girls?)\b/.test(blob)) return "kids";
   return "";
 }
 
 function measuresForFamily(family: string, blob: string, size: string, key: string): SizeMeasures | null {
   if (family === "length-only") return null;
+  if (family === "kids") return kidsMeasures(size) || TOP_CHART[key] || null;
+  if (family === "set") {
+    const top = TOP_CHART[key] || TSHIRT_CHART[key] || numericShirtMeasures(size);
+    if (!top) return null;
+    return {
+      ...top,
+      top_chest: top.bust,
+      top_length: top.length,
+      top_waist: top.waist,
+      top_hip: top.hip,
+      bottom_waist: top.waist,
+      bottom_length: "38",
+      bottom_hip: top.hip,
+      weight: kidWeightFor(size) || top.weight,
+    };
+  }
   if (family === "pant" && /^\d+$/.test(size)) return pantMeasures(size);
   if (family === "tshirt") return TSHIRT_CHART[key] || numericShirtMeasures(size);
   if (family === "shirt") {
@@ -456,8 +504,58 @@ function isSizeGridField(el: HTMLElement) {
   return Boolean(el.closest("[id='meesho_price'], [id='product_mrp']")?.parentElement?.querySelector("[id='meesho_price'], [id='product_mrp']"));
 }
 
+const KID_WEIGHT: Array<[number, number, string]> = [
+  [0, 0.25, "3-5"], [0.25, 0.5, "5-8"], [0.5, 1, "8-10"],
+  [1, 2, "10-12"], [2, 3, "12-14"], [3, 4, "14-15"], [4, 5, "15-16"],
+  [5, 6, "16-17"], [6, 7, "17-19"], [7, 8, "19-21"], [8, 9, "21-23"],
+  [9, 10, "23-25"], [10, 11, "25-26"], [11, 12, "26-28"], [12, 13, "28-32"],
+  [13, 14, "32-35"], [14, 99, "35-40"],
+];
+
+function kidWeightFor(sizeName: string) {
+  const match = normalizeKey(sizeName).match(/(\d+(?:\.\d+)?)\s*(?:-\s*\d+(?:\.\d+)?\s*)?(year|month)/);
+  if (!match) return "";
+  const years = /month/.test(match[2]) ? Number(match[1]) / 12 : Number(match[1]);
+  return KID_WEIGHT.find(([from, to]) => years >= from && years < to)?.[2] || "";
+}
+
+function kidsMeasures(size: string): SizeMeasures | null {
+  const weight = kidWeightFor(size);
+  if (!weight && !/year|month/i.test(size)) return null;
+  const chart: Record<string, SizeMeasures> = {
+    "0-3 months": { length: "14", bust: "16", waist: "15", hip: "17", shoulder: "8", weight: "3-5" },
+    "3-6 months": { length: "15", bust: "16.5", waist: "15.5", hip: "17.5", shoulder: "8.5", weight: "5-8" },
+    "6-9 months": { length: "15.5", bust: "17", waist: "16", hip: "18", shoulder: "9", weight: "8-10" },
+    "9-12 months": { length: "16", bust: "17.5", waist: "16.5", hip: "18.5", shoulder: "9.5", weight: "10-12" },
+    "12-18 months": { length: "17", bust: "18", waist: "17", hip: "19", shoulder: "10", weight: "12-14" },
+    "18-24 months": { length: "18", bust: "18.5", waist: "17.5", hip: "19.5", shoulder: "10.5", weight: "12-14" },
+    "2-3 years": { length: "20", bust: "20", waist: "19", hip: "21", shoulder: "11", weight: "12-14" },
+    "3-4 years": { length: "22", bust: "21", waist: "20", hip: "22", shoulder: "11.5", weight: "14-15" },
+    "4-5 years": { length: "24", bust: "22", waist: "21", hip: "23", shoulder: "12", weight: "15-16" },
+    "5-6 years": { length: "26", bust: "23", waist: "22", hip: "24", shoulder: "12.5", weight: "16-17" },
+  };
+  const key = normalizeKey(size).replace(/\byrs?\b/g, "years").replace(/\bmos?\b/g, "months");
+  const exact = chart[key];
+  if (exact) return { ...exact, weight: weight || exact.weight };
+  const years = (() => {
+    const match = size.match(/(\d+(?:\.\d+)?)/);
+    if (!match) return 1;
+    return /month/i.test(size) ? Number(match[1]) / 12 : Number(match[1]);
+  })();
+  const bust = String(Math.round((16 + years * 1.4) * 2) / 2);
+  return {
+    length: String(Math.round((14 + years * 2.2) * 2) / 2),
+    bust,
+    waist: String(Number(bust) - 1),
+    hip: String(Number(bust) + 1),
+    shoulder: String(Math.round((8 + years * 0.5) * 2) / 2),
+    weight,
+  };
+}
+
 export async function fillSizeChart(listing: MappedListing, onProgress?: (message: string) => void) {
   closeOpenMenus();
+  uncheckCopyToAllSizes();
   await waitForSizeRows(2200);
   const results: FillResult[] = [];
   const skuBase = (listing.skuId || listing.styleCode || "SKU").replace(/\s+/g, "-").replace(/-+$/, "");
@@ -509,7 +607,7 @@ function findDivSizeRows() {
   const seenSize = new Set<string>();
   const anchors = Array.from(
     document.querySelectorAll<HTMLElement>(
-      "[id='meesho_price'], [id='product_mrp'], [id='supplier_sku_id'], [id='inventory'], [id='shoulder_size'], [id='waist_size'], [id='length_size'], [id='hip_size'], [id='bust_size']",
+      "[id='meesho_price'], [id='product_mrp'], [id='supplier_sku_id'], [id='inventory'], [id='shoulder_size'], [id='waist_size'], [id='length_size'], [id='hip_size'], [id='bust_size'], [id='weight'], [id='kids_weight'], [id='top_chest_size'], [id='top_length_size'], [id='bottom_waist_size'], [id='bottom_length_size'], [id='dupatta_length']",
     ),
   ).filter((el) => !el.closest("#cs-sidebar") && visible(el));
   for (const anchor of anchors) {
@@ -553,7 +651,7 @@ function closestSingleSizeRow(el: HTMLElement) {
     const measures = node.querySelectorAll("[id$='_size']").length;
     if (prices > 1 || mrps > 1 || measures > 6) break;
     const inputs = node.querySelectorAll("input, select").length;
-    if ((prices === 1 || mrps === 1 || inputs >= 3) && inputs >= 2) best = node;
+    if ((prices === 1 || mrps === 1 || measures >= 1 || inputs >= 3) && inputs >= 1) best = node;
     node = node.parentElement;
   }
   return best;
@@ -587,24 +685,176 @@ async function fillVariationRow(row: Element, headers: Map<number, string>, list
   const measures = measuresForSize(size, listing);
   const money = sizeMoney(listing);
   const sku = skuForSize(skuBase, size);
-  results.push(await fillRowField(row, resolved, { ids: ["meesho_price"], names: ["listing price", "meesho price", "selling price"], fallbackIndex: 0, value: money.selling, field: "meesho price" }));
-  results.push(await fillRowField(row, resolved, { ids: ["only_wrong_return_price"], names: ["wrong", "defective", "returns price", "return price"], fallbackIndex: 1, value: money.returns, field: "returns price" }));
-  results.push(await fillRowField(row, resolved, { ids: ["product_mrp"], names: ["mrp", "maximum retail"], fallbackIndex: 2, value: money.mrp, field: "mrp" }));
-  results.push(await fillRowField(row, resolved, { ids: ["inventory"], names: ["inventory", "qty", "quantity", "stock"], fallbackIndex: 3, value: listing.inventory || "5", field: "inventory" }));
+  if (measures) {
+    results.push(...(await fillRowMeasureDropdowns(row, size, measures, listing)));
+  }
+  const useFallback = !row.querySelector("[id$='_size'], [id='weight'], [id='kids_weight']");
+  results.push(await fillRowField(row, resolved, { ids: ["meesho_price"], names: ["listing price", "meesho price", "selling price"], fallbackIndex: useFallback ? 0 : undefined, value: money.selling, field: "meesho price" }));
+  results.push(await fillRowField(row, resolved, { ids: ["only_wrong_return_price"], names: ["wrong", "defective", "returns price", "return price"], fallbackIndex: useFallback ? 1 : undefined, value: money.returns, field: "returns price" }));
+  results.push(await fillRowField(row, resolved, { ids: ["product_mrp"], names: ["mrp", "maximum retail"], fallbackIndex: useFallback ? 2 : undefined, value: money.mrp, field: "mrp" }));
+  results.push(await fillRowField(row, resolved, { ids: ["inventory"], names: ["inventory", "qty", "quantity", "stock"], fallbackIndex: useFallback ? 3 : undefined, value: listing.inventory || "5", field: "inventory" }));
   results.push(await fillRowField(row, resolved, { ids: ["supplier_sku_id"], names: ["sku id", "sku"], value: sku, field: "sku id" }));
   if (!headerHas(resolved, ["listing price", "meesho price", "selling price"]) && !row.querySelector("[id='meesho_price']")) {
     results.push(await fillRowField(row, resolved, { ids: [], names: ["price"], value: money.selling, field: "price" }));
   }
-  if (measures) {
-    const lengthHeader = [...resolved.values()].find((label) => /length size|size length/.test(label)) || "";
-    const lengthValue = /meter|metre/.test(lengthHeader) ? lengthValueForUnit(listing, size, "meter") : measures.length;
-    results.push(await fillRowField(row, resolved, { ids: ["shoulder_size"], names: ["shoulder size", "shoulder"], value: measures.shoulder, field: "shoulder" }));
-    results.push(await fillRowField(row, resolved, { ids: ["length_size"], names: ["size length", "length size", "length"], value: lengthValue, field: "length" }));
-    results.push(await fillRowField(row, resolved, { ids: ["bust_size", "top_chest_size"], names: ["breast", "bust", "chest"], value: measures.bust, field: "bust" }));
-    results.push(await fillRowField(row, resolved, { ids: ["waist_size"], names: ["waist size", "waist"], value: measures.waist, field: "waist" }));
-    results.push(await fillRowField(row, resolved, { ids: ["hip_size"], names: ["hip size", "hip", "hips"], value: measures.hip, field: "hip" }));
+  return results;
+}
+
+async function fillRowMeasureDropdowns(row: Element, size: string, measures: SizeMeasures, listing: MappedListing) {
+  const results: FillResult[] = [];
+  const columns = measurementColumns();
+  const lengthHeader = columns.find((column) => column.key === "length");
+  const lengthValue = lengthHeader && /meter|metre/.test(lengthHeader.label)
+    ? lengthValueForUnit(listing, size, "meter")
+    : measures.length;
+  const measureMap: Record<string, string> = {
+    shoulder: measures.shoulder,
+    length: lengthValue,
+    bust: measures.bust,
+    chest: measures.bust,
+    waist: measures.waist,
+    hip: measures.hip,
+    top_chest: measures.top_chest || measures.bust,
+    top_length: measures.top_length || measures.length,
+    top_waist: measures.top_waist || measures.waist,
+    top_hip: measures.top_hip || measures.hip,
+    bottom_waist: measures.bottom_waist || measures.waist,
+    bottom_length: measures.bottom_length || "",
+    bottom_hip: measures.bottom_hip || measures.hip,
+    dupatta_length: measures.dupatta_length || "",
+    weight: weightForRow(row, size, measures.weight),
+  };
+  const moneyIds = new Set(["meesho_price", "only_wrong_return_price", "product_mrp", "inventory", "supplier_sku_id"]);
+  const written = new Set<HTMLElement>();
+  const controls = Array.from(row.querySelectorAll<HTMLElement>("input, select, [role='combobox']")).filter((el) => {
+    if (el.closest("#cs-sidebar") || moneyIds.has((el.id || "").toLowerCase())) return false;
+    return true;
+  });
+  for (const control of controls) {
+    if (written.has(control)) continue;
+    const key = measureKeyOf(control, columns);
+    if (!key) continue;
+    let value = measureMap[key] || "";
+    if (!value) continue;
+    const options = menuOptionsOf(control);
+    if (options) {
+      const snapped = snapToOptions(value, options) || nearestMenuOption(value, options);
+      if (!snapped) {
+        results.push({ field: key, ok: false, message: "Dropdown value is unavailable" });
+        continue;
+      }
+      value = snapped;
+    }
+    written.add(control);
+    if (control instanceof HTMLSelectElement) {
+      results.push(await selectNativeDropdown({ labelText: key }, value, control));
+    } else if (control.getAttribute("role") === "combobox" || isDropdownElement(control)) {
+      results.push(await selectCustomDropdown({ labelText: key }, value, control));
+    } else {
+      const ok = await setNumberCell(control, value);
+      results.push({ field: key, ok, message: ok ? "Filled" : "Value not accepted" });
+    }
   }
   return results;
+}
+
+function measureKeyOf(el: HTMLElement, columns: Array<{ key: string; x: number; label: string }>) {
+  const id = (el.id || "").toLowerCase().replace(/_size$/, "");
+  if (id === "kids_weight") return "weight";
+  if (/^(weight|bust|length|shoulder|hip|waist|top_chest|top_length|top_waist|top_hip|bottom_waist|bottom_length|bottom_hip|dupatta_length)$/.test(id)) {
+    return id;
+  }
+  if (/meesho_price|product_mrp|inventory|supplier_sku|return_price/.test((el.id || "").toLowerCase())) return "";
+  if (!columns.length) return "";
+  const box = el.getBoundingClientRect();
+  const center = box.left + box.width / 2;
+  let best: { key: string; dist: number } | null = null;
+  for (const column of columns) {
+    const dist = Math.abs(column.x - center);
+    if (!best || dist < best.dist) best = { key: column.key, dist };
+  }
+  if (!best) return "";
+  return best.dist <= Math.max(90, box.width * 1.2) ? best.key : "";
+}
+
+function measurementColumns() {
+  const patterns: Array<[RegExp, string]> = [
+    [/top\s*chest|top\s*bust/, "top_chest"],
+    [/top\s*length/, "top_length"],
+    [/top\s*waist/, "top_waist"],
+    [/top\s*hip/, "top_hip"],
+    [/bottom\s*waist/, "bottom_waist"],
+    [/bottom\s*length/, "bottom_length"],
+    [/bottom\s*hip/, "bottom_hip"],
+    [/kids?\s*weight|weight\s*\(in\s*kg|kilogram/, "weight"],
+    [/duppa?tta\s*length/, "dupatta_length"],
+    [/shoulder/, "shoulder"],
+    [/hip/, "hip"],
+    [/bust|chest/, "bust"],
+    [/waist/, "waist"],
+    [/length\s*size|size\s*length|^length\b/, "length"],
+  ];
+  const found: Array<{ key: string; x: number; label: string }> = [];
+  const seen = new Set<string>();
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6,th,p,span"));
+  for (const el of nodes) {
+    if (el.closest("#cs-sidebar") || el.children.length > 4) continue;
+    const text = normalizeKey(el.textContent || "");
+    if (!text || text.length > 48) continue;
+    const key = patterns.find(([pattern]) => pattern.test(text))?.[1];
+    if (!key || seen.has(key) || !visible(el)) continue;
+    seen.add(key);
+    const box = el.getBoundingClientRect();
+    found.push({ key, x: box.left + box.width / 2, label: text });
+  }
+  return found.sort((a, b) => a.x - b.x);
+}
+
+function nearestMenuOption(value: string, options: string[]) {
+  const target = Number(String(value).replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(target) || target <= 0) return null;
+  let best: { option: string; dist: number } | null = null;
+  for (const option of options) {
+    const parsed = Number(String(option).replace(/[^\d.]/g, ""));
+    if (!Number.isFinite(parsed)) continue;
+    const dist = Math.abs(parsed - target);
+    if (!best || dist < best.dist) best = { option, dist };
+  }
+  if (!best) return null;
+  const limit = target <= 20 ? 1.5 : 3;
+  return best.dist <= limit ? best.option : null;
+}
+
+function weightForRow(row: Element, size: string, chartWeight?: string) {
+  const input = row.querySelector<HTMLElement>("[id='weight'], [id='kids_weight']");
+  const options = input ? menuOptionsOf(input) : null;
+  const preferred = chartWeight || kidWeightFor(size);
+  if (options && preferred) {
+    const snapped = snapToOptions(preferred, options);
+    if (snapped) return snapped;
+  }
+  if (options) {
+    const unavailable = options.find((option) => /not\s*available/i.test(option));
+    if (unavailable) return unavailable;
+  }
+  return preferred || "";
+}
+
+function uncheckCopyToAllSizes() {
+  const label = Array.from(document.querySelectorAll<HTMLElement>("p, span, label, div")).find((el) => {
+    if (el.closest("#cs-sidebar") || el.children.length) return false;
+    return normalizeKey(el.textContent || "") === "copy price details to all sizes";
+  });
+  if (!label) return;
+  let node: HTMLElement | null = label;
+  for (let i = 0; i < 5 && node; i++) {
+    const box = node.querySelector<HTMLInputElement>("input[type='checkbox']");
+    if (box?.checked) {
+      box.click();
+      return;
+    }
+    node = node.parentElement;
+  }
 }
 
 function skuForSize(skuBase: string, size: string, index = 0) {
@@ -650,8 +900,7 @@ async function fillRowField(
   if (input instanceof HTMLInputElement && input.type === "number" && !/^-?\d+(\.\d+)?$/.test(options.value)) {
     return { field: options.field, ok: false, message: "Skipped non-numeric value" };
   }
-  triggerReactInputEvents(input, options.value);
-  const ok = verifyFieldValue(input, options.value);
+  const ok = await setNumberCell(input, options.value);
   return { field: options.field, ok, message: ok ? "Filled" : "Value not accepted" };
 }
 
@@ -682,10 +931,19 @@ function headerIndex(headers: Map<number, string>, names: string[]) {
     if (exact) return exact[0];
   }
   for (const name of ranked) {
-    const fuzzy = entries.find(([, label]) => label.includes(name));
+    const fuzzy = entries.find(([, label]) => headerNamesMatch(label, name));
     if (fuzzy) return fuzzy[0];
   }
   return null;
+}
+
+function headerNamesMatch(label: string, name: string) {
+  if (label === name) return true;
+  if (!label.includes(name)) return false;
+  for (const qualifier of ["top", "bottom", "dupatta", "kids"]) {
+    if (label.includes(qualifier) && !name.includes(qualifier)) return false;
+  }
+  return true;
 }
 
 function siblingHeaderMap(row: Element) {
@@ -831,8 +1089,7 @@ async function writeVariantControl(el: HTMLElement, value: string, field: string
   if (el instanceof HTMLInputElement && el.type === "number" && !/^-?\d+(\.\d+)?$/.test(value)) {
     return { field, ok: false, message: "Skipped non-numeric value" };
   }
-  triggerReactInputEvents(el, value);
-  const ok = verifyFieldValue(el, value);
+  const ok = await setNumberCell(el, value);
   return { field, ok, message: ok ? "Filled" : "Value not accepted" };
 }
 
@@ -1049,6 +1306,73 @@ function numericShirtMeasures(size: string): SizeMeasures | null {
   const alpha = ALPHA_FROM_NUMBER[size];
   if (alpha && TSHIRT_CHART[alpha]) return TSHIRT_CHART[alpha];
   return pantMeasures(size);
+}
+
+const GAP_NEVER = /(importer|image|photo|upload|sku id|style code|product id|group id|description|product name|meesho price|mrp|wrong|return|search|otp|email|phone|mobile|password|pan|bank|ifsc|account|gst number|gstin)/;
+
+const PACK_DEFAULTS = { type: "Loose Packaging", unit: "cm", length: "24", breadth: "20", height: "4", weight: "200" };
+
+export async function fillPackagingFields(listing: MappedListing): Promise<FillResult[]> {
+  const fields: Array<{ id: string; field: string; value: string; select?: boolean }> = [
+    { id: "packaging_type", field: "Packaging Type", value: listing.packagingType || PACK_DEFAULTS.type, select: true },
+    { id: "packaging_unit", field: "Packaging Unit", value: listing.packagingUnit || PACK_DEFAULTS.unit, select: true },
+    { id: "packaging_length", field: "Packaging Length", value: listing.packageLength || PACK_DEFAULTS.length },
+    { id: "packaging_breadth", field: "Packaging Breadth", value: listing.packageWidth || PACK_DEFAULTS.breadth },
+    { id: "packaging_height", field: "Packaging Height", value: listing.packageHeight || PACK_DEFAULTS.height },
+    { id: "packaging_weight", field: "Packaging Weight", value: listing.packageWeight || PACK_DEFAULTS.weight },
+  ];
+  const results: FillResult[] = [];
+  for (const field of fields) {
+    const el = document.getElementById(field.id);
+    if (!el || el.closest("#cs-sidebar")) continue;
+    if (field.select || el instanceof HTMLSelectElement) {
+      results.push(await selectNativeDropdown({ labelText: field.field }, field.value, el));
+      continue;
+    }
+    const ok = await setNumberCell(el, field.value);
+    results.push({ field: field.field, ok, message: ok ? "Filled" : "Value not accepted" });
+  }
+  return results;
+}
+
+export async function fillBlankDropdowns(listing: MappedListing, onProgress?: (message: string) => void) {
+  const values = listingFieldValues(listing);
+  const results: FillResult[] = [];
+  const seen = new Set<HTMLElement>();
+  const controls = Array.from(document.querySelectorAll<HTMLElement>("[menuoptions] input, input[readonly], [role='combobox']"));
+  for (const control of controls) {
+    if (seen.has(control) || control.closest("#cs-sidebar") || isSizeGridField(control)) continue;
+    seen.add(control);
+    const current = control instanceof HTMLInputElement ? control.value : (control.innerText || "").split("\n")[0];
+    if (current && !/^(select|choose)?$/i.test(current.trim())) continue;
+    const label = labelBefore(control);
+    if (!label || GAP_NEVER.test(normalizeKey(label)) || isMeasureLabel(label)) continue;
+    const value = matchFieldValue(label, values);
+    if (!value) continue;
+    const options = menuOptionsOf(control);
+    const exactBrand = /^brand(\s*name)?$/i.test(label.trim());
+    if (exactBrand && options && !snapToOptions(value, options, true)) continue;
+    onProgress?.(`Filling ${label}...`);
+    results.push(await selectCustomDropdown({ labelText: label }, value, control, exactBrand));
+  }
+  return results.filter((item) => item.field);
+}
+
+function labelBefore(el: HTMLElement) {
+  let node: HTMLElement | null = el;
+  for (let depth = 0; depth < 6 && node; depth++) {
+    node = node.parentElement;
+    if (!node || node.closest("#cs-sidebar")) break;
+    const leaves = Array.from(node.querySelectorAll<HTMLElement>("label, p, span, h6, strong")).filter((leaf) => {
+      if (leaf.children.length || leaf.contains(el) || el.contains(leaf)) return false;
+      const text = (leaf.textContent || "").replace(/[*\s]+$/g, "").trim();
+      return text.length >= 2 && text.length <= 48 && !/^(select|choose)$/i.test(text);
+    });
+    const before = leaves.filter((leaf) => Boolean(el.compareDocumentPosition(leaf) & Node.DOCUMENT_POSITION_PRECEDING)).at(-1);
+    const pick = before || leaves[0];
+    if (pick) return (pick.textContent || "").replace(/[*\s]+$/g, "").trim();
+  }
+  return "";
 }
 
 function delay(ms: number) {

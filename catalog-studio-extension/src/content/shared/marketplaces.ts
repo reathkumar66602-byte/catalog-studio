@@ -60,6 +60,7 @@ export type FillStep = {
   hint: SelectorHint;
   value: string;
   type: "text" | "textarea" | "select" | "checkbox";
+  exact?: boolean;
   element?: HTMLElement;
 };
 
@@ -104,7 +105,9 @@ export function meeshoSteps(listing: MappedListing): FillStep[] {
     { hint: { labelText: "Sleeve Length" }, value: listing.sleeveLength || listing.sleeveType || "", type: "select" },
     { hint: { labelText: "Length" }, value: listing.garmentLength || "", type: "select" },
     { hint: { labelText: "Main Category" }, value: listing.mainCategory || "", type: "select" },
-    { hint: { labelText: "Brand" }, value: listing.brand || "", type: "select" },
+    { hint: { labelText: "Brand" }, value: listing.brand || "", type: "select", exact: true },
+    { hint: { labelText: "Brand Name" }, value: listing.brand || "", type: "select", exact: true },
+    { hint: { labelText: "Sustainable" }, value: "No", type: "select" },
     { hint: { labelText: "Fit/Shape" }, value: listing.fit || "", type: "select" },
     { hint: { labelText: "Waist Rise" }, value: listing.waistRise || "", type: "select" },
     { hint: { labelText: "Closure" }, value: listing.closure || "", type: "select" },

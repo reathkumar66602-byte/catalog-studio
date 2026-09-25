@@ -2,7 +2,6 @@ package com.catalogstudio.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +12,8 @@ import com.catalogstudio.admin.dto.StaffRoleActionRequest;
 import com.catalogstudio.admin.service.AdminWorkspaceService;
 import com.catalogstudio.audit.service.AuditService;
 import com.catalogstudio.common.exception.ApiException;
+import com.catalogstudio.config.CatalogStudioProperties;
+import com.catalogstudio.email.service.TemplatedEmailService;
 import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionStatus;
@@ -29,6 +30,7 @@ import com.catalogstudio.user.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,6 +53,8 @@ class AdminWorkspaceServiceTest {
     @Mock PaymentTransactionService paymentTransactionService;
     @Mock FeatureAccessService featureAccessService;
     @Mock AuditService auditService;
+    @Mock TemplatedEmailService templatedEmailService;
+    @Mock CatalogStudioProperties properties;
     @InjectMocks AdminWorkspaceService workspaceService;
 
     private MockedStatic<SecurityUtils> security;
@@ -109,6 +113,9 @@ class AdminWorkspaceServiceTest {
         when(subscriptionRepository.findFirstByUserIdOrderByCreatedAtDesc(11L)).thenReturn(Optional.of(expired));
         when(featureAccessService.mapFor(seller)).thenReturn(Map.of("meesho_calculator", true));
         when(subscriptionAccessService.statusOf(seller)).thenReturn(status("BASIC", true));
+        when(properties.cors()).thenReturn(new CatalogStudioProperties.Cors(List.of("https://catalogstudio.in")));
+        when(templatedEmailService.send(eq("plan-activated"), eq("seller@example.com"), org.mockito.ArgumentMatchers.<Map<String, String>>any()))
+                .thenReturn(true);
 
         workspaceService.applySubscription(seller.getUuid(), new AdminSubscriptionActionRequest(
                 "ACTIVATE", "BASIC", "UTR123", null));
@@ -118,6 +125,8 @@ class AdminWorkspaceServiceTest {
         verify(paymentTransactionService).record(
                 eq(seller), eq(basic), eq(TransactionType.ACTIVATION), eq(TransactionStatus.SUCCESS),
                 eq("MANUAL"), eq("UTR123"), eq("Activated after WhatsApp payment confirmation"));
+        verify(templatedEmailService).send(
+                eq("plan-activated"), eq("seller@example.com"), org.mockito.ArgumentMatchers.<Map<String, String>>any());
     }
 
     @Test

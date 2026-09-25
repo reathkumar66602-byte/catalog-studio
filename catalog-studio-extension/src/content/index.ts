@@ -2,11 +2,11 @@
 import { fillByHints, resetAutofill, stopAutofill } from "./shared/autofillEngine";
 import { syncGenerateEnabled } from "./shared/generateButton";
 import { detectMarketplace, type MappedListing } from "./shared/marketplaces";
-import { isMeeshoAddCatalogFlow, isMeeshoBulkCatalogPage, isMeeshoBulkTemplateStep, isMeeshoCatalogListPage, isMeeshoCatalogPage, isMeeshoCategoryPickerVisible, isMeeshoProductDetailsPage, readMeeshoCategoryFromPage, readMeeshoCategoryPath, shouldScanMeeshoForm, suggestedCategoryLabel } from "./shared/meeshoCatalog";
+import { isMeeshoAddCatalogFlow, isMeeshoBulkCatalogPage, isMeeshoBulkExcelOnly, isMeeshoBulkTemplateStep, isMeeshoCatalogListPage, isMeeshoCatalogPage, isMeeshoCategoryPickerVisible, isMeeshoProductDetailsPage, readMeeshoCategoryFromPage, readMeeshoCategoryPath, shouldScanMeeshoForm, suggestedCategoryLabel } from "./shared/meeshoCatalog";
 import { captureBestPageImage, watchMeeshoPageImages, type PageImageSource } from "./shared/meeshoPageImage";
 import { detectMeeshoStore, isMeeshoPageChrome, sanitizeStoreName, type MeeshoStore } from "./shared/meeshoStore";
 import { buildStyleCode, defaultsForCategory, deriveBrand, deriveFabric, deriveGenericName, deriveMainCategory, deriveOccasion, detectOrnamentation, extractPincode, fabricLengthFromMeters, isNonApparelCatalog, mapGarmentLength, mapNeck, mapSleeveLength, mapSleeveStyling, meterAmount, netQuantityForListing } from "./shared/meeshoDefaults";
-import { fillSizeChart, fillSizeChoices, detectPageSizes, detectSelectedPageSizes, fallbackSizesForListing, planMeeshoFill } from "./shared/meeshoFormFill";
+import { fillBlankDropdowns, fillPackagingFields, fillSizeChart, fillSizeChoices, detectPageSizes, detectSelectedPageSizes, fallbackSizesForListing, planMeeshoFill } from "./shared/meeshoFormFill";
 import { isInvalidatedContext, sendRuntimeMessage, storageGet, storageSet, watchStorageChanges } from "../services/chromeAccess";
 import { getSession } from "../services/storage";
 import { startFillSession, stopFillSession } from "./shared/fillSession";
@@ -322,10 +322,10 @@ function injectUi() {
       </section>
       <section>
         <h3 data-i18n="ext.category">Category</h3>
-        <input id="cs-category" readonly data-i18n-placeholder="ext.catPh" placeholder="Detected from Meesho after you select a category" />
+        <input id="cs-category" data-i18n-placeholder="ext.catPh" placeholder="Type 2-3 words — required before Generate" />
         <input id="cs-cat-search" data-i18n-placeholder="ext.catSearch" placeholder="Search Catalog Studio templates" />
         <div id="cs-cat-results"></div>
-        <p id="cs-category-note" class="cs-note" data-i18n="ext.catNote">Catalog Studio reads the category Meesho already selected.</p>
+        <p id="cs-category-note" class="cs-note" data-i18n="ext.catNote">Same as Manage Order: choose category first. Meesho path is used when present; otherwise type it here.</p>
       </section>
       <section>
         <h3 data-i18n="ext.image">Product image</h3>
@@ -501,9 +501,9 @@ function syncPageHint() {
   if (!el) return;
   if (isMeeshoCatalogListPage() && !isMeeshoAddCatalogFlow()) {
     el.textContent = t("ext.pageList");
-  } else if (isMeeshoBulkTemplateStep()) {
+  } else if (isMeeshoBulkExcelOnly()) {
     el.textContent = t("ext.pageBulkTpl");
-  } else if (isMeeshoBulkCatalogPage()) {
+  } else if (isMeeshoBulkCatalogPage() && !isMeeshoProductDetailsPage()) {
     el.textContent = t("ext.pageBulk");
   } else if (isMeeshoCategoryPickerVisible() || /select category/i.test(document.title)) {
     el.textContent = t("ext.pageCat");
@@ -791,7 +791,30 @@ async function analyzePickedImage() {
       : "";
     const categoryLeaf = readMeeshoCategoryFromPage();
     const categoryPath = readMeeshoCategoryPath().join(" / ");
-    const pageCategory = categoryPath || categoryLeaf;
+    const typedCategory = inputValue("cs-category");
+    const pageCategory = typedCategory || categoryPath || categoryLeaf;
+    if (!pageCategory) {
+      const cat = document.getElementById("cs-category") as HTMLInputElement | null;
+      if (cat) {
+        cat.style.outline = "2px solid #dc2626";
+        try {
+          cat.focus();
+          cat.scrollIntoView({ block: "center" });
+        } catch {
+          // jsdom
+        }
+        const clear = () => {
+          cat.style.outline = "";
+          cat.removeEventListener("input", clear);
+        };
+        cat.addEventListener("input", clear);
+      }
+      setProgress("Select a category before Generate — type 2-3 words in the red Category box (same as Manage Order).", true);
+      return;
+    }
+    const catOk = document.getElementById("cs-category") as HTMLInputElement | null;
+    if (catOk) catOk.style.outline = "2px solid #16a34a";
+    setInput("cs-category", pageCategory);
     if (shopLock === "bad" && !isMeeshoPageChrome(shopLockMessage)) {
       setProgress(shopLockMessage || t("ext.shopMismatch"), true);
       return;
@@ -1043,8 +1066,8 @@ async function runAutofill(mode: string) {
     setProgress("Generate a listing first, or select a saved product.");
     return;
   }
-  if (isMeeshoBulkTemplateStep() || isMeeshoBulkCatalogPage()) {
-    setProgress("This is Meesho's Bulk Catalog Upload (Excel template). Catalog Studio will not click or change this page. Open Add Single Catalog to fill the product form.");
+  if (isMeeshoBulkExcelOnly()) {
+    setProgress("This step is Meesho's Excel template upload. Catalog Studio will not click Upload or Download here. When the product form is open, Fill Values for Form fills it the same way as Add Single Catalog.");
     return;
   }
   resetAutofill();
@@ -1068,7 +1091,9 @@ async function runAutofill(mode: string) {
   if (marketplace === "MEESHO") {
     const sizeResults = await fillSizeChoices(listing, setProgress);
     const chartResults = await fillSizeChart(listing, setProgress);
-    results.push(...sizeResults, ...chartResults);
+    const packResults = await fillPackagingFields(listing);
+    const blankResults = await fillBlankDropdowns(listing, setProgress);
+    results.push(...sizeResults, ...chartResults, ...packResults, ...blankResults);
   }
   const filled = results.filter((item) => item.ok).length;
   setMeter(filled, results.length);

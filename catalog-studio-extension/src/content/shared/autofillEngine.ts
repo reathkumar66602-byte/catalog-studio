@@ -136,7 +136,82 @@ function realClick(el: HTMLElement) {
 }
 
 export function closeOpenMenus() {
-  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  fireEscape(document);
+  fireEscape(document.body);
+  for (const node of openMenuNodes()) {
+    fireEscape(node);
+    if (node.parentElement) fireEscape(node.parentElement);
+  }
+  for (const backdrop of document.querySelectorAll<HTMLElement>(".MuiBackdrop-root, [class*='backdrop'], [class*='overlay']")) {
+    if (backdrop.closest("#cs-sidebar") || !visible(backdrop)) continue;
+    backdrop.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    backdrop.click();
+  }
+  try {
+    document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  } catch {
+    // jsdom
+  }
+}
+
+const MENU_ROOT = ".MuiPopover-root, .MuiModal-root, .MuiMenu-root, [role='listbox'], [role='menu'], [class*='popover'], [class*='Popover'], [class*='dropdown-menu']";
+
+function openMenuNodes() {
+  return Array.from(document.querySelectorAll<HTMLElement>(MENU_ROOT)).filter((node) => !node.closest("#cs-sidebar") && visible(node));
+}
+
+function menuIsOpen() {
+  if (openMenuNodes().length) return true;
+  return Array.from(document.querySelectorAll<HTMLElement>("[role='option'], li[class*='MenuItem']")).some(
+    (node) => !node.closest("#cs-sidebar") && visible(node),
+  );
+}
+
+function fireEscape(target: EventTarget | null) {
+  if (!target) return;
+  const init = { key: "Escape", code: "Escape", keyCode: 27, which: 27, bubbles: true, cancelable: true };
+  try {
+    target.dispatchEvent(new KeyboardEvent("keydown", init));
+    target.dispatchEvent(new KeyboardEvent("keyup", init));
+  } catch {
+    // older event targets
+  }
+}
+
+export async function closeMenus() {
+  for (let attempt = 0; attempt < 6 && menuIsOpen(); attempt++) {
+    closeOpenMenus();
+    await delay(attempt < 3 ? 20 : 40);
+  }
+  return !menuIsOpen();
+}
+
+export function menuOptionsOf(el: HTMLElement | null | undefined) {
+  const host = el?.closest?.("[menuoptions]") || (el?.hasAttribute?.("menuoptions") ? el : null);
+  const raw = host?.getAttribute("menuoptions") || "";
+  const options = raw.split(",").map((item) => item.trim()).filter(Boolean);
+  return options.length ? options : null;
+}
+
+function optionNumber(value: string) {
+  const match = normalize(value).match(/^(\d+(?:\.\d+)?)\s*(?:in|inch|inches|cm|cms|kg|kgs|gms?|%|")?$/);
+  return match ? Number(match[1]) : null;
+}
+
+export function snapToOptions(value: string, options: string[], exactOnly = false) {
+  const want = normalize(value);
+  if (!want) return null;
+  const exact = options.find((option) => normalize(option) === want);
+  if (exact) return exact;
+  if (exactOnly) return null;
+  const wantNumber = optionNumber(want);
+  if (wantNumber != null) {
+    return options.find((option) => optionNumber(option) === wantNumber) || null;
+  }
+  return options.find((option) => {
+    const text = normalize(option);
+    return optionNumber(text) == null && text.includes(want);
+  }) || null;
 }
 
 function scrollField(el: HTMLElement) {
@@ -183,7 +258,7 @@ export async function fillTextArea(hint: SelectorHint, value: string, element?: 
   return fillTextInput(hint, value, element);
 }
 
-export async function selectNativeDropdown(hint: SelectorHint, value: string, element?: HTMLElement): Promise<FillResult> {
+export async function selectNativeDropdown(hint: SelectorHint, value: string, element?: HTMLElement, exactOnly = false): Promise<FillResult> {
   if (stopped) return { field: hint.labelText || "select", ok: false, message: "Stopped" };
   let match: { element: HTMLElement; label: string };
   try {
@@ -194,10 +269,12 @@ export async function selectNativeDropdown(hint: SelectorHint, value: string, el
   scrollField(match.element);
   await delay(80);
   if (!(match.element instanceof HTMLSelectElement)) {
-    return selectCustomDropdown(hint, value, match.element);
+    return selectCustomDropdown(hint, value, match.element, exactOnly);
   }
   const options = Array.from(match.element.options);
-  const option = options.find((o) => optionTextMatches(o.text || o.value, value)) || nearestSelectOption(options, value);
+  const option = exactOnly
+    ? options.find((o) => normalize(o.text || o.value) === normalize(value))
+    : options.find((o) => optionTextMatches(o.text || o.value, value)) || nearestSelectOption(options, value);
   if (!option) {
     return { field: match.label, ok: false, message: "Dropdown value is unavailable" };
   }
@@ -206,7 +283,48 @@ export async function selectNativeDropdown(hint: SelectorHint, value: string, el
   return { field: match.label, ok: true, message: "Selected" };
 }
 
-export async function selectCustomDropdown(hint: SelectorHint, value: string, element?: HTMLElement): Promise<FillResult> {
+export async function setNumberCell(el: HTMLElement, value: string) {
+  const next = String(value);
+  const write = () => {
+    try {
+      el.focus();
+    } catch {
+      // not focusable
+    }
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    el.click();
+    el.click();
+    try {
+      el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    } catch {
+      // jsdom
+    }
+    triggerReactInputEvents(el, "");
+    triggerReactInputEvents(el, next);
+  };
+  write();
+  if (cellValue(el) !== next) {
+    await delay(60);
+    if (cellValue(el) !== next) write();
+    if (cellValue(el) !== next) {
+      await delay(40);
+      write();
+    }
+  }
+  try {
+    el.dispatchEvent(new Event("blur", { bubbles: true }));
+  } catch {
+    // not focusable
+  }
+  return cellValue(el) === next;
+}
+
+function cellValue(el: HTMLElement) {
+  return "value" in el ? String((el as HTMLInputElement).value) : (el.textContent || "").trim();
+}
+
+export async function selectCustomDropdown(hint: SelectorHint, value: string, element?: HTMLElement, exactOnly = false): Promise<FillResult> {
   if (stopped) return { field: hint.labelText || "dropdown", ok: false, message: "Stopped" };
   let match: { element: HTMLElement; label: string };
   try {
@@ -214,34 +332,144 @@ export async function selectCustomDropdown(hint: SelectorHint, value: string, el
   } catch {
     return { field: hint.labelText || "dropdown", ok: false, message: "Field not on this form" };
   }
+  const listed = menuOptionsOf(match.element);
+  let target = value;
+  if (listed) {
+    const snapped = dropdownCandidates(value).map((candidate) => snapToOptions(candidate, listed, exactOnly)).find(Boolean) || null;
+    if (!snapped) {
+      await closeMenus();
+      return { field: match.label, ok: false, message: "Dropdown value is unavailable" };
+    }
+    target = snapped;
+  }
   scrollField(match.element);
-  await delay(80);
-  closeOpenMenus();
-  await delay(40);
+  await closeMenus();
   const opener =
     (match.element.closest("[class*='select'], [class*='Select'], [class*='dropdown'], [aria-haspopup='listbox']") as HTMLElement | null)
     || match.element;
-  for (const candidate of dropdownCandidates(value)) {
+  let picked = false;
+  for (let attempt = 0; attempt < 2 && !picked; attempt++) {
     realClick(opener);
-    await delay(350);
-    const search =
-      document.querySelector<HTMLInputElement>("[role='listbox'] input, .ant-select-dropdown input, input[type='search']")
-      || opener.querySelector("input")
-      || (match.element instanceof HTMLInputElement ? match.element : null);
-    if (search && !(search instanceof HTMLInputElement && search.type === "number" && !isNumericString(candidate))) {
-      triggerReactInputEvents(search, candidate);
-      await delay(220);
+    const opened = await waitUntil(() => visibleMenuOptions().length > 0 || Boolean(menuSearchInput()), 900);
+    if (!opened) continue;
+    const search = menuSearchInput();
+    if (search && search !== match.element) {
+      triggerReactInputEvents(search, target.split(";")[0]);
+      await waitUntil(() => Boolean(findMenuOption(target, true)), 500);
     }
-    const option = findBestOption(candidate) || (await delay(280), findBestOption(candidate));
-    if (option) {
-      realClick(option);
-      await delay(180);
-      return { field: match.label, ok: true, message: "Selected" };
+    let option = findMenuOption(target, true) || (!listed && !exactOnly ? findMenuOption(target, false) : undefined);
+    if (!option && !exactOnly) option = await scrollMenuFor(target);
+    if (!option) {
+      await closeMenus();
+      continue;
     }
-    closeOpenMenus();
-    await delay(80);
+    try {
+      option.scrollIntoView({ block: "center" });
+    } catch {
+      // jsdom
+    }
+    realClick(option);
+    await delay(30);
+    picked = dropdownValueStuck(match.element, target);
+    await closeMenus();
   }
-  return { field: match.label, ok: false, message: "Dropdown value is unavailable" };
+  if (!picked && !listed && !exactOnly && match.element instanceof HTMLInputElement && !match.element.readOnly) {
+    picked = await setNumberCell(match.element, target);
+  }
+  return { field: match.label, ok: picked, message: picked ? "Selected" : "Dropdown value is unavailable" };
+}
+
+function dropdownValueStuck(el: HTMLElement, value: string) {
+  const got = normalize("value" in el ? String((el as HTMLInputElement).value) : el.textContent || "");
+  const want = normalize(value);
+  if (!got || got === "select" || got === "choose") return false;
+  if (got === want || got.includes(want)) return true;
+  const gotNumber = optionNumber(got);
+  const wantNumber = optionNumber(want);
+  return gotNumber != null && wantNumber != null && gotNumber === wantNumber;
+}
+
+function menuSearchInput() {
+  const roots = openMenuNodes();
+  const scopes = roots.length ? roots : [];
+  for (const root of scopes) {
+    for (const input of root.querySelectorAll<HTMLInputElement>("input")) {
+      if (input.closest("#cs-sidebar") || !visible(input)) continue;
+      if ((input.placeholder || "").toLowerCase().includes("search")) return input;
+    }
+  }
+  return null;
+}
+
+function visibleMenuOptions() {
+  const roots = openMenuNodes();
+  const scopes = roots.length ? roots : [document];
+  const seen = new Set<HTMLElement>();
+  const list: HTMLElement[] = [];
+  for (const root of scopes) {
+    for (const el of root.querySelectorAll<HTMLElement>("[role='option'], li, [class*='option'], [class*='MenuItem']")) {
+      if (seen.has(el) || el.closest("#cs-sidebar") || !visible(el)) continue;
+      if (el.querySelector("[role='option'], li")) continue;
+      seen.add(el);
+      list.push(el);
+    }
+  }
+  return list;
+}
+
+function findMenuOption(value: string, exact: boolean) {
+  const needle = normalize(value);
+  const nodes = visibleMenuOptions().filter((el) => {
+    const text = normalize(el.textContent || "");
+    return text && text.length <= 80;
+  });
+  const exactHit = nodes.find((el) => optionTextMatches(el.textContent || "", value) && normalize(el.textContent || "") === needle)
+    || nodes.find((el) => optionTextMatches(normalize(el.textContent || "").split(";")[0] || "", value));
+  if (exactHit || exact) return exactHit;
+  return nodes.find((el) => normalize(el.textContent || "").includes(needle)) || nearestNumericOption(nodes, value);
+}
+
+async function scrollMenuFor(value: string) {
+  const hit = findMenuOption(value, true);
+  if (hit) return hit;
+  const sample = document.querySelector<HTMLElement>("li[class*='MenuItem'], [role='option']");
+  const scroller = sample ? scrollParent(sample) : null;
+  if (!scroller) return findMenuOption(value, true);
+  scroller.scrollTop = 0;
+  const deadline = Date.now() + 4000;
+  for (let step = 0; step < 40 && Date.now() < deadline; step++) {
+    const found = findMenuOption(value, true);
+    if (found) return found;
+    const previous = scroller.scrollTop;
+    scroller.scrollTop = previous + Math.max(80, scroller.clientHeight);
+    scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+    if (scroller.scrollTop <= previous + 1 && step > 2) break;
+    await delay(16);
+  }
+  return findMenuOption(value, true);
+}
+
+function scrollParent(el: HTMLElement) {
+  let node: HTMLElement | null = el;
+  while (node) {
+    const style = getComputedStyle(node);
+    if ((style.overflowY === "auto" || style.overflowY === "scroll") && node.scrollHeight > node.clientHeight + 10) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+async function waitUntil(check: () => boolean, ms: number) {
+  const started = Date.now();
+  while (Date.now() - started < ms) {
+    try {
+      if (check()) return true;
+    } catch {
+      return false;
+    }
+    await delay(Date.now() - started < 300 ? 12 : 24);
+  }
+  return false;
 }
 
 export async function setCheckbox(hint: SelectorHint, checked = true): Promise<FillResult> {
@@ -373,7 +601,7 @@ export function verifyFieldValue(el: HTMLElement, expected: string) {
 }
 
 export async function fillByHints(
-  steps: { hint: SelectorHint; value: string; type?: "text" | "textarea" | "select" | "checkbox"; element?: HTMLElement }[],
+  steps: { hint: SelectorHint; value: string; type?: "text" | "textarea" | "select" | "checkbox"; exact?: boolean; element?: HTMLElement }[],
   onProgress?: (message: string, done?: number, total?: number) => void,
 ) {
   const results: FillResult[] = [];
@@ -391,7 +619,7 @@ export async function fillByHints(
       if (step.type === "checkbox") {
         result = await setCheckbox(step.hint, step.value !== "false");
       } else if (step.type === "select") {
-        result = await selectNativeDropdown(step.hint, step.value, step.element);
+        result = await selectNativeDropdown(step.hint, step.value, step.element, Boolean(step.exact));
       } else if (step.type === "textarea") {
         result = await fillTextArea(step.hint, step.value, step.element);
       } else {
@@ -407,6 +635,24 @@ export async function fillByHints(
       );
     } catch (error) {
       results.push({ field: label, ok: false, message: error instanceof Error ? error.message : "Failed" });
+    }
+  }
+  const failed = steps.filter((step, index) => results[index] && !results[index].ok && results[index].message !== "Stopped by user" && results[index].message !== "Stopped");
+  for (const step of failed) {
+    if (stopped) break;
+    const label = step.hint.labelText || step.hint.name || "field";
+    try {
+      const result = step.type === "checkbox"
+        ? await setCheckbox(step.hint, step.value !== "false")
+        : step.type === "select"
+          ? await selectNativeDropdown(step.hint, step.value, step.element, Boolean(step.exact))
+          : step.type === "textarea"
+            ? await fillTextArea(step.hint, step.value, step.element)
+            : await fillTextInput(step.hint, step.value, step.element);
+      const at = results.findIndex((item) => item.field === label && !item.ok);
+      if (at >= 0) results[at] = result.ok ? { ...result, message: "Filled" } : result;
+    } catch (error) {
+      // leave the first failure
     }
   }
   const filled = results.filter((item) => item.ok).length;

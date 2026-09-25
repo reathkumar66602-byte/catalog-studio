@@ -36,14 +36,14 @@ function chipClass(selected: boolean) {
 }
 
 const MARKETS = [
-  { id: "MEESHO", label: "Meesho" },
   { id: "FLIPKART", label: "Flipkart" },
   { id: "AMAZON", label: "Amazon" },
+  { id: "MEESHO", label: "Meesho" },
 ] as const;
 
 export function TrendingPage() {
   const { t } = useI18n();
-  const [marketplace, setMarketplace] = useState<(typeof MARKETS)[number]["id"]>("MEESHO");
+  const [marketplace, setMarketplace] = useState<(typeof MARKETS)[number]["id"]>("FLIPKART");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState<number | undefined>(undefined);
@@ -232,6 +232,7 @@ export function TrendingPage() {
                   <ProductPhoto
                     src={product.imageUrl}
                     rank={view.page * view.pageSize + index + 1}
+                    wide={marketplace === "MEESHO"}
                   />
                   <div className="flex flex-1 flex-col gap-2 p-3">
                     <p className="line-clamp-2 text-sm font-medium">{product.title}</p>
@@ -290,14 +291,24 @@ export function TrendingPage() {
   );
 }
 
-function ProductPhoto({ src, rank }: { src?: string | null; rank: number }) {
+function displayPhoto(src: string, wide: boolean) {
+  if (!wide) return src;
+  return src.replace(/_512\.(jpe?g|webp|png)$/i, ".$1");
+}
+
+function ProductPhoto({ src, rank, wide }: { src?: string | null; rank: number; wide?: boolean }) {
   const [failed, setFailed] = useState(false);
-  const show = Boolean(src) && !failed;
+  const photo = src ? displayPhoto(src, Boolean(wide)) : "";
+  const show = Boolean(photo) && !failed;
   return (
-    <div className="relative aspect-[4/5] overflow-hidden bg-slate-100 dark:bg-slate-800">
+    <div
+      className={`relative overflow-hidden bg-white dark:bg-slate-800 ${
+        wide ? "aspect-video" : "aspect-[4/5] bg-slate-100"
+      }`}
+    >
       {show ? (
         <img
-          src={src!}
+          src={photo}
           alt=""
           className="h-full w-full object-contain"
           referrerPolicy="no-referrer"
