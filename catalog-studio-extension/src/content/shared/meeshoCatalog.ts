@@ -9,6 +9,8 @@ export type ProductLike = {
 };
 
 const STEP_NOISE = /select category|add product details|add images|image guidelines|discard catalog|save and go back|product 1|front view/i;
+const CATEGORY_UI_NOISE = /ai\s*sikhao|sikhao|image\s*dobara|dobara\s*lein|auto\s*fill|catalog\s*studio|manage\s*order|generate|fill values|capture image|drop an image|or drop|product image|this page|english|close|login|supplier|otp|password|help center|learn more|brain|🧠|⟳|↻/i;
+const CATEGORY_LEAF_HINT = /\bfashion\b|\bwear\b|\bkurt[ia]\b|\bsaree|\bdress|\bfrock|\bshirt|\bt[\s-]?shirt|\btop|\btunic|\bpant|\bjean|\blegging|\bpalazzo|\bgown|\bjumpsuit|\bset\b|\bkids?\b|\binfant|\bbaby|\bbodysuit|\bromper|\bblehenga|\bblouse|\bdupatta|\bnight|\bethnic|\bwestern|\blingerie|\bfootwear|\baccessories|\bhome\b|\bbeauty|\bgrocery|\btoys?\b|\bmonths?\b|\byears?\b/i;
 
 export function pagePath(url = location.href) {
   try {
@@ -132,12 +134,35 @@ export function readMeeshoCategoryFromPage() {
 
 let cachedPath: { at: number; path: string[] } | null = null;
 
+export function clearMeeshoCategoryCache() {
+  cachedPath = null;
+}
+
 export function readMeeshoCategoryPath() {
   if (cachedPath && Date.now() - cachedPath.at < 500) return cachedPath.path;
-  const picked = pathFromCategoryPicker();
-  const path = picked.length ? picked : pathFromBreadcrumb();
+  const picked = sanitizeCategoryPath(pathFromCategoryPicker());
+  const path = picked.length ? picked : sanitizeCategoryPath(pathFromBreadcrumb());
   cachedPath = { at: Date.now(), path };
   return path;
+}
+
+export function isPlausibleCategoryLabel(value: string) {
+  const text = (value || "").replace(/\s+/g, " ").trim();
+  if (!text || text.length < 2 || text.length > 64) return false;
+  if (STEP_NOISE.test(text) || CATEGORY_UI_NOISE.test(text)) return false;
+  if (/^\d+$/.test(text)) return false;
+  if (/[🧠⟳↻⚡]/.test(text)) return false;
+  if (/https?:|www\.|@/.test(text)) return false;
+  return true;
+}
+
+export function sanitizeCategoryPath(parts: string[]) {
+  const cleaned = parts.map((part) => part.replace(/\s+/g, " ").trim()).filter(isPlausibleCategoryLabel);
+  if (!cleaned.length) return [];
+  if (cleaned.length === 1 && !CATEGORY_LEAF_HINT.test(cleaned[0]) && !Object.values(CATEGORY_PATHS).some((path) => path.includes(cleaned[0]))) {
+    return [];
+  }
+  return cleaned;
 }
 
 export function pathFromCategoryPicker() {
@@ -205,17 +230,13 @@ function pathFromCategoryColumns() {
 
 function sanitizeOption(el: HTMLElement) {
   const text = optionText(el);
-  return Boolean(text && text.length >= 2 && text.length <= 48 && !STEP_NOISE.test(text) && !/^\d+$/.test(text));
+  return Boolean(text && isPlausibleCategoryLabel(text));
 }
 
 function isCategoryOption(el: HTMLElement) {
   if (el.closest("#cs-sidebar") || el.id === "cs-fab") return false;
   if (!visible(el)) return false;
-  const text = optionText(el);
-  if (!text || text.length < 2 || text.length > 48) return false;
-  if (STEP_NOISE.test(text)) return false;
-  if (/^\d+$/.test(text)) return false;
-  return true;
+  return sanitizeOption(el);
 }
 
 function optionText(el: HTMLElement) {
@@ -235,6 +256,8 @@ function optionText(el: HTMLElement) {
 
 function selectedLabel(kids: HTMLElement[]) {
   const marked = kids.find((el) => {
+    const text = optionText(el);
+    if (!isPlausibleCategoryLabel(text)) return false;
     const host = `${el.className} ${el.parentElement?.className || ""}`;
     return el.getAttribute("aria-selected") === "true"
       || el.getAttribute("aria-current") === "true"
@@ -243,7 +266,7 @@ function selectedLabel(kids: HTMLElement[]) {
   if (marked) return optionText(marked);
   const scored = kids
     .map((el) => ({ el, text: optionText(el), score: selectionScore(el) }))
-    .filter((item) => item.text && item.score >= 2);
+    .filter((item) => item.text && isPlausibleCategoryLabel(item.text) && item.score >= 2);
   scored.sort((a, b) => b.score - a.score);
   return scored[0]?.text || "";
 }
@@ -283,8 +306,9 @@ function pathFromBreadcrumb() {
     if (el.closest("#cs-sidebar")) continue;
     const text = (el.innerText || "").replace(/\s+/g, " ").trim();
     if (!text.includes("/") || text.length > 120) continue;
+    if (CATEGORY_UI_NOISE.test(text)) continue;
     const parts = text.split("/").map((part) => part.trim()).filter(Boolean);
-    if (parts.length >= 3 && parts.length <= 6 && parts.every((part) => part.length < 48 && !STEP_NOISE.test(part))) {
+    if (parts.length >= 3 && parts.length <= 6 && parts.every((part) => isPlausibleCategoryLabel(part))) {
       return parts;
     }
   }

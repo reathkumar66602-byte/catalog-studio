@@ -38,7 +38,7 @@ class ShootPlanTest {
     }
 
     @Test
-    void defaultShootUsesAStyledMeeshoBackground() {
+    void defaultShootUsesAutoMeeshoBackgroundAndCuteModel() {
         List<ShootPlan.Job> jobs = ShootPlan.jobs(
                 "SINGLE",
                 "26-32",
@@ -51,7 +51,84 @@ class ShootPlanTest {
         assertThat(jobs).extracting(ShootPlan.Job::kind).containsExactly("FRONT");
         assertThat(jobs.get(0).prompt()).contains("Meesho");
         assertThat(jobs.get(0).prompt()).contains("not a plain studio");
+        assertThat(jobs.get(0).prompt()).contains("flatters this exact outfit");
+        assertThat(jobs.get(0).prompt()).contains("cute Indian adult");
         assertThat(jobs.get(0).prompt()).contains("Indian");
+        assertThat(jobs.get(0).prompt()).contains("must not be plain white or pure white");
+        assertThat(jobs.get(0).prompt()).doesNotContain("RGB 255 255 255");
+        assertThat(jobs.get(0).prompt()).doesNotContain("Flipkart and Amazon");
+        assertThat(jobs.get(0).prompt()).doesNotContain("Use this exact setting");
+    }
+
+    @Test
+    void blankMeeshoBackgroundDefaultsToAuto() {
+        assertThat(ShootOptions.meeshoBackground(null)).isEqualTo("AUTO");
+        assertThat(ShootOptions.meeshoBackground("")).isEqualTo("AUTO");
+        assertThat(ShootOptions.DEFAULT_MEESHO_BACKGROUND).isEqualTo("AUTO");
+        assertThat(ShootOptions.MEESHO_BACKGROUNDS).containsExactly(
+                "AUTO", "FESTIVE_HOME", "LIVING_ROOM", "COURTYARD");
+    }
+
+    @Test
+    void meeshoBackgroundChoiceIsWrittenIntoThePrompt() {
+        List<ShootPlan.Job> living = ShootPlan.jobs(
+                "SINGLE",
+                "5-6",
+                List.of("FRONT"),
+                false,
+                false,
+                List.of(FRONT),
+                null,
+                "LIVING_ROOM");
+
+        assertThat(living.get(0).prompt()).contains("living room");
+        assertThat(living.get(0).prompt()).contains("Use this exact setting");
+        assertThat(living.get(0).prompt()).contains("cute Indian child");
+        assertThat(living.get(0).prompt()).doesNotContain("flatters this exact outfit");
+
+        List<ShootPlan.Job> festive = ShootPlan.jobs(
+                "SINGLE",
+                "5-6",
+                List.of("FRONT"),
+                false,
+                false,
+                List.of(FRONT),
+                null,
+                "FESTIVE_HOME");
+
+        assertThat(festive.get(0).prompt()).contains("marigold");
+        assertThat(festive.get(0).prompt()).contains("Use this exact setting");
+
+        List<ShootPlan.Job> courtyard = ShootPlan.jobs(
+                "SINGLE",
+                "5-6",
+                List.of("FRONT"),
+                false,
+                false,
+                List.of(FRONT),
+                null,
+                "COURTYARD");
+
+        assertThat(courtyard.get(0).prompt()).contains("courtyard");
+        assertThat(courtyard.get(0).prompt()).contains("Use this exact setting");
+    }
+
+    @Test
+    void flipkartIgnoresMeeshoBackgroundChoice() {
+        List<ShootPlan.Job> jobs = ShootPlan.jobs(
+                "SINGLE",
+                "26-32",
+                List.of("FRONT"),
+                true,
+                false,
+                List.of(FRONT),
+                null,
+                "FESTIVE_HOME");
+
+        assertThat(jobs.get(0).prompt()).contains("pure white");
+        assertThat(jobs.get(0).prompt()).contains("Flipkart and Amazon");
+        assertThat(jobs.get(0).prompt()).doesNotContain("marigold");
+        assertThat(jobs.get(0).prompt()).doesNotContain("flatters this exact outfit");
     }
 
     @Test
@@ -88,9 +165,16 @@ class ShootPlanTest {
     @Test
     void childCatalogPromptStaysAModestClothingShoot() {
         String prompt = ShootPrompt.forKind("FRONT", "5-6");
-        assertThat(prompt).contains("Indian child");
+        assertThat(prompt).contains("cute Indian child");
         assertThat(prompt).contains("modest children's clothing catalog");
-        assertThat(prompt).contains("Everyday kidswear only");
+        assertThat(prompt).contains("everyday kidswear only");
+        assertThat(prompt).contains("flatters this exact outfit");
+    }
+
+    @Test
+    void unknownMeeshoBackgroundIsRejected() {
+        assertThatThrownBy(() -> ShootOptions.meeshoBackground("beach"))
+                .hasMessageContaining("Meesho background");
     }
 
     @Test

@@ -5,10 +5,14 @@ public final class ShootPrompt {
     private ShootPrompt() {}
 
     public static String forKind(String kind, String modelAge) {
-        return forKind(kind, modelAge, false);
+        return forKind(kind, modelAge, false, ShootOptions.DEFAULT_MEESHO_BACKGROUND);
     }
 
     public static String forKind(String kind, String modelAge, boolean whiteBackground) {
+        return forKind(kind, modelAge, whiteBackground, ShootOptions.DEFAULT_MEESHO_BACKGROUND);
+    }
+
+    public static String forKind(String kind, String modelAge, boolean whiteBackground, String meeshoBackground) {
         String angle = switch (kind) {
             case "FRONT" -> "Front view of the same product. If a model is wearing it, the model faces the camera.";
             case "BACK" -> "Back view. If a model is wearing it, the model is turned away. Follow the back reference photo for the garment back.";
@@ -19,18 +23,46 @@ public final class ShootPrompt {
             case "MARKETPLACE", "MEESHO" -> "Catalog view of the same product.";
             default -> throw new IllegalArgumentException("Unknown shoot kind: " + kind);
         };
-        return base(modelAge) + " " + background(whiteBackground) + " " + angle;
+        return base(modelAge) + " " + background(whiteBackground, meeshoBackground) + " " + angle;
     }
 
-    private static String background(boolean whiteBackground) {
+    private static String background(boolean whiteBackground, String meeshoBackground) {
         if (whiteBackground) {
             return "The entire background behind the model and garment must be pure white, RGB 255 255 255. "
                     + "No cream, beige, grey, pastel, floor, wall, room, or coloured backdrop. "
                     + "No background shadow. This set is for Flipkart and Amazon.";
         }
+        return meeshoScene(meeshoBackground);
+    }
+
+    private static String meeshoScene(String meeshoBackground) {
+        String choice = ShootOptions.meeshoBackground(meeshoBackground);
+        if ("AUTO".equals(choice)) {
+            return "Place the model in a beautiful styled Meesho scene, not a plain studio. "
+                    + "Study the garment colour, print, fabric, occasion, and style in the reference photo, "
+                    + "then choose one beautiful Indian lifestyle background that flatters this exact outfit. "
+                    + "Examples: festive home with marigolds and brass lamps for ethnic or festive wear; "
+                    + "sunlit living room with sofa and plants for everyday wear; "
+                    + "bright courtyard or veranda for light summer looks. "
+                    + "Pick the single best match for this cloth — do not default to a plain beige wall. "
+                    + "The backdrop must show depth and decor. Do not use a seamless paper sweep, a plain beige wall, "
+                    + "a plain cream wall, or an empty studio. "
+                    + "The background must not be plain white or pure white. This set is for Meesho.";
+        }
+        String scene = switch (choice) {
+            case "FESTIVE_HOME" -> "a warm festive Indian home interior: hanging yellow and orange marigold garlands, "
+                    + "soft warm fairy lights, a traditional brass oil lamp or diya stand, "
+                    + "and a wooden console with festive decor under soft golden indoor light with gentle depth of field";
+            case "LIVING_ROOM" -> "a sunlit modern Indian living room with a cream sofa, tall green plants in woven baskets, "
+                    + "floor-length beige curtains, light flooring, and soft diffused daylight";
+            case "COURTYARD" -> "a bright Indian home courtyard or veranda with plants, warm natural daylight, "
+                    + "soft shadows, and lifestyle depth";
+            default -> "a beautiful styled Indian home interior with furniture, plants, curtains, and colour";
+        };
         return "Place the model in a beautiful styled Meesho scene, not a plain studio. "
-                + "Use a real setting such as a sunlit Indian home with a sofa and plants, a courtyard, or a festive room with curtains, furniture, and colour. "
-                + "The backdrop must show depth and decor. Do not use a seamless paper sweep, a plain beige wall, a plain cream wall, or an empty studio. "
+                + "Use this exact setting: " + scene + ". "
+                + "The backdrop must show depth and decor. Do not use a seamless paper sweep, a plain beige wall, "
+                + "a plain cream wall, or an empty studio. "
                 + "The background must not be plain white or pure white. This set is for Meesho.";
     }
 
@@ -58,16 +90,19 @@ public final class ShootPrompt {
     private static String ageLine(String modelAge) {
         String range = "50+".equals(modelAge) ? "50 years or older" : modelAge + " years";
         if (ShootOptions.childAge(modelAge)) {
-            return "The model is an Indian child in the " + range
-                    + " age range, photographed as a modest children's clothing catalog. Everyday kidswear only.";
+            return "The model is a cute Indian child in the " + range
+                    + " age range, photographed as a modest children's clothing catalog. "
+                    + "Warm cheerful expression, soft friendly features, everyday kidswear only.";
         }
         if (ShootOptions.teenAge(modelAge)) {
-            return "The model is an Indian teenager in the " + range
-                    + " age range, photographed as a modest teen clothing catalog.";
+            return "The model is a cute Indian teenager in the " + range
+                    + " age range, photographed as a modest teen clothing catalog. "
+                    + "Natural, camera-friendly expression.";
         }
         if ("50+".equals(modelAge)) {
-            return "The model is an older Indian adult, 50 years or older.";
+            return "The model is an older Indian adult, 50 years or older, with a warm pleasant expression.";
         }
-        return "The model is an Indian adult in the " + range + " age range.";
+        return "The model is a cute Indian adult in the " + range
+                + " age range, with a pleasant camera-friendly expression.";
     }
 }

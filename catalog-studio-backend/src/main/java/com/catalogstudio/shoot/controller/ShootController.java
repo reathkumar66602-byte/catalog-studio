@@ -35,6 +35,7 @@ public class ShootController {
             @RequestParam(value = "angles", required = false) List<String> angles,
             @RequestParam(value = "flipkart", required = false) Boolean flipkart,
             @RequestParam(value = "marketplace", defaultValue = "false") boolean marketplace,
+            @RequestParam(value = "meeshoBackground", required = false) String meeshoBackground,
             @RequestParam(value = "front", required = false) MultipartFile front,
             @RequestParam(value = "back", required = false) MultipartFile back,
             @RequestParam(value = "products", required = false) List<MultipartFile> products
@@ -46,6 +47,7 @@ public class ShootController {
                 angles,
                 flipkart == null ? marketplace : Boolean.TRUE.equals(flipkart),
                 true,
+                meeshoBackground,
                 front,
                 back,
                 products);

@@ -47,10 +47,29 @@ public class ShootService {
             MultipartFile back,
             List<MultipartFile> products
     ) {
+        return create(userId, modeRaw, modelAgeRaw, anglesRaw, flipkart, meesho,
+                ShootOptions.DEFAULT_MEESHO_BACKGROUND, front, back, products);
+    }
+
+    public ShootResponse create(
+            Long userId,
+            String modeRaw,
+            String modelAgeRaw,
+            List<String> anglesRaw,
+            boolean flipkart,
+            boolean meesho,
+            String meeshoBackgroundRaw,
+            MultipartFile front,
+            MultipartFile back,
+            List<MultipartFile> products
+    ) {
         User user = userRepository.findById(userId).orElseThrow(() -> ApiException.notFound("User not found"));
         String mode = ShootOptions.mode(modeRaw);
         String modelAge = ShootOptions.modelAge(modelAgeRaw);
         List<String> angles = ShootOptions.angles(anglesRaw, false);
+        String meeshoBackground = flipkart
+                ? ShootOptions.DEFAULT_MEESHO_BACKGROUND
+                : ShootOptions.meeshoBackground(meeshoBackgroundRaw);
         boolean trial = accessService.statusOf(user).trialActive();
 
         List<StorageService.StoredFile> productFiles = new ArrayList<>();
@@ -90,7 +109,7 @@ public class ShootService {
                 ? null
                 : new ShootPlan.Ref(filename(0, backFile.contentType()), backFile.contentType(), backFile.bytes());
 
-        List<ShootPlan.Job> full = ShootPlan.jobs(mode, modelAge, angles, flipkart, false, refs, backRef);
+        List<ShootPlan.Job> full = ShootPlan.jobs(mode, modelAge, angles, flipkart, false, refs, backRef, meeshoBackground);
         List<ShootPlan.Job> jobs = trial && full.size() > 1 ? List.of(full.get(0)) : full;
         if (jobs.isEmpty()) {
             throw ApiException.badRequest("Choose at least one photo to generate");

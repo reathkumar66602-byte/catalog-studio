@@ -15,6 +15,9 @@ import com.catalogstudio.storage.StorageService;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.service.SubscriptionAccessService;
 import com.catalogstudio.user.repository.UserRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.InputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -24,6 +27,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,16 +37,23 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class ExtensionFeatureService {
 
-    private static final List<Map<String, String>> FALLBACK_CATEGORIES = List.of(
-            Map.of("id", "women-kurti", "name", "Women Kurti", "path", "Women / Ethnic Wear / Kurti"),
-            Map.of("id", "women-kurti-set", "name", "Women Kurti Set", "path", "Women / Ethnic Wear / Kurti Set"),
-            Map.of("id", "saree", "name", "Saree", "path", "Women / Ethnic Wear / Saree"),
-            Map.of("id", "dress", "name", "Women Dress", "path", "Women / Western Wear / Dress"),
-            Map.of("id", "top", "name", "Women Top", "path", "Women / Western Wear / Top"),
-            Map.of("id", "tshirt", "name", "T-Shirt", "path", "Clothing / T-Shirts"),
-            Map.of("id", "men-shirt", "name", "Men Shirt", "path", "Men / Casual Wear / Shirt"),
-            Map.of("id", "kids-frock", "name", "Kids Frock", "path", "Kids / Girls / Frock")
-    );
+    private static final Logger log = LoggerFactory.getLogger(ExtensionFeatureService.class);
+    private static final List<Map<String, Object>> MEESHO_CATEGORIES = loadMeeshoCategories();
+
+    private static List<Map<String, Object>> loadMeeshoCategories() {
+        try (InputStream in = ExtensionFeatureService.class.getResourceAsStream("/extension/meesho-categories.json")) {
+            if (in == null) {
+                log.warn("Meesho category catalog missing at /extension/meesho-categories.json");
+                return List.of();
+            }
+            List<Map<String, Object>> rows = new ObjectMapper().readValue(in, new TypeReference<>() {});
+            log.info("Loaded {} Meesho categories for extension search", rows.size());
+            return rows;
+        } catch (Exception ex) {
+            log.warn("Failed to load Meesho category catalog: {}", ex.getMessage());
+            return List.of();
+        }
+    }
 
     private final ExtensionService extensionService;
     private final ExtensionUserSettingsRepository settingsRepository;
@@ -177,14 +189,17 @@ public class ExtensionFeatureService {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", template.getUuid().toString());
             row.put("name", template.getName());
+            row.put("label", template.getName());
             row.put("path", template.getName());
             row.put("productType", template.getProductType());
             row.put("attributes", template.getTemplateJson());
             row.put("source", "template");
+            row.put("n", 1);
             out.add(row);
         }
-        for (Map<String, String> fallback : FALLBACK_CATEGORIES) {
-            Map<String, Object> row = new LinkedHashMap<>(fallback);
+        for (Map<String, Object> catalog : MEESHO_CATEGORIES) {
+            Map<String, Object> row = new LinkedHashMap<>(catalog);
+            row.putIfAbsent("label", row.get("name"));
             row.put("source", "catalog");
             out.add(row);
         }

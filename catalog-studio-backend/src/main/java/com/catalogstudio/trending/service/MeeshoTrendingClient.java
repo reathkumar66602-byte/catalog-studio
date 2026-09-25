@@ -9,8 +9,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -79,11 +81,17 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
 
     static List<TrendingHit> parse(JsonNode root) {
         List<TrendingHit> hits = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
         for (JsonNode item : root.path("data")) {
             TrendingHit hit = hit(item);
-            if (hit != null) {
-                hits.add(hit);
+            if (hit == null) {
+                continue;
             }
+            String key = productKey(hit.productUrl(), hit.externalId());
+            if (!seen.add(key)) {
+                continue;
+            }
+            hits.add(hit);
             if (hits.size() == TrendingCatalog.PAGE_SIZE) {
                 break;
             }
@@ -97,20 +105,21 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
             return null;
         }
         String title = text(item, "title");
-        if (title == null) {
+        if (title == null || title.toLowerCase(Locale.ROOT).contains("buy premium")) {
             return null;
         }
-        String id = text(item, "id");
+        String id = text(item, "hero_pid");
         if (id == null) {
-            id = text(item, "hero_pid");
+            id = text(item, "id");
+        }
+        if (id == null) {
+            id = productKey(link, null);
         }
         if (id == null) {
             return null;
         }
-        String image = text(item, "image");
-        if (image != null && !image.startsWith("https://")) {
-            image = null;
-        }
+        String image = preferredImage(item);
+        String productUrl = link.startsWith("http") ? link : "https://www.meesho.com" + link;
         return new TrendingHit(
                 TrendingText.clip(id, 128),
                 TrendingText.clip(title, 500),
@@ -120,7 +129,36 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
                 rating(item.path("avg_rating")),
                 reviews(item),
                 image,
-                link.startsWith("http") ? link : "https://www.meesho.com" + link);
+                productUrl);
+    }
+
+    private static String preferredImage(JsonNode item) {
+        String image = text(item, "image");
+        if (image == null || !image.startsWith("https://")) {
+            return null;
+        }
+        return image.replaceAll("(?i)_512\\.(jpe?g|webp|png)$", ".$1");
+    }
+
+    private static String productKey(String link, String fallback) {
+        if (link != null) {
+            int at = link.lastIndexOf("/p/");
+            if (at >= 0 && at + 3 < link.length()) {
+                String slug = link.substring(at + 3);
+                int cut = slug.indexOf('?');
+                if (cut >= 0) {
+                    slug = slug.substring(0, cut);
+                }
+                cut = slug.indexOf('/');
+                if (cut >= 0) {
+                    slug = slug.substring(0, cut);
+                }
+                if (!slug.isBlank()) {
+                    return slug.toLowerCase(Locale.ROOT);
+                }
+            }
+        }
+        return fallback == null ? null : fallback.toLowerCase(Locale.ROOT);
     }
 
     private static String reviews(JsonNode item) {

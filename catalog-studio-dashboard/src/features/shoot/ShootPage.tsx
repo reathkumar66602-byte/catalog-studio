@@ -65,6 +65,31 @@ const ANGLES = [
   { id: "SHOP", label: "Shop shot" },
 ] as const;
 
+export const MEESHO_BACKGROUNDS = [
+  {
+    id: "AUTO",
+    label: "Auto",
+    hint: "Default — AI picks a beautiful scene that matches this cloth and style",
+  },
+  {
+    id: "FESTIVE_HOME",
+    label: "Festive home",
+    hint: "Marigolds, brass lamp, fairy lights — best for ethnic & kidswear",
+  },
+  {
+    id: "LIVING_ROOM",
+    label: "Living room",
+    hint: "Cream sofa, plants, soft daylight",
+  },
+  {
+    id: "COURTYARD",
+    label: "Courtyard",
+    hint: "Bright veranda with plants and natural light",
+  },
+] as const;
+
+export const DEFAULT_MEESHO_BACKGROUND = MEESHO_BACKGROUNDS[0].id;
+
 const KIND_LABEL: Record<string, string> = {
   FRONT: "Front",
   BACK: "Back",
@@ -99,6 +124,7 @@ export function ShootPage() {
   const [modelAge, setModelAge] = useState("");
   const [angles, setAngles] = useState<string[]>(["FRONT"]);
   const [flipkart, setFlipkart] = useState(false);
+  const [meeshoBackground, setMeeshoBackground] = useState<string>(DEFAULT_MEESHO_BACKGROUND);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ShootResult | null>(null);
@@ -146,6 +172,7 @@ export function ShootPage() {
     form.append("mode", mode);
     form.append("modelAge", modelAge);
     form.append("flipkart", String(flipkart));
+    if (!flipkart) form.append("meeshoBackground", meeshoBackground);
     angles.forEach((angle) => form.append("angles", angle));
     if (mode === "SINGLE" && front) form.append("front", front.file);
     if (mode === "SINGLE" && back) form.append("back", back.file);
@@ -321,9 +348,34 @@ export function ShootPage() {
           </span>
         </label>
         {!flipkart && (
-          <p className="mt-3 text-sm text-slate-500">
-            Left off, every photo uses a styled background for Meesho. Not a plain white backdrop.
-          </p>
+          <div className="mt-4 space-y-3">
+            <div>
+              <p className="font-medium">Meesho background</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Styled scene for Meesho — not a plain white backdrop. Auto matches the scene to the garment.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {MEESHO_BACKGROUNDS.map((bg) => {
+                const selected = meeshoBackground === bg.id;
+                return (
+                  <button
+                    key={bg.id}
+                    type="button"
+                    onClick={() => setMeeshoBackground(bg.id)}
+                    className={
+                      selected
+                        ? "rounded-2xl border-2 border-teal-700 bg-teal-50 px-3 py-3 text-left dark:bg-teal-950/40"
+                        : "rounded-2xl border border-slate-200 px-3 py-3 text-left hover:border-slate-300"
+                    }
+                  >
+                    <span className="block text-sm font-medium">{bg.label}</span>
+                    <span className="mt-1 block text-xs text-slate-500">{bg.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         <div className="mt-4 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm dark:bg-slate-800">

@@ -232,7 +232,7 @@ export function TrendingPage() {
                   <ProductPhoto
                     src={product.imageUrl}
                     rank={view.page * view.pageSize + index + 1}
-                    wide={marketplace === "MEESHO"}
+                    meesho={marketplace === "MEESHO"}
                   />
                   <div className="flex flex-1 flex-col gap-2 p-3">
                     <p className="line-clamp-2 text-sm font-medium">{product.title}</p>
@@ -291,19 +291,23 @@ export function TrendingPage() {
   );
 }
 
-function displayPhoto(src: string, wide: boolean) {
-  if (!wide) return src;
+function displayPhoto(src: string) {
   return src.replace(/_512\.(jpe?g|webp|png)$/i, ".$1");
 }
 
-function ProductPhoto({ src, rank, wide }: { src?: string | null; rank: number; wide?: boolean }) {
+function meeshoCatalogCover(src: string) {
+  return /\/images\/catalogs\/\d+\/cover\//.test(src);
+}
+
+function ProductPhoto({ src, rank, meesho }: { src?: string | null; rank: number; meesho?: boolean }) {
   const [failed, setFailed] = useState(false);
-  const photo = src ? displayPhoto(src, Boolean(wide)) : "";
+  const photo = src ? (meesho ? displayPhoto(src) : src) : "";
   const show = Boolean(photo) && !failed;
+  const cover = Boolean(meesho && show && meeshoCatalogCover(photo));
   return (
     <div
-      className={`relative overflow-hidden bg-white dark:bg-slate-800 ${
-        wide ? "aspect-video" : "aspect-[4/5] bg-slate-100"
+      className={`relative overflow-hidden bg-slate-50 dark:bg-slate-800 ${
+        cover ? "aspect-[16/9]" : "aspect-[3/4]"
       }`}
     >
       {show ? (

@@ -374,6 +374,30 @@ describe("meesho defaults", () => {
 });
 
 describe("live readiness vs manage order", () => {
+  it("searches categories like Manage Order with name, path, and +N more", async () => {
+    const {
+      CATEGORY_SHOW_MAX,
+      searchCategories,
+      setCategoryCatalog,
+      categoryCatalogSize,
+    } = await import("../src/content/shared/categorySearch");
+    const bundled = (await import("../src/content/shared/meeshoCategories.generated.json")).default as Array<{
+      id: string;
+      name: string;
+      path: string;
+    }>;
+    setCategoryCatalog(bundled);
+    expect(categoryCatalogSize()).toBeGreaterThan(3000);
+    const empty = searchCategories("");
+    expect(empty.list.length).toBeGreaterThan(CATEGORY_SHOW_MAX);
+    const body = searchCategories("b");
+    expect(body.list.some((item) => /bodysuit/i.test(item.name))).toBe(true);
+    expect(body.list.length).toBeGreaterThan(CATEGORY_SHOW_MAX);
+    const infant = searchCategories("bodysuit");
+    expect(infant.list[0]?.name.toLowerCase()).toContain("bodysuit");
+    expect(infant.list[0]?.path.toLowerCase()).toContain("kids");
+  });
+
   it("maps importer Not Required, sustainable No, and brand aliases", async () => {
     const { listingFieldValues } = await import("../src/content/shared/listingValues");
     const values = listingFieldValues({
@@ -925,8 +949,23 @@ describe("meesho page scan", () => {
 });
 
 describe("meesho category detection", () => {
+  it("ignores Meesho AI Sikhao chrome and junk breadcrumb text", async () => {
+    const { clearMeeshoCategoryCache, readMeeshoCategoryFromPage, readMeeshoCategoryPath } = await import("../src/content/shared/meeshoCatalog");
+    clearMeeshoCategoryCache();
+    document.body.innerHTML = `
+      <h1>Add Single Catalog</h1>
+      <div class="selected" style="background:#f3e8ff;color:#a855f7">🧠 AI Sikhao</div>
+      <div>Image dobara lein / 🧠 AI Sikhao</div>
+      <button class="selected">AI Sikhao</button>
+      <span>Image dobara lein</span>
+    `;
+    expect(readMeeshoCategoryFromPage()).toBe("");
+    expect(readMeeshoCategoryPath()).toEqual([]);
+  });
+
   it("reads the highlighted picker path instead of leftover Kurtis text", async () => {
-    const { readMeeshoCategoryFromPage, readMeeshoCategoryPath, isMeeshoProductDetailsPage } = await import("../src/content/shared/meeshoCatalog");
+    const { clearMeeshoCategoryCache, readMeeshoCategoryFromPage, readMeeshoCategoryPath, isMeeshoProductDetailsPage } = await import("../src/content/shared/meeshoCatalog");
+    clearMeeshoCategoryCache();
     document.body.innerHTML = `
       <h1>Add Single Catalog</h1>
       <div>1 Select Category</div>

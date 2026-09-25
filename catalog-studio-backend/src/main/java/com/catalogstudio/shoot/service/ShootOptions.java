@@ -13,8 +13,17 @@ public final class ShootOptions {
             "20-25", "26-32", "33-40", "41-50", "50+"
     );
     public static final List<String> ANGLE_ORDER = List.of("FRONT", "BACK", "SIDE", "SHOP");
+    /** Auto lets the model pick a scene that flatters the garment; fixed scenes stay available. */
+    public static final String DEFAULT_MEESHO_BACKGROUND = "AUTO";
+    public static final List<String> MEESHO_BACKGROUNDS = List.of(
+            "AUTO",
+            "FESTIVE_HOME",
+            "LIVING_ROOM",
+            "COURTYARD"
+    );
     private static final Set<String> AGE_SET = Set.copyOf(AGES);
     private static final Set<String> ANGLE_SET = Set.copyOf(ANGLE_ORDER);
+    private static final Set<String> MEESHO_BACKGROUND_SET = Set.copyOf(MEESHO_BACKGROUNDS);
 
     private ShootOptions() {}
 
@@ -32,6 +41,17 @@ public final class ShootOptions {
             throw ApiException.badRequest("Choose a model age");
         }
         return age;
+    }
+
+    public static String meeshoBackground(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return DEFAULT_MEESHO_BACKGROUND;
+        }
+        String value = raw.trim().toUpperCase(Locale.ROOT);
+        if (!MEESHO_BACKGROUND_SET.contains(value)) {
+            throw ApiException.badRequest("Choose a Meesho background");
+        }
+        return value;
     }
 
     public static List<String> angles(List<String> raw, boolean marketplace) {

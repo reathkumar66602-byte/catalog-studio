@@ -3,6 +3,15 @@ import { fillByHints, resetAutofill, stopAutofill } from "./shared/autofillEngin
 import { syncGenerateEnabled } from "./shared/generateButton";
 import { detectMarketplace, type MappedListing } from "./shared/marketplaces";
 import { isMeeshoAddCatalogFlow, isMeeshoBulkCatalogPage, isMeeshoBulkExcelOnly, isMeeshoBulkTemplateStep, isMeeshoCatalogListPage, isMeeshoCatalogPage, isMeeshoCategoryPickerVisible, isMeeshoProductDetailsPage, readMeeshoCategoryFromPage, readMeeshoCategoryPath, shouldScanMeeshoForm, suggestedCategoryLabel } from "./shared/meeshoCatalog";
+import {
+  CATEGORY_SHOW_MAX,
+  categoryCatalogSize,
+  highlightCategoryText,
+  searchCategories,
+  setCategoryCatalog,
+  type CategoryOption,
+} from "./shared/categorySearch";
+import bundledCategories from "./shared/meeshoCategories.generated.json";
 import { captureBestPageImage, watchMeeshoPageImages, type PageImageSource } from "./shared/meeshoPageImage";
 import { detectMeeshoStore, isMeeshoPageChrome, sanitizeStoreName, type MeeshoStore } from "./shared/meeshoStore";
 import { buildStyleCode, defaultsForCategory, deriveBrand, deriveFabric, deriveGenericName, deriveMainCategory, deriveOccasion, detectOrnamentation, extractPincode, fabricLengthFromMeters, isNonApparelCatalog, mapGarmentLength, mapNeck, mapSleeveLength, mapSleeveStyling, meterAmount, netQuantityForListing } from "./shared/meeshoDefaults";
@@ -73,7 +82,8 @@ let shopLock: "ok" | "wait" | "bad" = "wait";
 let shopLockMessage = "";
 let sellerSettings: Record<string, any> = {};
 let quota: { used?: number; limit?: number; remaining?: number; plan?: string } = {};
-let categoryOptions: Array<{ id: string; name: string; path: string }> = [];
+let categoryOptions: CategoryOption[] = [];
+let categorySearchTimer = 0;
 const SIDEBAR_DISMISS_KEY = "csSidebarDismissedPath";
 let sidebarDismissedPath = "";
 
@@ -287,6 +297,14 @@ function injectUi() {
     #cs-sidebar .footer-actions { position:sticky; bottom:0; background:#fff; padding-top:10px; border-top:1px solid #f1f5f9; }
     #cs-sidebar details { margin:10px 0; }
     #cs-sidebar summary { cursor:pointer; color:#334155; font-weight:600; }
+    #cs-sidebar .cs-cat-results { display:flex; flex-direction:column; gap:0; margin:0 0 6px; max-height:220px; overflow:auto; border:1px solid #e2e8f0; border-radius:10px; background:#fff; box-shadow:0 8px 24px rgba(15,23,42,.08); }
+    #cs-sidebar .cs-cat-results:empty { display:none; border:0; box-shadow:none; }
+    #cs-sidebar .cs-cat-results button.cs-cat-it { width:100%; margin:0; text-align:left; font-size:13px; line-height:1.25; padding:8px 10px; border:0; border-bottom:1px solid #f1f5f9; border-radius:0; background:#fff; cursor:pointer; color:#0f172a; font-weight:700; }
+    #cs-sidebar .cs-cat-results button.cs-cat-it:last-of-type { border-bottom:0; }
+    #cs-sidebar .cs-cat-results button.cs-cat-it:hover, #cs-sidebar .cs-cat-results button.cs-cat-it.act, #cs-sidebar .cs-cat-results button.cs-cat-it:focus { background:#eef2ff; outline:none; }
+    #cs-sidebar .cs-cat-results .cs-cat-path { display:block; margin-top:2px; font-size:11px; font-weight:500; color:#7c6bb5; line-height:1.3; }
+    #cs-sidebar .cs-cat-results .cs-cat-path b, #cs-sidebar .cs-cat-results button.cs-cat-it b { color:#b45309; font-weight:800; }
+    #cs-sidebar .cs-cat-results .cs-cat-more, #cs-sidebar .cs-cat-results .cs-cat-empty { font-size:12px; color:#64748b; padding:8px 10px; border-top:1px dashed #e2e8f0; background:#f8fafc; }
     #cs-sidebar header .cs-locale-wrap select#cs-locale { color:#fff !important; -webkit-text-fill-color:#fff !important; background-color:transparent !important; }
     #cs-sidebar header .cs-locale-wrap select#cs-locale option { color:#0f172a !important; -webkit-text-fill-color:#0f172a !important; background:#fff !important; }
   `;
@@ -322,10 +340,9 @@ function injectUi() {
       </section>
       <section>
         <h3 data-i18n="ext.category">Category</h3>
-        <input id="cs-category" data-i18n-placeholder="ext.catPh" placeholder="Type 2-3 words — required before Generate" />
-        <input id="cs-cat-search" data-i18n-placeholder="ext.catSearch" placeholder="Search Catalog Studio templates" />
-        <div id="cs-cat-results"></div>
-        <p id="cs-category-note" class="cs-note" data-i18n="ext.catNote">Same as Manage Order: choose category first. Meesho path is used when present; otherwise type it here.</p>
+        <input id="cs-category" data-i18n-placeholder="ext.catPh" placeholder="Type 2-3 words — suggestions appear as you type" autocomplete="off" />
+        <div id="cs-cat-results" class="cs-cat-results" role="listbox" aria-label="Category suggestions"></div>
+        <p id="cs-category-note" class="cs-note" data-i18n="ext.catNote">Same as Manage Order: type here to see category suggestions. Meesho path is used when already selected on the page.</p>
       </section>
       <section>
         <h3 data-i18n="ext.image">Product image</h3>
@@ -424,7 +441,34 @@ function injectUi() {
   sidebar.querySelector("#cs-fill")?.addEventListener("click", () => runAutofill("all"));
   sidebar.querySelector("#cs-reset-listing")?.addEventListener("click", resetListing);
   sidebar.querySelector("#cs-save-settings")?.addEventListener("click", () => void saveSellerSettings());
-  sidebar.querySelector("#cs-cat-search")?.addEventListener("input", (e) => renderCategoryResults((e.target as HTMLInputElement).value));
+  const categoryInput = sidebar.querySelector("#cs-category") as HTMLInputElement | null;
+  const scheduleCategorySearch = (value: string) => {
+    if (categorySearchTimer) window.clearTimeout(categorySearchTimer);
+    categorySearchTimer = window.setTimeout(() => {
+      categorySearchTimer = 0;
+      renderCategoryResults(value);
+    }, 90);
+  };
+  categoryInput?.addEventListener("input", (e) => {
+    const el = e.target as HTMLInputElement;
+    el.dataset.userPicked = el.value.trim() ? "1" : "";
+    scheduleCategorySearch(el.value);
+  });
+  categoryInput?.addEventListener("focus", (e) => renderCategoryResults((e.target as HTMLInputElement).value));
+  categoryInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const box = document.getElementById("cs-cat-results");
+      if (box) box.innerHTML = "";
+    }
+  });
+  categoryInput?.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      const box = document.getElementById("cs-cat-results");
+      if (box && !box.matches(":hover")) box.innerHTML = "";
+    }, 180);
+  });
+  setCategoryCatalog(bundledCategories as CategoryOption[]);
+  categoryOptions = bundledCategories as CategoryOption[];
   sidebar.querySelectorAll("[data-mode]").forEach((btn) =>
     btn.addEventListener("click", () => runAutofill((btn as HTMLElement).dataset.mode || "all")),
   );
@@ -526,8 +570,11 @@ function syncCategoryFromPage() {
   const input = document.getElementById("cs-category") as HTMLInputElement | null;
   const note = document.getElementById("cs-category-note");
   if (!input) return;
+  // While the seller is searching/picking (Manage Order behaviour), never overwrite.
+  if (document.activeElement === input || input.dataset.userPicked === "1") return;
   if (leaf) {
-    input.value = leaf;
+    input.value = path.length > 1 ? path.join(" / ") : leaf;
+    input.dataset.userPicked = "";
     applyCategoryDefaults(path.join(" "));
     if (note) {
       note.className = "cs-ok";
@@ -535,10 +582,15 @@ function syncCategoryFromPage() {
     }
     return;
   }
-  input.value = "";
-  if (note) {
-    note.className = "cs-note";
-    note.textContent = t("ext.catHint");
+  const current = input.value.trim();
+  if (current && /ai\s*sikhao|image\s*dobara|dobara\s*lein/i.test(current)) {
+    input.value = "";
+  }
+  if (!input.value.trim()) {
+    if (note) {
+      note.className = "cs-note";
+      note.textContent = t("ext.catHint");
+    }
   }
 }
 
@@ -792,7 +844,8 @@ async function analyzePickedImage() {
     const categoryLeaf = readMeeshoCategoryFromPage();
     const categoryPath = readMeeshoCategoryPath().join(" / ");
     const typedCategory = inputValue("cs-category");
-    const pageCategory = typedCategory || categoryPath || categoryLeaf;
+    const junkTyped = /ai\s*sikhao|image\s*dobara|dobara\s*lein/i.test(typedCategory);
+    const pageCategory = (!junkTyped && typedCategory) || categoryPath || categoryLeaf;
     if (!pageCategory) {
       const cat = document.getElementById("cs-category") as HTMLInputElement | null;
       if (cat) {
@@ -1319,8 +1372,25 @@ async function loadExtensionFeatures() {
   sellerSettings = data.settings || {};
   paintQuota();
   paintSettingsForm();
-  const cats = await sendRuntimeMessage<{ data?: Array<{ id: string; name: string; path: string }> }>({ type: "API", path: "/extension/categories" });
-  categoryOptions = cats?.data || [];
+  const cats = await sendRuntimeMessage<{ data?: CategoryOption[] }>({ type: "API", path: "/extension/categories" });
+  const remote = cats?.data || [];
+  const bundled = bundledCategories as CategoryOption[];
+  // Manage Order keeps a full Meesho catalog (~3k+). Never let a tiny API payload
+  // (old 8 fallbacks / a few templates) wipe the bundled catalog — that made "mo"
+  // show zero suggestions while the Meesho page path still looked "selected".
+  const templates = remote.filter((item) => item.source === "template" || Boolean(item.n));
+  const remoteCatalog = remote.filter((item) => item.source !== "template" && !item.n);
+  const catalog = remoteCatalog.length >= 500 ? remoteCatalog : bundled;
+  const seen = new Set<string>();
+  const merged: CategoryOption[] = [];
+  for (const item of [...templates, ...catalog]) {
+    const key = String(item.id || item.path || item.name || "").toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  categoryOptions = merged.length ? merged : bundled;
+  setCategoryCatalog(categoryOptions);
   void verifyShopLock();
 }
 
@@ -1439,22 +1509,61 @@ async function postVerifyShop(name: string) {
 
 function renderCategoryResults(query: string) {
   const box = document.getElementById("cs-cat-results");
+  const note = document.getElementById("cs-category-note");
   if (!box) return;
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    box.innerHTML = "";
+  if (!categoryCatalogSize()) {
+    box.innerHTML = `<div class="cs-cat-empty">No category list loaded yet — wait for Catalog Studio to sync.</div>`;
     return;
   }
-  const hits = categoryOptions.filter((item) => `${item.name} ${item.path}`.toLowerCase().includes(q)).slice(0, 6);
-  box.innerHTML = hits
-    .map((item) => `<button type="button" class="ghost" data-cat="${escapeHtml(item.name)}">${escapeHtml(item.path || item.name)}</button>`)
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const found = searchCategories(query);
+  const hits = found.list.slice(0, CATEGORY_SHOW_MAX);
+  // While searching, hide the Meesho auto-path note so the list looks like Manage Order.
+  if (note && (words.length || hits.length)) {
+    note.className = "cs-note";
+    note.textContent = categoryCatalogSize()
+      ? `Searching ${categoryCatalogSize()} categories — same as Manage Order.`
+      : t("ext.catHint");
+  }
+  if (!hits.length) {
+    box.innerHTML = `<div class="cs-cat-empty">Koi category match nahi hui — thoda alag word try karein.</div>`;
+    return;
+  }
+  let html = found.fuzzy
+    ? `<div class="cs-cat-more">Bilkul yahi naam nahi mila — milti-julti categories:</div>`
+    : "";
+  html += hits
+    .map((item, index) => {
+      const label = item.label || item.name;
+      const path = item.path || label;
+      const star = item.n ? "⭐ " : "";
+      const title = found.fuzzy ? escapeHtml(label) : highlightCategoryText(label, words);
+      const pathHtml = found.fuzzy ? escapeHtml(path) : highlightCategoryText(path, words);
+      return `<button type="button" role="option" class="cs-cat-it${index === 0 ? " act" : ""}" data-cat="${escapeHtml(label)}" data-path="${escapeHtml(path)}">${star}${title}<span class="cs-cat-path">${pathHtml}</span></button>`;
+    })
     .join("");
+  if (found.list.length > hits.length) {
+    html += `<div class="cs-cat-more">+ ${found.list.length - hits.length} aur category — 1-2 word aur type karein</div>`;
+  }
+  box.innerHTML = html;
   box.querySelectorAll<HTMLButtonElement>("[data-cat]").forEach((btn) => {
+    btn.addEventListener("mousedown", (event) => event.preventDefault());
     btn.addEventListener("click", () => {
       const input = document.getElementById("cs-category") as HTMLInputElement | null;
-      if (input) input.value = btn.dataset.cat || "";
-      applyCategoryDefaults(btn.dataset.cat || "");
+      const picked = btn.dataset.cat || "";
+      const shown = btn.dataset.path || picked;
+      if (input) {
+        input.value = shown;
+        input.dataset.userPicked = "1";
+        input.style.outline = "2px solid #16a34a";
+      }
+      applyCategoryDefaults(picked);
       box.innerHTML = "";
+      if (note) {
+        note.className = "cs-ok";
+        note.textContent = `Category set — ${picked}. ${shown}`;
+      }
+      setProgress(`Category set: ${shown}`);
     });
   });
 }
