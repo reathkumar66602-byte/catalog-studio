@@ -65,8 +65,8 @@ export function EmailTemplatesPage() {
         <h1 className="text-2xl font-semibold">Email templates</h1>
         <p className="mt-1 text-sm text-slate-500">
           Stored in the database. Each template can be edited here. Use placeholders such as <code>{"{{otp}}"}</code>,{" "}
-          <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code>, <code>{"{{plan}}"}</code>, <code>{"{{price}}"}</code>,{" "}
-          <code>{"{{accessUntil}}"}</code>, and <code>{"{{loginLink}}"}</code>.
+          <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code>, <code>{"{{plan}}"}</code>, <code>{"{{planDetail}}"}</code>, <code>{"{{startDate}}"}</code>,{" "}
+          <code>{"{{endDate}}"}</code>, and <code>{"{{loginLink}}"}</code>.
         </p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">

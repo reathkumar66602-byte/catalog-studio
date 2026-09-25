@@ -175,7 +175,7 @@ public class AdminWorkspaceService {
                 "MANUAL", reference, notes);
         auditService.log(actor, "SUBSCRIPTION_ACTIVATED", "USER", target.getUuid().toString(), null,
                 Map.of("plan", plan.getName(), "reference", reference));
-        sendActivationEmail(target, plan, subscription.getEndDate(), reference);
+        sendActivationEmail(target, plan, subscription.getStartDate(), subscription.getEndDate(), reference);
         return toRow(target, subscription, featureAccessService.mapFor(target));
     }
 
@@ -239,12 +239,14 @@ public class AdminWorkspaceService {
         return toRow(target, subscription, featureAccessService.mapFor(target));
     }
 
-    private void sendActivationEmail(User target, SubscriptionPlan plan, LocalDate accessUntil, String reference) {
+    private void sendActivationEmail(User target, SubscriptionPlan plan, LocalDate startDate, LocalDate endDate, String reference) {
         if (!StringUtils.hasText(target.getEmail())) {
             return;
         }
         try {
             String origin = properties.cors() == null ? "https://catalogstudio.in" : properties.cors().publicAppOrigin();
+            String start = formatDate(startDate);
+            String end = formatDate(endDate);
             Map<String, String> vars = new LinkedHashMap<>();
             vars.put("name", StringUtils.hasText(target.getName()) ? target.getName().trim() : "there");
             vars.put("username", StringUtils.hasText(target.getUsername()) ? target.getUsername().trim() : target.getName());
@@ -252,7 +254,11 @@ public class AdminWorkspaceService {
             vars.put("appName", "Catalog Studio");
             vars.put("plan", plan.getName());
             vars.put("price", formatPrice(plan.getPrice()));
-            vars.put("accessUntil", accessUntil == null ? "" : ACCESS_DATE.format(accessUntil));
+            vars.put("billingCycle", cycleLabel(plan.getBillingCycle()));
+            vars.put("planDetail", planDetail(plan));
+            vars.put("startDate", start);
+            vars.put("endDate", end);
+            vars.put("accessUntil", end);
             vars.put("reference", reference == null ? "" : reference);
             vars.put("loginLink", origin + "/login");
             boolean sent = templatedEmailService.send("plan-activated", target.getEmail().trim(), vars);
@@ -271,6 +277,49 @@ public class AdminWorkspaceService {
             return "";
         }
         return "₹" + price.stripTrailingZeros().toPlainString();
+    }
+
+    private static String formatDate(LocalDate date) {
+        return date == null ? "" : ACCESS_DATE.format(date);
+    }
+
+    private static String cycleLabel(String billingCycle) {
+        String cycle = billingCycle == null ? "MONTHLY" : billingCycle.toUpperCase(Locale.ROOT);
+        return switch (cycle) {
+            case "YEARLY", "ANNUAL" -> "year";
+            case "QUARTERLY" -> "quarter";
+            default -> "month";
+        };
+    }
+
+    private static String planDetail(SubscriptionPlan plan) {
+        StringBuilder detail = new StringBuilder();
+        detail.append(plan.getName()).append(" · ").append(formatPrice(plan.getPrice()));
+        String cycle = cycleLabel(plan.getBillingCycle());
+        if (StringUtils.hasText(cycle)) {
+            detail.append(" per ").append(cycle);
+        }
+        Map<String, Object> features = plan.getFeaturesJson() == null ? Map.of() : plan.getFeaturesJson();
+        List<String> includes = new java.util.ArrayList<>();
+        addCount(includes, features, "monthlyAiAnalyses", "autofill uses");
+        addCount(includes, features, "monthlyShootPhotos", "shoot photos");
+        addCount(includes, features, "monthlyTrendingProducts", "trending products");
+        if (!includes.isEmpty()) {
+            detail.append(". Includes ").append(String.join(", ", includes));
+        }
+        Object crop = features.get("labelCrop");
+        if (crop != null && StringUtils.hasText(crop.toString())) {
+            detail.append(". ").append(crop.toString().trim());
+        }
+        return detail.toString();
+    }
+
+    private static void addCount(List<String> includes, Map<String, Object> features, String key, String label) {
+        Object value = features.get(key);
+        if (!(value instanceof Number number) || number.longValue() <= 0) {
+            return;
+        }
+        includes.add(number.longValue() + " " + label);
     }
 
     private Subscription ensureSubscription(User target, SubscriptionPlan plan) {

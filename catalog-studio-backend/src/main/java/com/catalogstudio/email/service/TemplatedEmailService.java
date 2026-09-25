@@ -52,21 +52,21 @@ public class TemplatedEmailService {
                 html = "<p>" + text + "</p>";
             } else if ("plan-activated".equalsIgnoreCase(slug)) {
                 String name = vars.getOrDefault("name", "there");
-                String plan = vars.getOrDefault("plan", "your plan");
-                String until = vars.getOrDefault("accessUntil", "");
+                String detail = vars.getOrDefault("planDetail", vars.getOrDefault("plan", "your plan"));
+                String start = vars.getOrDefault("startDate", "");
+                String end = vars.getOrDefault("endDate", vars.getOrDefault("accessUntil", ""));
                 String link = vars.getOrDefault("loginLink", "");
                 subject = "Your Catalog Studio plan is active";
-                text = "Hi " + name + ", your " + plan + " plan is active"
-                        + (StringUtils.hasText(until) ? " until " + until : "")
-                        + ". Sign in at " + link;
+                text = "Hi " + name + ", your plan is active. Plan: " + detail
+                        + ". Start date: " + start + ". End date: " + end + ". Sign in at " + link;
                 html = "<div style=\"font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:24px;\">"
                         + "<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;\">"
                         + "<p style=\"margin:0 0 8px;color:#0f766e;font-size:12px;letter-spacing:.16em;text-transform:uppercase;\">Catalog Studio</p>"
                         + "<h1 style=\"margin:0 0 16px;font-size:22px;color:#0f172a;\">Your plan is active</h1>"
-                        + "<p style=\"margin:0 0 16px;color:#334155;line-height:1.6;\">Hi " + name
-                        + ", your <strong>" + plan + "</strong> plan is active"
-                        + (StringUtils.hasText(until) ? " until " + until : "")
-                        + ".</p>"
+                        + "<p style=\"margin:0 0 16px;color:#334155;line-height:1.6;\">Hi " + name + ", your plan is now active.</p>"
+                        + "<p style=\"margin:0 0 8px;color:#334155;line-height:1.6;\"><strong>Plan:</strong> " + detail + "</p>"
+                        + "<p style=\"margin:0 0 8px;color:#334155;line-height:1.6;\"><strong>Start date:</strong> " + start + "</p>"
+                        + "<p style=\"margin:0 0 16px;color:#334155;line-height:1.6;\"><strong>End date:</strong> " + end + "</p>"
                         + "<p style=\"margin:0 0 20px;\"><a href=\"" + link
                         + "\" style=\"display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;"
                         + "padding:12px 20px;border-radius:8px;font-weight:600;\">Open Catalog Studio</a></p>"
