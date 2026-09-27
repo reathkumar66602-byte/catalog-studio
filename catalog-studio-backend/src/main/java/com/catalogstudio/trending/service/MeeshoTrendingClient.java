@@ -30,6 +30,7 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
 
     private final ObjectMapper objectMapper;
     private final TingilyAuthService tingilyAuthService;
+    private final OpenAiMeeshoLookup openAiMeeshoLookup;
 
     @Override
     public String marketplace() {
@@ -41,40 +42,116 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         int page = Math.max(nextPage, 1);
         String slug = catalogSlug(category.key());
         int limit = tingilyAuthService.fetchLimit();
+        List<TrendingHit> collected = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        int fetchPage = page;
+        int guard = 0;
+        boolean hasNext = false;
+        Exception lastError = null;
+
+        while (collected.size() < TrendingCatalog.PAGE_SIZE && guard++ < 4) {
+            try {
+                JsonNode root = fetchCatalog(slug, limit, fetchPage);
+                List<TrendingHit> raw = parse(root, limit);
+                hasNext = root.path("meta").path("hasNext").asBoolean(false)
+                        || (root.path("data").isArray() && root.path("data").size() >= limit);
+                List<TrendingHit> matched = CategoryRelevance.filter(category.key(), raw, TrendingCatalog.PAGE_SIZE);
+                for (TrendingHit hit : matched) {
+                    String key = productKey(hit.productUrl(), hit.externalId());
+                    if (key != null && seen.add(key)) {
+                        collected.add(hit);
+                        if (collected.size() >= TrendingCatalog.PAGE_SIZE) {
+                            break;
+                        }
+                    }
+                }
+                log.info("Meesho catalog category={} slug={} page={} raw={} matched={} kept={}",
+                        category.key(), slug, fetchPage, raw.size(), matched.size(), collected.size());
+                if (!hasNext) {
+                    break;
+                }
+                fetchPage++;
+            } catch (ApiException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                lastError = ex;
+                log.warn("Meesho catalog failed category={} page={} {}",
+                        category.key(), fetchPage, ex.getClass().getSimpleName());
+                break;
+            }
+        }
+
+        if (shouldFallbackToSearch(category, collected)) {
+            List<TrendingHit> searched = searchFallback(category, page);
+            for (TrendingHit hit : searched) {
+                if (!CategoryRelevance.matches(category.key(), hit.title())) {
+                    continue;
+                }
+                String key = productKey(hit.productUrl(), hit.externalId());
+                if (key != null && seen.add(key)) {
+                    collected.add(hit);
+                    if (collected.size() >= TrendingCatalog.PAGE_SIZE) {
+                        break;
+                    }
+                }
+            }
+            log.info("Meesho search fallback category={} query={} kept={}",
+                    category.key(), category.meeshoQuery(), collected.size());
+        }
+
+        if (collected.isEmpty() && lastError != null && !CategoryRelevance.isDepartmentChild(category.key())) {
+            throw ApiException.unavailable("Meesho listings are not available for this category right now.");
+        }
+
+        List<TrendingHit> pageHits = collected.size() <= TrendingCatalog.PAGE_SIZE
+                ? collected
+                : collected.subList(0, TrendingCatalog.PAGE_SIZE);
+        return new TrendingBatch(pageHits, null, hasNext || pageHits.size() == TrendingCatalog.PAGE_SIZE
+                ? Math.max(fetchPage, page + 1)
+                : page);
+    }
+
+    private boolean shouldFallbackToSearch(TrendingCatalog.Category category, List<TrendingHit> collected) {
+        if (!CategoryRelevance.isDepartmentChild(category.key())) {
+            return false;
+        }
+        if (collected.size() >= TrendingCatalog.PAGE_SIZE / 2) {
+            return false;
+        }
+        return StringUtils.hasText(category.meeshoQuery());
+    }
+
+    private List<TrendingHit> searchFallback(TrendingCatalog.Category category, int page) {
+        try {
+            return openAiMeeshoLookup.search(category.meeshoQuery(), page);
+        } catch (ApiException ex) {
+            log.warn("Meesho OpenAI fallback unavailable category={} {}", category.key(), ex.getMessage());
+            return List.of();
+        } catch (Exception ex) {
+            log.warn("Meesho OpenAI fallback failed category={} {}", category.key(), ex.getClass().getSimpleName());
+            return List.of();
+        }
+    }
+
+    private JsonNode fetchCatalog(String slug, int limit, int page) throws Exception {
         String token = tingilyAuthService.bearerToken();
         String url = tingilyAuthService.baseUrl()
                 + "/api/products/c/" + slug + "/best-sellers?limit=" + limit + "&page=" + page;
-        try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(Duration.ofSeconds(20))
-                    .header("Accept", "application/json")
-                    .header("User-Agent", "CatalogStudio/1.0")
-                    .GET();
-            if (StringUtils.hasText(token)) {
-                builder.header("Authorization", "Bearer " + token);
-            }
-            HttpResponse<String> response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("Meesho catalog HTTP {} category={} auth={}",
-                        response.statusCode(), category.key(), StringUtils.hasText(token));
-                throw ApiException.unavailable("Meesho listings are not available for this category right now.");
-            }
-            JsonNode root = objectMapper.readTree(response.body() == null ? "{}" : response.body());
-            List<TrendingHit> hits = parse(root, TrendingCatalog.PAGE_SIZE);
-            boolean hasNext = root.path("meta").path("hasNext").asBoolean(false)
-                    || (root.path("data").isArray() && root.path("data").size() >= limit);
-            log.info("Meesho catalog category={} slug={} fetchedLimit={} products={} auth={}",
-                    category.key(), slug, limit, hits.size(), StringUtils.hasText(token));
-            return new TrendingBatch(hits, null, hasNext ? page + 1 : page);
-        } catch (ApiException ex) {
-            throw ex;
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw ApiException.unavailable("Meesho listings are not available for this category right now.");
-        } catch (Exception ex) {
-            log.warn("Meesho catalog failed category={} {}", category.key(), ex.getClass().getSimpleName());
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(20))
+                .header("Accept", "application/json")
+                .header("User-Agent", "CatalogStudio/1.0")
+                .GET();
+        if (StringUtils.hasText(token)) {
+            builder.header("Authorization", "Bearer " + token);
+        }
+        HttpResponse<String> response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            log.warn("Meesho catalog HTTP {} slug={} auth={}",
+                    response.statusCode(), slug, StringUtils.hasText(token));
             throw ApiException.unavailable("Meesho listings are not available for this category right now.");
         }
+        return objectMapper.readTree(response.body() == null ? "{}" : response.body());
     }
 
     static String catalogSlug(String categoryKey) {

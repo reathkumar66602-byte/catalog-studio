@@ -134,10 +134,10 @@ public class PaymentTransactionService {
                 : "Catalog Studio";
         String parent = StringUtils.hasText(billing.getParentCompanyName())
                 ? billing.getParentCompanyName()
-                : "Shirtaji";
+                : "Shritaji";
         String gstin = StringUtils.hasText(txn.getCompanyGstin())
                 ? txn.getCompanyGstin()
-                : billing.getCompanyGstin();
+                : (StringUtils.hasText(billing.getCompanyGstin()) ? billing.getCompanyGstin() : "19CMZPM0096H1ZA");
         String invoice = StringUtils.hasText(txn.getInvoiceNumber())
                 ? txn.getInvoiceNumber()
                 : "CS-" + txn.getId();
@@ -147,43 +147,60 @@ public class PaymentTransactionService {
                 : (nz(txn.getDiscountAmount()).signum() > 0
                 ? "<tr><td>Discount</td><td class=\"neg\">-₹" + money(txn.getDiscountAmount()) + "</td></tr>"
                 : "");
+        String serviceLine = nz(txn.getServiceCharge()).signum() > 0
+                ? "<tr><td>Service charge</td><td>₹" + money(txn.getServiceCharge()) + "</td></tr>"
+                : "";
         return """
                 <!DOCTYPE html>
                 <html lang="en">
                 <head>
                   <meta charset="utf-8"/>
-                  <title>Invoice %s</title>
+                  <title>Tax Invoice %s</title>
                   <style>
                     body{font-family:Segoe UI,Arial,sans-serif;color:#0f172a;margin:32px;background:#f8fafc}
                     .card{max-width:720px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px}
+                    .head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
                     h1{margin:0;font-size:22px} .muted{color:#64748b;font-size:13px}
+                    .tag{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:6px;background:#f1f5f9;color:#334155;font-size:11px;font-weight:600;letter-spacing:.04em}
                     table{width:100%%;border-collapse:collapse;margin-top:20px}
                     td{padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
                     td:last-child{text-align:right;font-variant-numeric:tabular-nums}
                     .neg{color:#b45309} .total{font-weight:700;font-size:16px}
                     .badge{display:inline-block;margin-top:8px;padding:4px 10px;border-radius:999px;background:#ecfdf5;color:#0f766e;font-size:12px}
+                    .foot{margin-top:28px;padding-top:16px;border-top:1px solid #e2e8f0}
                     @media print{body{margin:0;background:#fff}.card{border:none}}
                   </style>
                 </head>
                 <body>
                   <div class="card">
-                    <h1>%s</h1>
-                    <p class="muted">A %s company · Tax invoice / payment receipt</p>
-                    %s
+                    <div class="head">
+                      <div>
+                        <h1>%s</h1>
+                        <p class="muted" style="margin:6px 0 0">A product of %s</p>
+                        <span class="tag">TAX INVOICE</span>
+                      </div>
+                      <div style="text-align:right">
+                        <p class="muted" style="margin:0">GSTIN</p>
+                        <p style="margin:4px 0 0;font-weight:600;letter-spacing:.02em">%s</p>
+                      </div>
+                    </div>
                     <p class="badge">%s · %s</p>
                     <table>
-                      <tr><td>Invoice</td><td>%s</td></tr>
-                      <tr><td>Date</td><td>%s</td></tr>
+                      <tr><td>Invoice number</td><td>%s</td></tr>
+                      <tr><td>Invoice date</td><td>%s</td></tr>
                       <tr><td>Billed to</td><td>%s</td></tr>
-                      <tr><td>Plan</td><td>%s (%s)</td></tr>
-                      <tr><td>Plan amount</td><td>₹%s</td></tr>
+                      <tr><td>Description</td><td>%s (%s)</td></tr>
+                      <tr><td>Taxable value</td><td>₹%s</td></tr>
                       %s
-                      <tr><td>Service charge</td><td>₹%s</td></tr>
+                      %s
                       <tr><td>GST</td><td>₹%s</td></tr>
-                      <tr><td class="total">Total paid</td><td class="total">₹%s</td></tr>
-                      <tr><td>Reference</td><td>%s</td></tr>
+                      <tr><td class="total">Total amount</td><td class="total">₹%s</td></tr>
+                      <tr><td>Payment reference</td><td>%s</td></tr>
                     </table>
-                    <p class="muted" style="margin-top:24px">Thank you for subscribing to Catalog Studio.</p>
+                    <div class="foot">
+                      <p class="muted" style="margin:0">Issued by %s. Parent company: %s.</p>
+                      <p class="muted" style="margin:8px 0 0">This is a computer-generated tax invoice / payment receipt for Catalog Studio subscription services.</p>
+                    </div>
                   </div>
                   <script>window.onload=function(){window.print()}</script>
                 </body>
@@ -192,7 +209,7 @@ public class PaymentTransactionService {
                 esc(invoice),
                 esc(legal),
                 esc(parent),
-                StringUtils.hasText(gstin) ? "<p class=\"muted\">GSTIN: " + esc(gstin) + "</p>" : "",
+                esc(gstin),
                 esc(txn.getType().name()),
                 esc(txn.getStatus().name()),
                 esc(invoice),
@@ -202,10 +219,12 @@ public class PaymentTransactionService {
                 esc(txn.getBillingCycle() == null ? "MONTHLY" : txn.getBillingCycle()),
                 money(txn.getBaseAmount() != null ? txn.getBaseAmount() : txn.getAmount()),
                 promoLine,
-                money(txn.getServiceCharge()),
+                serviceLine,
                 money(txn.getGstAmount()),
                 money(txn.getAmount()),
-                esc(txn.getReference() == null ? "—" : txn.getReference())
+                esc(txn.getReference() == null ? "—" : txn.getReference()),
+                esc(legal),
+                esc(parent)
         );
     }
 

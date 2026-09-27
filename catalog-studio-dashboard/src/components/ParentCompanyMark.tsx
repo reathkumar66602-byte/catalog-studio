@@ -1,13 +1,25 @@
 type ParentCompanyMarkProps = {
-  /** Compact inline mark for headers; full mark for landing / footer bands. */
+  /** Compact inline mark for headers; band for landing; footer for legal line. */
   variant?: "inline" | "band" | "footer";
   className?: string;
   productName?: string;
 };
 
+function ShritajiLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const box = size === "lg" ? "h-14 w-14" : size === "sm" ? "h-8 w-8" : "h-11 w-11";
+  return (
+    <img
+      src="/shritaji-mark.svg"
+      alt=""
+      aria-hidden
+      className={`shrink-0 rounded-[14px] shadow-sm ring-1 ring-black/5 ${box}`}
+    />
+  );
+}
+
 /**
- * Corporate parent-company attribution for Shirtaji.
- * Catalog Studio stays the product brand; Shirtaji is shown as the parent entity.
+ * Parent-company attribution for Shritaji (official mark from D:\\shritaji assets).
+ * Catalog Studio stays the product brand; Shritaji is the parent entity.
  */
 export function ParentCompanyMark({
   variant = "band",
@@ -17,49 +29,61 @@ export function ParentCompanyMark({
   if (variant === "inline") {
     return (
       <p
-        className={`text-[10px] font-medium uppercase tracking-[0.22em] text-slate-400 ${className}`.trim()}
+        className={`flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400 ${className}`.trim()}
       >
-        A <span className="text-teal-700">Shirtaji</span> Company
+        <span className="h-px w-3 bg-slate-300" aria-hidden />
+        A <span className="text-[#0D5C63]">Shritaji</span> Company
       </p>
     );
   }
 
   if (variant === "footer") {
     return (
-      <p className={`text-xs text-slate-500 ${className}`.trim()}>
-        {productName} is a product of{" "}
-        <span className="font-semibold tracking-wide text-slate-700">Shirtaji</span>
-      </p>
+      <div className={`flex flex-col items-center gap-3 ${className}`.trim()}>
+        <div className="flex items-center gap-3">
+          <ShritajiLogo size="sm" />
+          <div className="text-left">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Parent Company</p>
+            <p className="text-sm font-semibold tracking-wide text-[#0D5C63]">Shritaji</p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-500">
+          {productName} is a product of <span className="font-semibold text-slate-700">Shritaji</span>
+        </p>
+      </div>
     );
   }
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-white via-teal-50/40 to-slate-50 px-6 py-8 shadow-[0_18px_40px_-28px_rgba(15,118,110,0.45)] ${className}`.trim()}
-    >
-      <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-teal-500 to-sky-500" />
-      <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-        <div className="flex items-center gap-4">
-          <span
-            aria-hidden
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-teal-200 bg-white text-sm font-bold tracking-wider text-teal-800 shadow-sm"
-          >
-            SJ
-          </span>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-teal-700/70">
-              Parent Company
-            </p>
-            <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Shirtaji</p>
-            <p className="mt-0.5 text-sm text-slate-500">
-              {productName} is proudly operated under Shirtaji.
-            </p>
+    <div className={`relative ${className}`.trim()}>
+      <div className="mb-8 flex items-center gap-4" aria-hidden>
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.35em] text-slate-400">
+          From our parent company
+        </span>
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent" />
+      </div>
+
+      <div className="relative mx-auto max-w-xl overflow-hidden rounded-[1.75rem] border border-slate-200/90 bg-white/90 px-8 py-10 text-center shadow-[0_20px_50px_-28px_rgba(15,23,42,0.35)]">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(13,92,99,0.12),transparent_55%)]"
+        />
+        <div className="relative flex flex-col items-center">
+          <div className="flex items-center gap-3">
+            <ShritajiLogo size="lg" />
+            <span className="text-3xl font-bold tracking-tight text-[#0D5C63] sm:text-4xl">Shritaji</span>
           </div>
+          <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-400">Parent Company</p>
+          <div aria-hidden className="mt-4 h-px w-16 bg-gradient-to-r from-transparent via-[#1A8A7A] to-transparent" />
+          <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-500">
+            {productName} is built and operated by Shritaji — committed to trust, fairness, and lasting product quality.
+          </p>
+          <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#0D5C63]/20 bg-[#0D5C63]/5 px-4 py-1.5 text-[11px] font-medium tracking-wide text-[#0D5C63]">
+            <ShritajiLogo size="sm" />
+            A Shritaji Company
+          </p>
         </div>
-        <div className="hidden h-10 w-px bg-teal-100 sm:block" aria-hidden />
-        <p className="max-w-xs text-xs leading-relaxed text-slate-500 sm:text-right">
-          Built to company standards for trust, fairness, and lasting product quality.
-        </p>
       </div>
     </div>
   );

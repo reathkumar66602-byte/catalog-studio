@@ -80,7 +80,7 @@ public class BillingSettingsService {
         if (request.parentCompanyName() != null) {
             settings.setParentCompanyName(StringUtils.hasText(request.parentCompanyName())
                     ? request.parentCompanyName().trim()
-                    : "Shirtaji");
+                    : "Shritaji");
         }
         if (request.gstPercent() != null) {
             settings.setGstPercent(request.gstPercent().max(BigDecimal.ZERO));
@@ -137,7 +137,8 @@ public class BillingSettingsService {
                 .qrImageUrl(DEFAULT_SCANNER)
                 .paymentProvider("MANUAL")
                 .companyLegalName("Catalog Studio")
-                .parentCompanyName("Shirtaji")
+                .companyGstin("19CMZPM0096H1ZA")
+                .parentCompanyName("Shritaji")
                 .serviceChargePercent(BigDecimal.ZERO)
                 .gstPercent(new BigDecimal("18"))
                 .build());

@@ -36,7 +36,8 @@ class PricingServiceTest {
                 .gstPercent(new BigDecimal("18"))
                 .companyLegalName("Catalog Studio")
                 .companyGstin("")
-                .parentCompanyName("Shirtaji")
+                .parentCompanyName("Shritaji")
+                .companyGstin("19CMZPM0096H1ZA")
                 .build();
         when(billingSettingsService.current()).thenReturn(billing);
     }

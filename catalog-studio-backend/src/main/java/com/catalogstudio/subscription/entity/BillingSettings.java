@@ -79,11 +79,11 @@ public class BillingSettings {
 
     @Builder.Default
     @Column(name = "company_gstin", nullable = false, length = 20)
-    private String companyGstin = "";
+    private String companyGstin = "19CMZPM0096H1ZA";
 
     @Builder.Default
     @Column(name = "parent_company_name", nullable = false, length = 120)
-    private String parentCompanyName = "Shirtaji";
+    private String parentCompanyName = "Shritaji";
 
     @Builder.Default
     @Column(name = "service_charge_percent", nullable = false, precision = 6, scale = 2)
@@ -153,11 +153,12 @@ public class BillingSettings {
         if (companyLegalName == null || companyLegalName.isBlank()) {
             companyLegalName = "Catalog Studio";
         }
-        if (companyGstin == null) {
-            companyGstin = "";
+        if (companyGstin == null || companyGstin.isBlank()) {
+            companyGstin = "19CMZPM0096H1ZA";
         }
-        if (parentCompanyName == null || parentCompanyName.isBlank()) {
-            parentCompanyName = "Shirtaji";
+        if (parentCompanyName == null || parentCompanyName.isBlank()
+                || "shirtaji".equalsIgnoreCase(parentCompanyName.trim())) {
+            parentCompanyName = "Shritaji";
         }
         if (serviceChargePercent == null || serviceChargePercent.signum() < 0) {
             serviceChargePercent = BigDecimal.ZERO;

@@ -74,8 +74,8 @@ export function BillingAdminPage() {
       rechargeHeadline: String(f.get("rechargeHeadline") || ""),
       rechargeBody: String(f.get("rechargeBody") || ""),
       companyLegalName: String(f.get("companyLegalName") || "Catalog Studio"),
-      companyGstin: String(f.get("companyGstin") || ""),
-      parentCompanyName: String(f.get("parentCompanyName") || "Shirtaji"),
+      companyGstin: String(f.get("companyGstin") || "19CMZPM0096H1ZA"),
+      parentCompanyName: String(f.get("parentCompanyName") || "Shritaji"),
       gstPercent: Number(f.get("gstPercent") || 18),
       serviceChargePercent: Number(f.get("serviceChargePercent") || 0),
     });
@@ -155,15 +155,15 @@ export function BillingAdminPage() {
             </label>
             <label className="block text-sm font-medium">
               Parent company
-              <input name="parentCompanyName" defaultValue={data.parentCompanyName || "Shirtaji"} className="mt-1 w-full rounded-xl border px-3 py-2" />
+              <input name="parentCompanyName" defaultValue={data.parentCompanyName || "Shritaji"} className="mt-1 w-full rounded-xl border px-3 py-2" />
             </label>
             <label className="block text-sm font-medium">
               Company GSTIN
               <input
                 name="companyGstin"
-                defaultValue={data.companyGstin || ""}
+                defaultValue={data.companyGstin || "19CMZPM0096H1ZA"}
                 className="mt-1 w-full rounded-xl border px-3 py-2 uppercase"
-                placeholder="Enter your 15-digit GSTIN"
+                placeholder="19CMZPM0096H1ZA"
               />
             </label>
             <label className="block text-sm font-medium">

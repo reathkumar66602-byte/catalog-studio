@@ -59,7 +59,7 @@ public class TrendingService {
         List<UserTrendingProduct> saved = snapshotStore.saved(userId, market, category.key());
         if (!saved.isEmpty()
                 && (requestedPage == null || saved.get(0).getPageIndex() == requestedPage)
-                && !refreshSaved(market, saved)) {
+                && !refreshSaved(market, category.key(), saved)) {
             return fromSaved(market, category, saved, true);
         }
         int page = requestedPage == null ? 0 : requestedPage;
@@ -152,12 +152,18 @@ public class TrendingService {
         return false;
     }
 
-    private static boolean refreshSaved(String marketplace, List<UserTrendingProduct> rows) {
+    private static boolean refreshSaved(
+            String marketplace,
+            String categoryKey,
+            List<UserTrendingProduct> rows
+    ) {
         if (!"MEESHO".equals(marketplace)) {
             return false;
         }
         Set<String> images = new HashSet<>();
+        List<String> titles = new ArrayList<>();
         for (UserTrendingProduct row : rows) {
+            titles.add(row.getTitle());
             if (!OpenAiMeeshoLookup.usableCard(row.getTitle(), row.getImageUrl())) {
                 return true;
             }
@@ -165,7 +171,7 @@ public class TrendingService {
                 return true;
             }
         }
-        return false;
+        return CategoryRelevance.mostlyMismatched(categoryKey, titles);
     }
 
     private static boolean meeshoPageUnusable(List<TrendingFeedItem> items, int page) {
