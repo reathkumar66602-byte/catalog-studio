@@ -18,5 +18,6 @@ public record PaymentCheckoutResponse(
         String whatsappUrl,
         String whatsappMessage,
         String notice,
-        String instructions
+        String instructions,
+        PriceBreakdown pricing
 ) {}

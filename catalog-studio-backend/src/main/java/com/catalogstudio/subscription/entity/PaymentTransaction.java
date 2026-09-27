@@ -76,6 +76,30 @@ public class PaymentTransaction {
     @Column(length = 500)
     private String notes;
 
+    @Column(name = "base_amount", precision = 10, scale = 2)
+    private BigDecimal baseAmount;
+
+    @Builder.Default
+    @Column(name = "service_charge", nullable = false, precision = 10, scale = 2)
+    private BigDecimal serviceCharge = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "gst_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal gstAmount = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "discount_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(name = "promo_code", length = 40)
+    private String promoCode;
+
+    @Column(name = "company_gstin", length = 20)
+    private String companyGstin;
+
+    @Column(name = "invoice_number", length = 40)
+    private String invoiceNumber;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -93,6 +117,18 @@ public class PaymentTransaction {
         }
         if (amount == null) {
             amount = BigDecimal.ZERO;
+        }
+        if (baseAmount == null) {
+            baseAmount = amount;
+        }
+        if (serviceCharge == null) {
+            serviceCharge = BigDecimal.ZERO;
+        }
+        if (gstAmount == null) {
+            gstAmount = BigDecimal.ZERO;
+        }
+        if (discountAmount == null) {
+            discountAmount = BigDecimal.ZERO;
         }
         createdAt = now;
         updatedAt = now;

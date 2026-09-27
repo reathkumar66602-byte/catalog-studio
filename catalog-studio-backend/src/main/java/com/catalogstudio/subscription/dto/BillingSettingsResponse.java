@@ -1,5 +1,7 @@
 package com.catalogstudio.subscription.dto;
 
+import java.math.BigDecimal;
+
 public record BillingSettingsResponse(
         int trialDays,
         String trialPlan,
@@ -11,5 +13,10 @@ public record BillingSettingsResponse(
         String paymentProvider,
         String paymentInstructions,
         String rechargeHeadline,
-        String rechargeBody
+        String rechargeBody,
+        String companyLegalName,
+        String companyGstin,
+        String parentCompanyName,
+        BigDecimal serviceChargePercent,
+        BigDecimal gstPercent
 ) {}

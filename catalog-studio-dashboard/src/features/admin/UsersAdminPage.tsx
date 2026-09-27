@@ -114,7 +114,7 @@ export function UsersAdminPage() {
       {message && <p className="text-sm text-teal-800">{message}</p>}
       {action.isError && <p className="text-sm text-red-600">{apiErrorMessage(action.error)}</p>}
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1100px] text-left text-sm">
+        <table className="w-full min-w-[1240px] text-left text-sm">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
               <th className="p-3">
@@ -129,6 +129,7 @@ export function UsersAdminPage() {
                 <SortHeader label="Status" field="status" sort={sort} onSort={(next) => { setSort(next); setPage(0); }} />
               </th>
               <th>Access</th>
+              <th>Checkout / promo</th>
               <th>WhatsApp ref</th>
               <th>Action</th>
             </tr>
@@ -136,17 +137,17 @@ export function UsersAdminPage() {
           <tbody>
             {list.isLoading && (
               <tr>
-                <td className="p-6 text-slate-500" colSpan={8}>Loading users...</td>
+                <td className="p-6 text-slate-500" colSpan={9}>Loading users...</td>
               </tr>
             )}
             {list.isError && (
               <tr>
-                <td className="p-6 text-red-600" colSpan={8}>{apiErrorMessage(list.error, "Could not load users")}</td>
+                <td className="p-6 text-red-600" colSpan={9}>{apiErrorMessage(list.error, "Could not load users")}</td>
               </tr>
             )}
             {!list.isLoading && !list.isError && rows.length === 0 && (
               <tr>
-                <td className="p-6 text-slate-500" colSpan={8}>No sellers match this search.</td>
+                <td className="p-6 text-slate-500" colSpan={9}>No sellers match this search.</td>
               </tr>
             )}
             {rows.map((row) => {
@@ -178,6 +179,9 @@ export function UsersAdminPage() {
                   <td className="p-3">{row.status}</td>
                   <td className="p-3">
                     <StatusBadge entitled={row.accessEntitled} status={row.planStatus} />
+                  </td>
+                  <td className="p-3">
+                    <CheckoutPromoCell row={row} />
                   </td>
                   <td className="p-3">
                     <input
@@ -254,6 +258,36 @@ function planHint(row: AdminUserRow) {
   return `Current ${plan} · access ended ${row.subscriptionEndDate}`;
 }
 
+function CheckoutPromoCell({ row }: { row: AdminUserRow }) {
+  if (!row.pendingPlan && !row.pendingTotalAmount && !row.promoApplied) {
+    return <span className="text-slate-400">—</span>;
+  }
+  return (
+    <div className="max-w-[200px] space-y-1 text-xs">
+      {row.pendingPlan && (
+        <p>
+          Pending <span className="font-semibold">{row.pendingPlan}</span>
+        </p>
+      )}
+      {row.promoApplied ? (
+        <p className="rounded-md bg-amber-50 px-1.5 py-0.5 font-medium text-amber-900">
+          Promo {row.pendingPromoCode}
+          {Number(row.pendingDiscountAmount) > 0
+            ? ` · −₹${Number(row.pendingDiscountAmount).toLocaleString("en-IN")}`
+            : ""}
+        </p>
+      ) : (
+        <p className="text-slate-500">No promo</p>
+      )}
+      {row.pendingTotalAmount != null && (
+        <p className="text-slate-600">
+          Pay ₹{Number(row.pendingTotalAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function dialogCopy(pending: PendingAction | null) {
   if (!pending) return null;
   const { row, action, plan } = pending;
@@ -265,6 +299,9 @@ function dialogCopy(pending: PendingAction | null) {
       infoOnly: false,
       body: [
         `Confirm that ${row.email} sent the UPI screenshot on WhatsApp.`,
+        row.promoApplied
+          ? `Promo applied: ${row.pendingPromoCode}. Discount ₹${Number(row.pendingDiscountAmount || 0).toLocaleString("en-IN")} · payable ₹${Number(row.pendingTotalAmount || 0).toLocaleString("en-IN")}.`
+          : "No promo code on this checkout.",
         `Catalog Studio will set the plan to ${plan}, unlock the workspace for one billing period, and add a paid entry to Transactions.`,
       ],
     };

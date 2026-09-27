@@ -14,6 +14,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -63,6 +64,24 @@ public class Subscription {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pending_plan_id")
     private SubscriptionPlan pendingPlan;
+
+    @Column(name = "pending_promo_code", length = 40)
+    private String pendingPromoCode;
+
+    @Column(name = "pending_base_amount", precision = 10, scale = 2)
+    private BigDecimal pendingBaseAmount;
+
+    @Column(name = "pending_discount_amount", precision = 10, scale = 2)
+    private BigDecimal pendingDiscountAmount;
+
+    @Column(name = "pending_service_charge", precision = 10, scale = 2)
+    private BigDecimal pendingServiceCharge;
+
+    @Column(name = "pending_gst_amount", precision = 10, scale = 2)
+    private BigDecimal pendingGstAmount;
+
+    @Column(name = "pending_total_amount", precision = 10, scale = 2)
+    private BigDecimal pendingTotalAmount;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

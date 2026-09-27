@@ -5,6 +5,7 @@ import com.catalogstudio.subscription.dto.BillingSettingsRequest;
 import com.catalogstudio.subscription.dto.BillingSettingsResponse;
 import com.catalogstudio.subscription.entity.BillingSettings;
 import com.catalogstudio.subscription.repository.BillingSettingsRepository;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +32,7 @@ public class BillingSettingsService {
     }
 
     @Transactional
-    public BillingSettingsResponse update(BillingSettingsRequest request) {
+    public BillingSettingsResponse update(BillingSettingsRequest request, boolean allowServiceChargeEdit) {
         BillingSettings settings = current();
         if (request.trialDays() != null) {
             settings.setTrialDays(Math.max(request.trialDays(), 0));
@@ -67,6 +68,25 @@ public class BillingSettingsService {
         }
         if (StringUtils.hasText(request.rechargeBody())) {
             settings.setRechargeBody(request.rechargeBody().trim());
+        }
+        if (request.companyLegalName() != null) {
+            settings.setCompanyLegalName(StringUtils.hasText(request.companyLegalName())
+                    ? request.companyLegalName().trim()
+                    : "Catalog Studio");
+        }
+        if (request.companyGstin() != null) {
+            settings.setCompanyGstin(request.companyGstin().trim().toUpperCase());
+        }
+        if (request.parentCompanyName() != null) {
+            settings.setParentCompanyName(StringUtils.hasText(request.parentCompanyName())
+                    ? request.parentCompanyName().trim()
+                    : "Shirtaji");
+        }
+        if (request.gstPercent() != null) {
+            settings.setGstPercent(request.gstPercent().max(BigDecimal.ZERO));
+        }
+        if (allowServiceChargeEdit && request.serviceChargePercent() != null) {
+            settings.setServiceChargePercent(request.serviceChargePercent().max(BigDecimal.ZERO));
         }
         if (StringUtils.hasText(fromProperty())) {
             settings.setWhatsappNumber(fromProperty());
@@ -116,6 +136,10 @@ public class BillingSettingsService {
                 .payeeName("VISHAL KUMAR MISHRA")
                 .qrImageUrl(DEFAULT_SCANNER)
                 .paymentProvider("MANUAL")
+                .companyLegalName("Catalog Studio")
+                .parentCompanyName("Shirtaji")
+                .serviceChargePercent(BigDecimal.ZERO)
+                .gstPercent(new BigDecimal("18"))
                 .build());
     }
 
@@ -140,7 +164,12 @@ public class BillingSettingsService {
                 settings.getPaymentProvider(),
                 settings.getPaymentInstructions(),
                 settings.getRechargeHeadline(),
-                settings.getRechargeBody()
+                settings.getRechargeBody(),
+                settings.getCompanyLegalName(),
+                settings.getCompanyGstin(),
+                settings.getParentCompanyName(),
+                settings.getServiceChargePercent() == null ? BigDecimal.ZERO : settings.getServiceChargePercent(),
+                settings.getGstPercent() == null ? new BigDecimal("18") : settings.getGstPercent()
         );
     }
 }

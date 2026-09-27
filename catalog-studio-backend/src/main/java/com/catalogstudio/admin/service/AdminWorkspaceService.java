@@ -11,6 +11,7 @@ import com.catalogstudio.config.CatalogStudioProperties;
 import com.catalogstudio.email.service.TemplatedEmailService;
 import com.catalogstudio.security.Roles;
 import com.catalogstudio.security.SecurityUtils;
+import com.catalogstudio.subscription.dto.PriceBreakdown;
 import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionStatus;
 import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionType;
 import com.catalogstudio.subscription.entity.Subscription;
@@ -19,6 +20,7 @@ import com.catalogstudio.subscription.entity.SubscriptionPlan;
 import com.catalogstudio.subscription.repository.SubscriptionPlanRepository;
 import com.catalogstudio.subscription.repository.SubscriptionRepository;
 import com.catalogstudio.subscription.service.PaymentTransactionService;
+import com.catalogstudio.subscription.service.PricingService;
 import com.catalogstudio.subscription.service.SubscriptionAccessService;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
@@ -59,6 +61,7 @@ public class AdminWorkspaceService {
     private final SubscriptionPlanRepository planRepository;
     private final SubscriptionAccessService subscriptionAccessService;
     private final PaymentTransactionService paymentTransactionService;
+    private final PricingService pricingService;
     private final FeatureAccessService featureAccessService;
     private final AuditService auditService;
     private final TemplatedEmailService templatedEmailService;
@@ -158,23 +161,56 @@ public class AdminWorkspaceService {
     private AdminUserRow activate(User actor, User target, AdminSubscriptionActionRequest request) {
         SubscriptionPlan plan = requirePlan(request.planName());
         Subscription subscription = ensureSubscription(target, plan);
+        PriceBreakdown pricing = subscriptionAccessService.pendingBreakdown(subscription);
+        if (pricing == null) {
+            try {
+                pricing = pricingService.quote(plan, subscription.getPendingPromoCode());
+            } catch (Exception ex) {
+                pricing = new PriceBreakdown(
+                        plan.getPrice() == null ? BigDecimal.ZERO : plan.getPrice(),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        plan.getPrice() == null ? BigDecimal.ZERO : plan.getPrice(),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        subscription.getPendingPromoCode(),
+                        null,
+                        null,
+                        null,
+                        null
+                );
+            }
+        }
         LocalDate start = LocalDate.now();
         subscription.setPlan(plan);
         subscription.setPendingPlan(null);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setStartDate(start);
         subscription.setEndDate(endDateFor(plan, start));
+        String promoNote = StringUtils.hasText(pricing.promoCode())
+                ? " · promo " + pricing.promoCode() + " applied (−₹" + pricing.discountAmount() + ")"
+                : " · no promo code";
         String notes = StringUtils.hasText(request.notes())
                 ? request.notes().trim()
-                : "Activated after WhatsApp payment confirmation";
+                : "Activated after WhatsApp payment confirmation" + promoNote;
         String reference = StringUtils.hasText(request.reference())
                 ? request.reference().trim()
                 : "whatsapp:" + target.getEmail();
         paymentTransactionService.record(
                 target, plan, TransactionType.ACTIVATION, TransactionStatus.SUCCESS,
-                "MANUAL", reference, notes);
-        auditService.log(actor, "SUBSCRIPTION_ACTIVATED", "USER", target.getUuid().toString(), null,
-                Map.of("plan", plan.getName(), "reference", reference));
+                "MANUAL", reference, notes, pricing);
+        if (StringUtils.hasText(pricing.promoCode())) {
+            pricingService.consumePromo(pricing.promoCode());
+        }
+        subscriptionAccessService.clearPendingAfterActivation(subscription);
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("plan", plan.getName());
+        audit.put("reference", reference);
+        audit.put("promoCode", pricing.promoCode() == null ? "" : pricing.promoCode());
+        audit.put("promoApplied", StringUtils.hasText(pricing.promoCode()));
+        audit.put("totalAmount", pricing.totalAmount() == null ? "" : pricing.totalAmount().toPlainString());
+        auditService.log(actor, "SUBSCRIPTION_ACTIVATED", "USER", target.getUuid().toString(), null, audit);
         sendActivationEmail(target, plan, subscription.getStartDate(), subscription.getEndDate(), reference);
         return toRow(target, subscription, featureAccessService.mapFor(target));
     }
@@ -193,6 +229,7 @@ public class AdminWorkspaceService {
         subscription.setPendingPlan(null);
         subscription.setStatus(SubscriptionStatus.EXPIRED);
         subscription.setEndDate(LocalDate.now().minusDays(1));
+        subscriptionAccessService.clearPendingAfterActivation(subscription);
         String notes = StringUtils.hasText(request.notes())
                 ? request.notes().trim()
                 : "Subscription deactivated by admin";
@@ -368,6 +405,10 @@ public class AdminWorkspaceService {
 
     private AdminUserRow toRow(User user, Subscription subscription, Map<String, Boolean> features) {
         var access = subscriptionAccessService.statusOf(user);
+        String pendingPlan = subscription == null || subscription.getPendingPlan() == null
+                ? null
+                : subscription.getPendingPlan().getName();
+        String pendingPromo = subscription == null ? null : subscription.getPendingPromoCode();
         return new AdminUserRow(
                 user.getUuid(),
                 user.getName(),
@@ -383,7 +424,15 @@ public class AdminWorkspaceService {
                 access.startDate(),
                 access.endDate(),
                 user.getCreatedAt(),
-                features
+                features,
+                pendingPlan,
+                pendingPromo,
+                StringUtils.hasText(pendingPromo),
+                subscription == null ? null : subscription.getPendingBaseAmount(),
+                subscription == null ? null : subscription.getPendingDiscountAmount(),
+                subscription == null ? null : subscription.getPendingServiceCharge(),
+                subscription == null ? null : subscription.getPendingGstAmount(),
+                subscription == null ? null : subscription.getPendingTotalAmount()
         );
     }
 

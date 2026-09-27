@@ -28,6 +28,11 @@ services:
       ZEPTOMAIL_API_URL: ${ZEPTOMAIL_API_URL:-https://api.zeptomail.in/v1.1/email}
       ZEPTOMAIL_SEND_TOKEN: ${ZEPTOMAIL_SEND_TOKEN:-}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      TINGILY_BASE_URL: ${TINGILY_BASE_URL:-https://engine1.tingily.com}
+      TINGILY_EMAIL: ${TINGILY_EMAIL:-}
+      TINGILY_PASSWORD: ${TINGILY_PASSWORD:-}
+      TINGILY_TOKEN: ${TINGILY_TOKEN:-}
+      TINGILY_FETCH_LIMIT: ${TINGILY_FETCH_LIMIT:-40}
       LOG_DIR: /var/catalog-studio/logs
     volumes:
       - catalog_studio_logs:/var/catalog-studio/logs

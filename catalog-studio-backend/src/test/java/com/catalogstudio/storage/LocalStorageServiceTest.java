@@ -22,7 +22,8 @@ class LocalStorageServiceTest {
                     "https://api.zeptomail.in/v1.1/email", "", ""),
             new CatalogStudioProperties.Otp(false, 6, 10, 5, 60, true),
             new CatalogStudioProperties.Google(""),
-            new CatalogStudioProperties.Billing("919560111849")
+            new CatalogStudioProperties.Billing("919560111849"),
+            new CatalogStudioProperties.Tingily("https://engine1.tingily.com", "", "", "", 40)
     ));
 
     @Test

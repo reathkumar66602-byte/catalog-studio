@@ -16,19 +16,20 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class MeeshoTrendingClient implements TrendingMarketplaceClient {
 
-    private static final String CATALOG = "https://engine1.tingily.com/api/products/c/%s/best-sellers?limit=%d&page=%d";
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(8))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
     private final ObjectMapper objectMapper;
+    private final TingilyAuthService tingilyAuthService;
 
     @Override
     public String marketplace() {
@@ -39,23 +40,31 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
     public TrendingBatch nextBatch(TrendingCatalog.Category category, String cursor, int nextPage) {
         int page = Math.max(nextPage, 1);
         String slug = catalogSlug(category.key());
-        String url = CATALOG.formatted(slug, TrendingCatalog.PAGE_SIZE, page);
+        int limit = tingilyAuthService.fetchLimit();
+        String token = tingilyAuthService.bearerToken();
+        String url = tingilyAuthService.baseUrl()
+                + "/api/products/c/" + slug + "/best-sellers?limit=" + limit + "&page=" + page;
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                     .timeout(Duration.ofSeconds(20))
                     .header("Accept", "application/json")
-                    .header("User-Agent", "Mozilla/5.0")
-                    .GET()
-                    .build();
-            HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+                    .header("User-Agent", "CatalogStudio/1.0")
+                    .GET();
+            if (StringUtils.hasText(token)) {
+                builder.header("Authorization", "Bearer " + token);
+            }
+            HttpResponse<String> response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("Meesho catalog HTTP {} category={}", response.statusCode(), category.key());
+                log.warn("Meesho catalog HTTP {} category={} auth={}",
+                        response.statusCode(), category.key(), StringUtils.hasText(token));
                 throw ApiException.unavailable("Meesho listings are not available for this category right now.");
             }
             JsonNode root = objectMapper.readTree(response.body() == null ? "{}" : response.body());
-            List<TrendingHit> hits = parse(root);
-            boolean hasNext = root.path("meta").path("hasNext").asBoolean(false);
-            log.info("Meesho catalog category={} slug={} products={}", category.key(), slug, hits.size());
+            List<TrendingHit> hits = parse(root, TrendingCatalog.PAGE_SIZE);
+            boolean hasNext = root.path("meta").path("hasNext").asBoolean(false)
+                    || (root.path("data").isArray() && root.path("data").size() >= limit);
+            log.info("Meesho catalog category={} slug={} fetchedLimit={} products={} auth={}",
+                    category.key(), slug, limit, hits.size(), StringUtils.hasText(token));
             return new TrendingBatch(hits, null, hasNext ? page + 1 : page);
         } catch (ApiException ex) {
             throw ex;
@@ -79,10 +88,15 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         return categoryKey;
     }
 
-    static List<TrendingHit> parse(JsonNode root) {
-        List<TrendingHit> hits = new ArrayList<>();
+    static List<TrendingHit> parse(JsonNode root, int max) {
+        List<TrendingHit> preferred = new ArrayList<>();
+        List<TrendingHit> fallback = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (JsonNode item : root.path("data")) {
+        JsonNode data = root.path("data");
+        if (!data.isArray()) {
+            data = root.path("products");
+        }
+        for (JsonNode item : data) {
             TrendingHit hit = hit(item);
             if (hit == null) {
                 continue;
@@ -91,20 +105,40 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
             if (!seen.add(key)) {
                 continue;
             }
-            hits.add(hit);
-            if (hits.size() == TrendingCatalog.PAGE_SIZE) {
+            if (OpenAiMeeshoLookup.usableCard(hit.title(), hit.imageUrl())) {
+                preferred.add(hit);
+            } else {
+                fallback.add(hit);
+            }
+            if (preferred.size() >= max) {
                 break;
             }
         }
-        return hits;
+        if (preferred.size() >= max) {
+            return preferred.subList(0, max);
+        }
+        List<TrendingHit> merged = new ArrayList<>(preferred);
+        for (TrendingHit hit : fallback) {
+            merged.add(hit);
+            if (merged.size() >= max) {
+                break;
+            }
+        }
+        return merged;
     }
 
     private static TrendingHit hit(JsonNode item) {
         String link = text(item, "link");
+        if (link == null) {
+            link = text(item, "url");
+        }
         if (link == null || !link.contains("meesho.com")) {
             return null;
         }
         String title = text(item, "title");
+        if (title == null) {
+            title = text(item, "name");
+        }
         if (title == null || title.toLowerCase(Locale.ROOT).contains("buy premium")) {
             return null;
         }
@@ -134,6 +168,9 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
 
     private static String preferredImage(JsonNode item) {
         String image = text(item, "image");
+        if (image == null) {
+            image = text(item, "image_url");
+        }
         if (image == null || !image.startsWith("https://")) {
             return null;
         }
@@ -184,6 +221,9 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         JsonNode node = item.path(field);
         if (node.isMissingNode() || node.isNull()) {
             return null;
+        }
+        if (node.isNumber()) {
+            return node.asText();
         }
         String value = node.asText("").trim();
         return value.isEmpty() ? null : value;

@@ -2,10 +2,14 @@ package com.catalogstudio.subscription.controller;
 
 import com.catalogstudio.common.api.ApiResponse;
 import com.catalogstudio.security.SecurityUtils;
+import com.catalogstudio.subscription.dto.BillingPromoCodeResponse;
+import com.catalogstudio.subscription.dto.CheckoutRequest;
 import com.catalogstudio.subscription.dto.PaymentCheckoutResponse;
+import com.catalogstudio.subscription.dto.PriceBreakdown;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.entity.SubscriptionPlan;
 import com.catalogstudio.subscription.repository.SubscriptionPlanRepository;
+import com.catalogstudio.subscription.service.BillingPromoService;
 import com.catalogstudio.subscription.service.SubscriptionAccessService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.LinkedHashMap;
@@ -15,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,6 +31,7 @@ public class SubscriptionController {
 
     private final SubscriptionPlanRepository planRepository;
     private final SubscriptionAccessService accessService;
+    private final BillingPromoService billingPromoService;
 
     @GetMapping("/plans")
     public ApiResponse<List<Map<String, Object>>> plans() {
@@ -34,14 +40,32 @@ public class SubscriptionController {
                 .toList());
     }
 
+    @GetMapping("/promos")
+    public ApiResponse<List<BillingPromoCodeResponse>> promos() {
+        return ApiResponse.ok(billingPromoService.listActiveForCheckout());
+    }
+
     @GetMapping("/current")
     public ApiResponse<SubscriptionStatusResponse> current() {
         return ApiResponse.ok(accessService.statusOf(SecurityUtils.currentUserId()));
     }
 
+    @PostMapping("/plans/{name}/quote")
+    public ApiResponse<PriceBreakdown> quote(
+            @PathVariable String name,
+            @RequestBody(required = false) CheckoutRequest request
+    ) {
+        String promo = request == null ? null : request.promoCode();
+        return ApiResponse.ok(accessService.quote(SecurityUtils.currentUserId(), name, promo));
+    }
+
     @PostMapping("/plans/{name}/checkout")
-    public ApiResponse<PaymentCheckoutResponse> checkout(@PathVariable String name) {
-        return ApiResponse.ok(accessService.checkout(SecurityUtils.currentUserId(), name));
+    public ApiResponse<PaymentCheckoutResponse> checkout(
+            @PathVariable String name,
+            @RequestBody(required = false) CheckoutRequest request
+    ) {
+        String promo = request == null ? null : request.promoCode();
+        return ApiResponse.ok(accessService.checkout(SecurityUtils.currentUserId(), name, promo));
     }
 
     @PostMapping("/plans/{name}/payment-sent")

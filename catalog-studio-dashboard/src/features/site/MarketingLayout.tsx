@@ -4,6 +4,7 @@ import { useAuth } from "../../store/auth";
 import { useSite } from "./useSite";
 import { useI18n } from "../../i18n/LanguageProvider";
 import { LanguageSelect } from "../../i18n/LanguageSelect";
+import { ParentCompanyMark } from "../../components/ParentCompanyMark";
 
 export function MarketingLayout() {
   const site = useSite();
@@ -20,9 +21,12 @@ export function MarketingLayout() {
     <div className="min-h-screen bg-white text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-100 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 text-lg font-semibold text-sky-800">
-            <img src={logo} alt="" className="h-9 w-9 rounded-xl" />
-            {name}
+          <Link to="/" className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-2 text-lg font-semibold text-sky-800">
+              <img src={logo} alt="" className="h-9 w-9 rounded-xl" />
+              {name}
+            </span>
+            <ParentCompanyMark variant="inline" className="pl-11" />
           </Link>
           <nav className="flex items-center gap-2 sm:gap-3">
             <LanguageSelect compact />
@@ -49,6 +53,7 @@ export function MarketingLayout() {
           <div>
             <p className="font-semibold">{name}</p>
             <p className="mt-2 text-sm text-slate-600">{t("land.footer")}</p>
+            <ParentCompanyMark variant="footer" productName={name} className="mt-3" />
           </div>
           <div className="text-sm">
             <p className="font-semibold">{t("marketing.support")}</p>

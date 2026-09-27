@@ -2,9 +2,12 @@ package com.catalogstudio.subscription.service;
 
 import com.catalogstudio.common.exception.ApiException;
 import com.catalogstudio.subscription.dto.PaymentCheckoutResponse;
+import com.catalogstudio.subscription.dto.PriceBreakdown;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse.PaymentNotice;
 import com.catalogstudio.subscription.entity.BillingSettings;
+import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionStatus;
+import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionType;
 import com.catalogstudio.subscription.entity.Subscription;
 import com.catalogstudio.subscription.entity.Subscription.SubscriptionStatus;
 import com.catalogstudio.subscription.entity.SubscriptionPlan;
@@ -35,6 +38,8 @@ public class SubscriptionAccessService {
     private final SubscriptionPlanRepository planRepository;
     private final BillingSettingsService billingSettingsService;
     private final PaymentGatewayService paymentGatewayService;
+    private final PricingService pricingService;
+    private final PaymentTransactionService paymentTransactionService;
 
     @Transactional
     public void ensureTrialOnLogin(User user) {
@@ -105,32 +110,49 @@ public class SubscriptionAccessService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public PriceBreakdown quote(Long userId, String planName, String promoCode) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.unauthorized("Unauthorized"));
+        return pricingService.quote(purchasablePlan(planName), promoCode);
+    }
+
     @Transactional
-    public PaymentCheckoutResponse checkout(Long userId, String planName) {
+    public PaymentCheckoutResponse checkout(Long userId, String planName, String promoCode) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.unauthorized("Unauthorized"));
         SubscriptionPlan plan = purchasablePlan(planName);
         BillingSettings billing = billingSettingsService.current();
+        PriceBreakdown pricing = pricingService.quote(plan, promoCode);
         Subscription subscription = latest(userId);
         if (subscription != null) {
             subscription.setPendingPlan(plan);
+            applyPendingPricing(subscription, pricing);
             if (!statusOf(user).accessEntitled()) {
                 subscription.setStatus(SubscriptionStatus.PAYMENT_PENDING);
             }
         }
         PaymentProvider.CheckoutSession session = paymentGatewayService.checkout(userId, plan.getName());
-        String message = renderMessage(billing.getWhatsappMessageTemplate(), user.getEmail(), plan, billing);
+        String amountText = pricing.totalAmount().stripTrailingZeros().toPlainString();
+        String message = renderMessage(billing.getWhatsappMessageTemplate(), user.getEmail(), plan, billing, amountText, pricing.promoCode());
         String digits = billingSettingsService.resolvedWhatsappNumber(billing);
         String whatsappUrl = "https://wa.me/" + digits + "?text=" + URLEncoder.encode(message, StandardCharsets.UTF_8);
         String scannerUrl = billingSettingsService.scannerImageUrl(billing);
         String notice = "Send the payment screenshot on WhatsApp and mention your registered email ID ("
                 + user.getEmail() + "). We activate the account only after this confirmation.";
+        paymentTransactionService.record(
+                user, plan, TransactionType.CHECKOUT, TransactionStatus.PENDING,
+                session.provider(), session.sessionId(),
+                pricing.promoCode() == null
+                        ? "Checkout started"
+                        : "Checkout started with promo " + pricing.promoCode(),
+                pricing);
         return new PaymentCheckoutResponse(
                 session.provider(),
                 session.checkoutUrl(),
                 session.sessionId(),
                 plan.getName(),
-                plan.getPrice(),
+                pricing.totalAmount(),
                 plan.getBillingCycle(),
                 user.getEmail(),
                 billing.getUpiId(),
@@ -141,7 +163,8 @@ public class SubscriptionAccessService {
                 whatsappUrl,
                 message,
                 notice,
-                billing.getPaymentInstructions()
+                billing.getPaymentInstructions(),
+                pricing
         );
     }
 
@@ -151,6 +174,12 @@ public class SubscriptionAccessService {
                 .orElseThrow(() -> ApiException.unauthorized("Unauthorized"));
         SubscriptionPlan plan = purchasablePlan(planName);
         Subscription subscription = latest(userId);
+        PriceBreakdown pricing = null;
+        if (subscription != null && subscription.getPendingTotalAmount() != null) {
+            pricing = pendingAsBreakdown(subscription, billingSettingsService.current());
+        } else {
+            pricing = pricingService.quote(plan, subscription == null ? null : subscription.getPendingPromoCode());
+        }
         if (subscription == null) {
             subscription = subscriptionRepository.save(Subscription.builder()
                     .user(user)
@@ -160,17 +189,76 @@ public class SubscriptionAccessService {
                     .endDate(LocalDate.now().minusDays(1))
                     .pendingPlan(plan)
                     .build());
+            applyPendingPricing(subscription, pricing);
         } else {
             subscription.setPendingPlan(plan);
+            applyPendingPricing(subscription, pricing);
             if (!statusOf(user).accessEntitled()) {
                 subscription.setStatus(SubscriptionStatus.PAYMENT_PENDING);
             }
         }
+        paymentTransactionService.record(
+                user, plan, TransactionType.PAYMENT_SENT, TransactionStatus.REPORTED,
+                "MANUAL",
+                "whatsapp:" + user.getEmail(),
+                pricing.promoCode() == null
+                        ? "Payment screenshot reported"
+                        : "Payment screenshot reported · promo " + pricing.promoCode(),
+                pricing);
         return statusOf(user);
     }
 
     public boolean isEntitled(User user) {
         return statusOf(user).accessEntitled();
+    }
+
+    public PriceBreakdown pendingBreakdown(Subscription subscription) {
+        if (subscription == null || subscription.getPendingTotalAmount() == null) {
+            return null;
+        }
+        return pendingAsBreakdown(subscription, billingSettingsService.current());
+    }
+
+    private void applyPendingPricing(Subscription subscription, PriceBreakdown pricing) {
+        subscription.setPendingPromoCode(pricing.promoCode());
+        subscription.setPendingBaseAmount(pricing.baseAmount());
+        subscription.setPendingDiscountAmount(pricing.discountAmount());
+        subscription.setPendingServiceCharge(pricing.serviceCharge());
+        subscription.setPendingGstAmount(pricing.gstAmount());
+        subscription.setPendingTotalAmount(pricing.totalAmount());
+    }
+
+    private PriceBreakdown pendingAsBreakdown(Subscription subscription, BillingSettings billing) {
+        return new PriceBreakdown(
+                nz(subscription.getPendingBaseAmount()),
+                nz(subscription.getPendingDiscountAmount()),
+                nz(subscription.getPendingServiceCharge()),
+                nz(subscription.getPendingGstAmount()),
+                nz(subscription.getPendingTotalAmount()),
+                billing.getServiceChargePercent(),
+                billing.getGstPercent(),
+                subscription.getPendingPromoCode(),
+                null,
+                billing.getCompanyLegalName(),
+                billing.getCompanyGstin(),
+                billing.getParentCompanyName()
+        );
+    }
+
+    private void clearPendingPricing(Subscription subscription) {
+        subscription.setPendingPromoCode(null);
+        subscription.setPendingBaseAmount(null);
+        subscription.setPendingDiscountAmount(null);
+        subscription.setPendingServiceCharge(null);
+        subscription.setPendingGstAmount(null);
+        subscription.setPendingTotalAmount(null);
+    }
+
+    /** Called from admin activation after success. */
+    public void clearPendingAfterActivation(Subscription subscription) {
+        if (subscription != null) {
+            clearPendingPricing(subscription);
+        }
     }
 
     private Subscription grantSignupTrial(User user, Integer referralTrialDays) {
@@ -291,17 +379,28 @@ public class SubscriptionAccessService {
         return start.plusDays(Math.max(trialDays, 1) - 1L);
     }
 
-    private String renderMessage(String template, String email, SubscriptionPlan plan, BillingSettings billing) {
+    private String renderMessage(
+            String template,
+            String email,
+            SubscriptionPlan plan,
+            BillingSettings billing,
+            String amount,
+            String promoCode
+    ) {
         String body = StringUtils.hasText(template)
                 ? template
                 : "Hello Catalog Studio, I have paid for the {{plan}} plan (₹{{amount}}). Registered email: {{email}}. Payment screenshot is attached.";
-        String amount = plan.getPrice() == null ? "0" : plan.getPrice().stripTrailingZeros().toPlainString();
         return body
                 .replace("{{plan}}", plan.getName())
-                .replace("{{amount}}", amount)
+                .replace("{{amount}}", amount == null ? "0" : amount)
                 .replace("{{email}}", email)
                 .replace("{{upi}}", billing.getUpiId() == null ? "" : billing.getUpiId())
-                .replace("{{payee}}", billing.getPayeeName() == null ? "" : billing.getPayeeName());
+                .replace("{{payee}}", billing.getPayeeName() == null ? "" : billing.getPayeeName())
+                .replace("{{promo}}", promoCode == null ? "" : promoCode);
+    }
+
+    private static java.math.BigDecimal nz(java.math.BigDecimal value) {
+        return value == null ? java.math.BigDecimal.ZERO : value;
     }
 
     private record Snapshot(

@@ -7,6 +7,7 @@ import { HeroIllustration } from "./HeroIllustration";
 import { formatMoney } from "./format";
 import { useSite } from "./useSite";
 import { useI18n } from "../../i18n/LanguageProvider";
+import { ParentCompanyMark } from "../../components/ParentCompanyMark";
 
 export function LandingPage() {
   const site = useSite();
@@ -50,6 +51,10 @@ export function LandingPage() {
             <ServiceChip logo={<ExtMark />} label={t("land.extChip")} hint={t("land.extHint")} />
           </div>
         </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-10">
+        <ParentCompanyMark productName={site.branding.siteName || "Catalog Studio"} />
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-14">

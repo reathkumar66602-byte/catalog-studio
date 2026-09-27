@@ -5,11 +5,14 @@ import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.subscription.dto.TransactionHistoryItem;
 import com.catalogstudio.subscription.service.PaymentTransactionService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,5 +35,10 @@ public class TransactionController {
         return ApiResponse.ok(paymentTransactionService.history(
                 SecurityUtils.currentUserId(),
                 PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))));
+    }
+
+    @GetMapping(value = "/{id}/bill", produces = MediaType.TEXT_HTML_VALUE)
+    public String bill(@PathVariable UUID id) {
+        return paymentTransactionService.renderBillHtml(SecurityUtils.currentUserId(), id);
     }
 }

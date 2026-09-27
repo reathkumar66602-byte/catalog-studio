@@ -47,7 +47,16 @@ api.interceptors.response.use(
     }
     if (error.response?.status === 402) {
       const here = window.location.pathname;
-      if (here !== "/subscription" && !here.startsWith("/login") && here !== "/forgot-password" && here !== "/reset-password" && here !== "/register") {
+      if (
+        !here.startsWith("/subscription") &&
+        !here.startsWith("/login") &&
+        here !== "/forgot-password" &&
+        here !== "/reset-password" &&
+        here !== "/register" &&
+        !here.startsWith("/transactions") &&
+        !here.startsWith("/settings") &&
+        !here.startsWith("/billing-address")
+      ) {
         window.location.href = "/subscription";
       }
     }

@@ -16,7 +16,8 @@ public record CatalogStudioProperties(
         @DefaultValue Mail mail,
         @DefaultValue Otp otp,
         @DefaultValue Google google,
-        @DefaultValue Billing billing
+        @DefaultValue Billing billing,
+        @DefaultValue Tingily tingily
 ) {
     public record Jwt(String secret, long accessTokenMinutes, long refreshTokenDays) {}
 
@@ -167,4 +168,13 @@ public record CatalogStudioProperties(
             return cleaned;
         }
     }
+
+    /** Meesho trending via Tingily Pro account credentials. */
+    public record Tingily(
+            @DefaultValue("https://engine1.tingily.com") String baseUrl,
+            @DefaultValue("") String email,
+            @DefaultValue("") String password,
+            @DefaultValue("") String token,
+            @DefaultValue("40") int fetchLimit
+    ) {}
 }

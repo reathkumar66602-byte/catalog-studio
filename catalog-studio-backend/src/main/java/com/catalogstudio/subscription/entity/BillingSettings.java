@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -72,6 +73,26 @@ public class BillingSettings {
     @Column(name = "recharge_body", nullable = false, columnDefinition = "text")
     private String rechargeBody;
 
+    @Builder.Default
+    @Column(name = "company_legal_name", nullable = false, length = 160)
+    private String companyLegalName = "Catalog Studio";
+
+    @Builder.Default
+    @Column(name = "company_gstin", nullable = false, length = 20)
+    private String companyGstin = "";
+
+    @Builder.Default
+    @Column(name = "parent_company_name", nullable = false, length = 120)
+    private String parentCompanyName = "Shirtaji";
+
+    @Builder.Default
+    @Column(name = "service_charge_percent", nullable = false, precision = 6, scale = 2)
+    private BigDecimal serviceChargePercent = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "gst_percent", nullable = false, precision = 6, scale = 2)
+    private BigDecimal gstPercent = new BigDecimal("18");
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -128,6 +149,21 @@ public class BillingSettings {
         if (rechargeBody == null || rechargeBody.isBlank()) {
             rechargeBody = "Your free trial has ended. Choose a plan, pay by UPI, and send the payment screenshot"
                     + " on WhatsApp with your registered email. Access is enabled after we confirm the payment.";
+        }
+        if (companyLegalName == null || companyLegalName.isBlank()) {
+            companyLegalName = "Catalog Studio";
+        }
+        if (companyGstin == null) {
+            companyGstin = "";
+        }
+        if (parentCompanyName == null || parentCompanyName.isBlank()) {
+            parentCompanyName = "Shirtaji";
+        }
+        if (serviceChargePercent == null || serviceChargePercent.signum() < 0) {
+            serviceChargePercent = BigDecimal.ZERO;
+        }
+        if (gstPercent == null || gstPercent.signum() < 0) {
+            gstPercent = new BigDecimal("18");
         }
         if (trialDays < 0) {
             trialDays = 0;

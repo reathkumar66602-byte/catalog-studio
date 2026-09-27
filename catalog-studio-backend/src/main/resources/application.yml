@@ -115,3 +115,9 @@ catalogstudio:
     maps-api-key: ${GOOGLE_MAPS_API_KEY:}
   billing:
     whatsapp-number: ${BILLING_WHATSAPP_NUMBER:919560111849}
+  tingily:
+    base-url: ${TINGILY_BASE_URL:https://engine1.tingily.com}
+    email: ${TINGILY_EMAIL:}
+    password: ${TINGILY_PASSWORD:}
+    token: ${TINGILY_TOKEN:}
+    fetch-limit: ${TINGILY_FETCH_LIMIT:40}

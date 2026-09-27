@@ -156,6 +156,33 @@ export type PaymentCheckout = {
   whatsappMessage: string;
   notice: string;
   instructions: string;
+  pricing?: PriceBreakdown;
+};
+
+export type PriceBreakdown = {
+  baseAmount: number;
+  discountAmount: number;
+  serviceCharge: number;
+  gstAmount: number;
+  totalAmount: number;
+  serviceChargePercent: number;
+  gstPercent: number;
+  promoCode?: string | null;
+  discountLabel?: string | null;
+  companyLegalName?: string | null;
+  companyGstin?: string | null;
+  parentCompanyName?: string | null;
+};
+
+export type BillingPromoOption = {
+  id: string;
+  code: string;
+  description?: string;
+  discountType: string;
+  discountValue: number;
+  status?: string;
+  maxUses?: number | null;
+  usedCount?: number;
 };
 
 export type BillingSettings = {
@@ -170,6 +197,11 @@ export type BillingSettings = {
   paymentInstructions: string;
   rechargeHeadline: string;
   rechargeBody: string;
+  companyLegalName?: string;
+  companyGstin?: string;
+  parentCompanyName?: string;
+  serviceChargePercent?: number;
+  gstPercent?: number;
 };
 
 export type AccountProfile = {
@@ -208,6 +240,14 @@ export type TransactionRow = {
   currency?: string;
   provider?: string;
   reference?: string;
+  baseAmount?: number;
+  serviceCharge?: number;
+  gstAmount?: number;
+  discountAmount?: number;
+  promoCode?: string;
+  companyGstin?: string;
+  invoiceNumber?: string;
+  billAvailable?: boolean;
 };
 
 

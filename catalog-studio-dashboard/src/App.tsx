@@ -21,6 +21,7 @@ import { AnalysisHistoryPage } from "./features/analysis/AnalysisHistoryPage";
 import { ExtensionPage } from "./features/extension/ExtensionPage";
 import { ExtensionBridge } from "./features/extension/ExtensionBridge";
 import { SubscriptionPage } from "./features/subscription/SubscriptionPage";
+import { SubscriptionPaymentPage } from "./features/subscription/SubscriptionPaymentPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { BillingAddressPage } from "./features/settings/BillingAddressPage";
 import { EmailTemplatesPage } from "./features/settings/EmailTemplatesPage";
@@ -107,6 +108,7 @@ export default function App() {
                   </Route>
                   <Route element={<FeatureRoute feature="subscription" />}>
                     <Route path="/subscription" element={<SubscriptionPage />} />
+                    <Route path="/subscription/pay" element={<SubscriptionPaymentPage />} />
                   </Route>
                   <Route element={<FeatureRoute feature="transactions" />}>
                     <Route path="/transactions" element={<TransactionHistoryPage />} />

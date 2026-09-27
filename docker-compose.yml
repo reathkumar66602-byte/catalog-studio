@@ -45,6 +45,11 @@ services:
       OTP_ENABLED: ${OTP_ENABLED:-true}
       OTP_LOG_CODE: ${OTP_LOG_CODE:-false}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      TINGILY_BASE_URL: ${TINGILY_BASE_URL:-https://engine1.tingily.com}
+      TINGILY_EMAIL: ${TINGILY_EMAIL:-}
+      TINGILY_PASSWORD: ${TINGILY_PASSWORD:-}
+      TINGILY_TOKEN: ${TINGILY_TOKEN:-}
+      TINGILY_FETCH_LIMIT: ${TINGILY_FETCH_LIMIT:-40}
       LOG_DIR: /var/catalog-studio/logs
     ports:
       - "127.0.0.1:8080:8080"

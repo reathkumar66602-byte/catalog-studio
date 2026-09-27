@@ -14,6 +14,14 @@ export type AdminUserRow = {
   subscriptionEndDate?: string;
   createdAt: string;
   features: Record<string, boolean>;
+  pendingPlan?: string | null;
+  pendingPromoCode?: string | null;
+  promoApplied?: boolean;
+  pendingBaseAmount?: number | null;
+  pendingDiscountAmount?: number | null;
+  pendingServiceCharge?: number | null;
+  pendingGstAmount?: number | null;
+  pendingTotalAmount?: number | null;
 };
 
 export type FeatureDefinition = {
