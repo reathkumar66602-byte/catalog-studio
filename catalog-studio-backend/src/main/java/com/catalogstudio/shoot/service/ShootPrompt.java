@@ -73,6 +73,9 @@ public final class ShootPrompt {
                 + ageLine(modelAge) + " "
                 + "The model must be Indian: an Indian woman, man, girl, boy, or older adult who matches the garment. "
                 + "Do not use a European, East Asian, African, or any non-Indian model. "
+                + "When a person is wearing the garment, the model must look beautiful and photogenic: "
+                + "flattering catalog face, healthy glowing skin, neat well-groomed hair, warm natural smile — "
+                + "still modest everyday styling appropriate for the model's age. "
                 + "Modest everyday catalog styling, fully clothed, natural standing pose, clean light, no text, no watermark, "
                 + "and no extra accessories that hide the product. "
                 + framing();
@@ -90,19 +93,25 @@ public final class ShootPrompt {
     private static String ageLine(String modelAge) {
         String range = "50+".equals(modelAge) ? "50 years or older" : modelAge + " years";
         if (ShootOptions.childAge(modelAge)) {
-            return "The model is a cute Indian child in the " + range
+            return "The model is a beautiful, adorable Indian child in the " + range
                     + " age range, photographed as a modest children's clothing catalog. "
-                    + "Warm cheerful expression, soft friendly features, everyday kidswear only.";
+                    + "Cute photogenic face, soft healthy features, neat hair, bright cheerful smile, "
+                    + "camera-friendly kidswear catalog look — everyday kidswear only.";
         }
         if (ShootOptions.teenAge(modelAge)) {
-            return "The model is a cute Indian teenager in the " + range
+            return "The model is a beautiful, fresh-faced Indian teenager in the " + range
                     + " age range, photographed as a modest teen clothing catalog. "
-                    + "Natural, camera-friendly expression.";
+                    + "Attractive youthful face, clear glowing skin, neat hair, warm natural smile, "
+                    + "photogenic and camera-friendly — polished teen fashion catalog look.";
         }
         if ("50+".equals(modelAge)) {
-            return "The model is an older Indian adult, 50 years or older, with a warm pleasant expression.";
+            return "The model is a beautiful, graceful, elegant older Indian adult, 50 years or older: "
+                    + "attractive mature face, clear healthy skin, well-groomed hair, warm pleasant smile, "
+                    + "photogenic and camera-friendly — polished commercial catalog look.";
         }
-        return "The model is a cute Indian adult in the " + range
-                + " age range, with a pleasant camera-friendly expression.";
+        return "The model is a beautiful Indian adult fashion model in the " + range
+                + " age range: attractive face, clear glowing skin, well-groomed hair, "
+                + "pleasant natural smile, photogenic and camera-friendly — "
+                + "polished commercial catalog look like a professional Meesho or Flipkart model shoot.";
     }
 }
