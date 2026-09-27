@@ -12,13 +12,16 @@ class CategoryRelevanceTest {
     @Test
     void rejectsWomenTitlesForMenShirts() {
         assertThat(CategoryRelevance.matches("men--shirts", "Fancy Glamorous Women Shirts")).isFalse();
+        assertThat(CategoryRelevance.matches("men--shirts", "Exclusive Lining Shirt Tunic")).isFalse();
+        assertThat(CategoryRelevance.matches("men--shirts", "delta crop shart coat")).isFalse();
+        assertThat(CategoryRelevance.matches("men--shirts", "DESIGNER SHIRT")).isFalse();
         assertThat(CategoryRelevance.matches("men--shirts", "Men Formal Cotton Shirt")).isTrue();
         assertThat(CategoryRelevance.mostlyMismatched(
                 "men--shirts",
                 List.of(
-                        "Fancy Glamorous Women Shirts",
-                        "Stylish Fashionable Women Shirts",
-                        "Pretty Elegant Women Shirts"))).isTrue();
+                        "Shart of peach",
+                        "DESIGNER SHIRT",
+                        "Exclusive Lining Shirt Tunic"))).isTrue();
     }
 
     @Test
@@ -32,12 +35,22 @@ class CategoryRelevanceTest {
         List<TrendingHit> hits = List.of(
                 hit("Fancy Glamorous Women Shirts"),
                 hit("Men Formal Cotton Shirt"),
-                hit("Stylish Fashionable Women Shirts"));
+                hit("Stylish Fashionable Women Shirts"),
+                hit("DESIGNER SHIRT"));
         List<TrendingHit> men = CategoryRelevance.filter("men--shirts", hits, 10);
         assertThat(men).extracting(TrendingHit::title).containsExactly("Men Formal Cotton Shirt");
     }
 
     private static TrendingHit hit(String title) {
-        return new TrendingHit("id", title, null, "₹100", null, null, null, "https://images.meesho.com/x.jpg", "https://www.meesho.com/p/1");
+        return new TrendingHit(
+                "id",
+                title,
+                null,
+                "₹100",
+                null,
+                null,
+                null,
+                "https://images.meesho.com/x.jpg",
+                "https://www.meesho.com/p/1");
     }
 }

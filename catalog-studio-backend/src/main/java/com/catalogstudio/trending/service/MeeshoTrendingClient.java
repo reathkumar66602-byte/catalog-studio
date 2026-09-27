@@ -48,26 +48,25 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         int guard = 0;
         boolean hasNext = false;
         Exception lastError = null;
+        boolean searchFirst = CategoryRelevance.requiresPositiveDepartmentMatch(category.key())
+                && pollutedSharedLeaf(CategoryRelevance.leafSlug(category.key()));
 
-        while (collected.size() < TrendingCatalog.PAGE_SIZE && guard++ < 4) {
+        if (searchFirst) {
+            addFiltered(category, searchFallback(category, page), collected, seen);
+            log.info("Meesho search-first category={} query={} kept={}",
+                    category.key(), category.meeshoQuery(), collected.size());
+        }
+
+        while (!searchFirst && collected.size() < TrendingCatalog.PAGE_SIZE && guard++ < 4) {
             try {
                 JsonNode root = fetchCatalog(slug, limit, fetchPage);
                 List<TrendingHit> raw = parse(root, limit);
                 hasNext = root.path("meta").path("hasNext").asBoolean(false)
                         || (root.path("data").isArray() && root.path("data").size() >= limit);
-                List<TrendingHit> matched = CategoryRelevance.filter(category.key(), raw, TrendingCatalog.PAGE_SIZE);
-                for (TrendingHit hit : matched) {
-                    String key = productKey(hit.productUrl(), hit.externalId());
-                    if (key != null && seen.add(key)) {
-                        collected.add(hit);
-                        if (collected.size() >= TrendingCatalog.PAGE_SIZE) {
-                            break;
-                        }
-                    }
-                }
-                log.info("Meesho catalog category={} slug={} page={} raw={} matched={} kept={}",
-                        category.key(), slug, fetchPage, raw.size(), matched.size(), collected.size());
-                if (!hasNext) {
+                addFiltered(category, raw, collected, seen);
+                log.info("Meesho catalog category={} slug={} page={} raw={} kept={}",
+                        category.key(), slug, fetchPage, raw.size(), collected.size());
+                if (collected.size() >= TrendingCatalog.PAGE_SIZE || !hasNext) {
                     break;
                 }
                 fetchPage++;
@@ -81,20 +80,18 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
             }
         }
 
-        if (shouldFallbackToSearch(category, collected)) {
-            List<TrendingHit> searched = searchFallback(category, page);
-            for (TrendingHit hit : searched) {
-                if (!CategoryRelevance.matches(category.key(), hit.title())) {
-                    continue;
-                }
-                String key = productKey(hit.productUrl(), hit.externalId());
-                if (key != null && seen.add(key)) {
-                    collected.add(hit);
-                    if (collected.size() >= TrendingCatalog.PAGE_SIZE) {
-                        break;
-                    }
-                }
+        if (searchFirst && collected.size() < TrendingCatalog.PAGE_SIZE) {
+            try {
+                JsonNode root = fetchCatalog(slug, limit, page);
+                addFiltered(category, parse(root, limit), collected, seen);
+            } catch (Exception ex) {
+                log.warn("Meesho catalog supplement failed category={} {}",
+                        category.key(), ex.getClass().getSimpleName());
             }
+        }
+
+        if (shouldFallbackToSearch(category, collected)) {
+            addFiltered(category, searchFallback(category, page), collected, seen);
             log.info("Meesho search fallback category={} query={} kept={}",
                     category.key(), category.meeshoQuery(), collected.size());
         }
@@ -111,14 +108,46 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
                 : page);
     }
 
+    private static boolean pollutedSharedLeaf(String leaf) {
+        return Set.of("shirts", "jackets", "sweatshirts", "sweaters", "kurta-sets", "t-shirts").contains(leaf);
+    }
+
+    private static void addFiltered(
+            TrendingCatalog.Category category,
+            List<TrendingHit> incoming,
+            List<TrendingHit> collected,
+            Set<String> seen
+    ) {
+        if (incoming == null || incoming.isEmpty()) {
+            return;
+        }
+        for (TrendingHit hit : incoming) {
+            if (!CategoryRelevance.matches(category.key(), hit.title())) {
+                continue;
+            }
+            String key = productKey(hit.productUrl(), hit.externalId());
+            if (key != null && seen.add(key)) {
+                collected.add(hit);
+                if (collected.size() >= TrendingCatalog.PAGE_SIZE) {
+                    return;
+                }
+            }
+        }
+    }
+
     private boolean shouldFallbackToSearch(TrendingCatalog.Category category, List<TrendingHit> collected) {
         if (!CategoryRelevance.isDepartmentChild(category.key())) {
             return false;
         }
-        if (collected.size() >= TrendingCatalog.PAGE_SIZE / 2) {
+        if (!StringUtils.hasText(category.meeshoQuery())) {
             return false;
         }
-        return StringUtils.hasText(category.meeshoQuery());
+        // Shared Men fashion leaves (shirts/jackets/…) are women-dominated on Tingily —
+        // fill from search until we have a full page of positive Men matches.
+        if (CategoryRelevance.requiresPositiveDepartmentMatch(category.key())) {
+            return collected.size() < TrendingCatalog.PAGE_SIZE;
+        }
+        return collected.size() < TrendingCatalog.PAGE_SIZE / 2;
     }
 
     private List<TrendingHit> searchFallback(TrendingCatalog.Category category, int page) {
@@ -251,7 +280,20 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         if (image == null || !image.startsWith("https://")) {
             return null;
         }
-        return image.replaceAll("(?i)_512\\.(jpe?g|webp|png)$", ".$1");
+        return upgradeMeeshoImage(image);
+    }
+
+    /** Prefer sharper Meesho CDN variants; keep product path (not catalog cover crops). */
+    static String upgradeMeeshoImage(String image) {
+        if (image == null || image.isBlank()) {
+            return image;
+        }
+        String upgraded = image.replaceAll("(?i)_512\\.(jpe?g|webp|png|avif)$", "_800.$1");
+        if (upgraded.contains("/images/catalogs/") && upgraded.contains("/cover/")) {
+            // Catalog covers are often extreme crops; keep but callers may still filter.
+            return upgraded;
+        }
+        return upgraded;
     }
 
     private static String productKey(String link, String fallback) {

@@ -292,7 +292,7 @@ export function TrendingPage() {
 }
 
 function displayPhoto(src: string) {
-  return src.replace(/_512\.(jpe?g|webp|png)$/i, ".$1");
+  return src.replace(/_512\.(jpe?g|webp|png|avif)$/i, "_800.$1");
 }
 
 function meeshoCatalogCover(src: string) {
@@ -306,24 +306,25 @@ function ProductPhoto({ src, rank, meesho }: { src?: string | null; rank: number
   const cover = Boolean(meesho && show && meeshoCatalogCover(photo));
   return (
     <div
-      className={`relative overflow-hidden bg-slate-50 dark:bg-slate-800 ${
-        cover ? "aspect-[16/9]" : "aspect-[3/4]"
+      className={`relative overflow-hidden bg-white dark:bg-slate-800 ${
+        cover ? "aspect-[4/3]" : "aspect-square"
       }`}
     >
       {show ? (
         <img
           src={photo}
           alt=""
-          className="h-full w-full object-contain"
+          className="h-full w-full object-contain object-center p-1"
           referrerPolicy="no-referrer"
+          loading="lazy"
           onError={() => setFailed(true)}
         />
       ) : (
-        <div className="flex h-full items-center justify-center text-slate-300">
+        <div className="flex h-full items-center justify-center bg-slate-50 text-slate-300 dark:bg-slate-800">
           <ImageOff size={28} />
         </div>
       )}
-      <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-700">
+      <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-700 shadow-sm">
         #{rank}
       </span>
     </div>
