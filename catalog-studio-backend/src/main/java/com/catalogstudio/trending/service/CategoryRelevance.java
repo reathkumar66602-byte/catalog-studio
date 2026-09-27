@@ -3,43 +3,22 @@ package com.catalogstudio.trending.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Keeps Meesho/Tingily results aligned with the selected department (Men / Women / Kids).
- * Shared leaf slugs like {@code shirts} often return the wrong gender on Tingily, including
- * women's items that omit the word "Women" (tunic, crop shirt, etc.).
+ * Light gender/type filter for Meesho categories. Keep this simple — other marketplaces
+ * and non-fashion leaves pass through unchanged.
  */
 public final class CategoryRelevance {
 
     private static final Pattern WOMEN = Pattern.compile(
-            "(?i)\\b(women|woman|womens|ladies|lady|girl|girls|female)\\b");
-    private static final Pattern WOMEN_FASHION = Pattern.compile(
-            "(?i)\\b(tunic|blouse|kurti|kurta\\s*set|saree|sari|lehenga|anarkali|gown|skirt|"
-                    + "legging|jeggings|palazzo|crop\\s*top|crop\\s*shirt|crop\\s*shart|"
-                    + "womenswear|ladieswear|for\\s+women|for\\s+girls?)\\b");
-    private static final Pattern MEN = Pattern.compile(
-            "(?i)\\b(men|man|mens|boy|boys|male)\\b");
-    private static final Pattern KIDS = Pattern.compile(
-            "(?i)\\b(kid|kids|baby|babies|infant|toddler)\\b");
-
-    /** Leaf slugs Tingily shares across Men and Women (often women-dominated). */
-    private static final Set<String> SHARED_FASHION_LEAVES = Set.of(
-            "shirts",
-            "t-shirts",
-            "jeans",
-            "jackets",
-            "sweatshirts",
-            "sweaters",
-            "trackpants",
-            "kurtas",
-            "kurta-sets",
-            "shirts-combo",
-            "t-shirts-combos",
-            "summer-t-shirts",
-            "gym-tshirts",
-            "nehru-jacket");
+            "(?i)\\b(women|woman|womens|ladies|lady|girl|girls|female|tunic|blouse|kurti|saree|lehenga)\\b");
+    private static final Pattern MEN = Pattern.compile("(?i)\\b(men|man|mens|boy|boys)\\b");
+    private static final Pattern SHIRT = Pattern.compile("(?i)\\bshirts?\\b|\\bsharts?\\b");
+    private static final Pattern SWEATSHIRT = Pattern.compile("(?i)sweat\\s*shirt");
+    private static final Pattern JACKET = Pattern.compile("(?i)\\bjackets?\\b");
+    private static final Pattern SWEATER = Pattern.compile("(?i)\\bsweaters?\\b|\\bsweatshirts?\\b");
+    private static final Pattern TSHIRT = Pattern.compile("(?i)\\bt[\\s-]?shirts?\\b|\\btees?\\b");
 
     private CategoryRelevance() {}
 
@@ -59,33 +38,16 @@ public final class CategoryRelevance {
     }
 
     public static String leafSlug(String categoryKey) {
-        if (categoryKey == null || categoryKey.isBlank() || "all".equals(categoryKey)) {
-            return "popular";
+        if (categoryKey == null || categoryKey.isBlank()) {
+            return "";
         }
-        int split = categoryKey.lastIndexOf("--");
-        if (split >= 0 && split + 2 < categoryKey.length()) {
-            return categoryKey.substring(split + 2);
-        }
-        return categoryKey;
+        String key = categoryKey.trim().toLowerCase(Locale.ROOT);
+        int split = key.lastIndexOf("--");
+        return split >= 0 ? key.substring(split + 2) : key;
     }
 
     public static boolean isDepartmentChild(String categoryKey) {
         return department(categoryKey) != null && categoryKey != null && categoryKey.contains("--");
-    }
-
-    /** Men/Women child leaves that must not trust the shared Tingily slug alone. */
-    public static boolean requiresPositiveDepartmentMatch(String categoryKey) {
-        String dept = department(categoryKey);
-        if (!isDepartmentChild(categoryKey) || dept == null) {
-            return false;
-        }
-        if ("Men".equals(dept)) {
-            return SHARED_FASHION_LEAVES.contains(leafSlug(categoryKey))
-                    || leafSlug(categoryKey).contains("shirt")
-                    || leafSlug(categoryKey).contains("tshirt")
-                    || leafSlug(categoryKey).contains("jacket");
-        }
-        return false;
     }
 
     public static boolean matches(String categoryKey, String title) {
@@ -96,19 +58,31 @@ public final class CategoryRelevance {
         if (dept == null) {
             return true;
         }
-        boolean womenHit = WOMEN.matcher(title).find() || WOMEN_FASHION.matcher(title).find();
-        boolean menHit = MEN.matcher(title).find() && !WOMEN.matcher(title).find();
+        boolean womenHit = WOMEN.matcher(title).find();
+        boolean menHit = MEN.matcher(title).find() && !womenHit;
+        String leaf = leafSlug(categoryKey);
+
         return switch (dept) {
             case "Men" -> {
                 if (womenHit) {
                     yield false;
                 }
-                if (requiresPositiveDepartmentMatch(categoryKey)) {
-                    yield menHit;
+                // When we load the parent "men" feed, keep only the selected product type.
+                if ("shirts".equals(leaf)) {
+                    yield SHIRT.matcher(title).find() && !SWEATSHIRT.matcher(title).find();
+                }
+                if ("jackets".equals(leaf)) {
+                    yield JACKET.matcher(title).find();
+                }
+                if ("sweatshirts".equals(leaf) || "sweaters".equals(leaf)) {
+                    yield SWEATER.matcher(title).find();
+                }
+                if ("t-shirts".equals(leaf)) {
+                    yield TSHIRT.matcher(title).find();
                 }
                 yield true;
             }
-            case "Women" -> !menHit || WOMEN.matcher(title).find();
+            case "Women" -> !menHit || womenHit;
             case "Kids" -> true;
             default -> true;
         };
@@ -137,7 +111,6 @@ public final class CategoryRelevance {
         return matched;
     }
 
-    /** True when half or more titles contradict the selected department. */
     public static boolean mostlyMismatched(String categoryKey, List<String> titles) {
         if (department(categoryKey) == null || titles == null || titles.isEmpty()) {
             return false;

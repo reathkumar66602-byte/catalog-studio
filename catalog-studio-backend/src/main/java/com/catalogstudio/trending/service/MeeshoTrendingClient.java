@@ -30,7 +30,6 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
 
     private final ObjectMapper objectMapper;
     private final TingilyAuthService tingilyAuthService;
-    private final OpenAiMeeshoLookup openAiMeeshoLookup;
 
     @Override
     public String marketplace() {
@@ -42,128 +41,76 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         int page = Math.max(nextPage, 1);
         String slug = catalogSlug(category.key());
         int limit = tingilyAuthService.fetchLimit();
-        List<TrendingHit> collected = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        int fetchPage = page;
-        int guard = 0;
-        boolean hasNext = false;
-        Exception lastError = null;
-        boolean searchFirst = CategoryRelevance.requiresPositiveDepartmentMatch(category.key())
-                && pollutedSharedLeaf(CategoryRelevance.leafSlug(category.key()));
-
-        if (searchFirst) {
-            addFiltered(category, searchFallback(category, page), collected, seen);
-            log.info("Meesho search-first category={} query={} kept={}",
-                    category.key(), category.meeshoQuery(), collected.size());
-        }
-
-        while (!searchFirst && collected.size() < TrendingCatalog.PAGE_SIZE && guard++ < 4) {
-            try {
-                JsonNode root = fetchCatalog(slug, limit, fetchPage);
-                List<TrendingHit> raw = parse(root, limit);
-                hasNext = root.path("meta").path("hasNext").asBoolean(false)
-                        || (root.path("data").isArray() && root.path("data").size() >= limit);
-                addFiltered(category, raw, collected, seen);
-                log.info("Meesho catalog category={} slug={} page={} raw={} kept={}",
-                        category.key(), slug, fetchPage, raw.size(), collected.size());
-                if (collected.size() >= TrendingCatalog.PAGE_SIZE || !hasNext) {
-                    break;
+        String token = tingilyAuthService.bearerToken();
+        String url = tingilyAuthService.baseUrl()
+                + "/api/products/c/" + slug + "/best-sellers?limit=" + limit + "&page=" + page;
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(20))
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "CatalogStudio/1.0")
+                    .GET();
+            if (StringUtils.hasText(token)) {
+                builder.header("Authorization", "Bearer " + token);
+            }
+            HttpResponse<String> response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn("Meesho catalog HTTP {} category={} auth={}",
+                        response.statusCode(), category.key(), StringUtils.hasText(token));
+                throw ApiException.unavailable("Meesho listings are not available for this category right now.");
+            }
+            JsonNode root = objectMapper.readTree(response.body() == null ? "{}" : response.body());
+            List<TrendingHit> raw = parse(root, limit);
+            List<TrendingHit> hits = CategoryRelevance.filter(category.key(), raw, TrendingCatalog.PAGE_SIZE);
+            // If Men>Shirts style remap used parent feed, keep paging until we have a page of matches.
+            int fetchPage = page;
+            boolean hasNext = root.path("meta").path("hasNext").asBoolean(false)
+                    || (root.path("data").isArray() && root.path("data").size() >= limit);
+            Set<String> seen = new HashSet<>();
+            List<TrendingHit> collected = new ArrayList<>();
+            for (TrendingHit hit : hits) {
+                String key = productKey(hit.productUrl(), hit.externalId());
+                if (key != null && seen.add(key)) {
+                    collected.add(hit);
                 }
+            }
+            int guard = 0;
+            while (usesParentMenFeed(category.key())
+                    && collected.size() < TrendingCatalog.PAGE_SIZE
+                    && hasNext
+                    && guard++ < 5) {
                 fetchPage++;
-            } catch (ApiException ex) {
-                throw ex;
-            } catch (Exception ex) {
-                lastError = ex;
-                log.warn("Meesho catalog failed category={} page={} {}",
-                        category.key(), fetchPage, ex.getClass().getSimpleName());
-                break;
+                JsonNode more = fetchCatalog(slug, limit, fetchPage, token);
+                hasNext = more.path("meta").path("hasNext").asBoolean(false)
+                        || (more.path("data").isArray() && more.path("data").size() >= limit);
+                for (TrendingHit hit : CategoryRelevance.filter(category.key(), parse(more, limit), limit)) {
+                    String key = productKey(hit.productUrl(), hit.externalId());
+                    if (key != null && seen.add(key)) {
+                        collected.add(hit);
+                        if (collected.size() >= TrendingCatalog.PAGE_SIZE) {
+                            break;
+                        }
+                    }
+                }
             }
-        }
-
-        if (searchFirst && collected.size() < TrendingCatalog.PAGE_SIZE) {
-            try {
-                JsonNode root = fetchCatalog(slug, limit, page);
-                addFiltered(category, parse(root, limit), collected, seen);
-            } catch (Exception ex) {
-                log.warn("Meesho catalog supplement failed category={} {}",
-                        category.key(), ex.getClass().getSimpleName());
-            }
-        }
-
-        if (shouldFallbackToSearch(category, collected)) {
-            addFiltered(category, searchFallback(category, page), collected, seen);
-            log.info("Meesho search fallback category={} query={} kept={}",
-                    category.key(), category.meeshoQuery(), collected.size());
-        }
-
-        if (collected.isEmpty() && lastError != null && !CategoryRelevance.isDepartmentChild(category.key())) {
+            List<TrendingHit> pageHits = collected.size() <= TrendingCatalog.PAGE_SIZE
+                    ? collected
+                    : collected.subList(0, TrendingCatalog.PAGE_SIZE);
+            log.info("Meesho catalog category={} slug={} fetchedLimit={} products={} auth={}",
+                    category.key(), slug, limit, pageHits.size(), StringUtils.hasText(token));
+            return new TrendingBatch(pageHits, null, hasNext ? fetchPage + 1 : fetchPage);
+        } catch (ApiException ex) {
+            throw ex;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw ApiException.unavailable("Meesho listings are not available for this category right now.");
+        } catch (Exception ex) {
+            log.warn("Meesho catalog failed category={} {}", category.key(), ex.getClass().getSimpleName());
             throw ApiException.unavailable("Meesho listings are not available for this category right now.");
         }
-
-        List<TrendingHit> pageHits = collected.size() <= TrendingCatalog.PAGE_SIZE
-                ? collected
-                : collected.subList(0, TrendingCatalog.PAGE_SIZE);
-        return new TrendingBatch(pageHits, null, hasNext || pageHits.size() == TrendingCatalog.PAGE_SIZE
-                ? Math.max(fetchPage, page + 1)
-                : page);
     }
 
-    private static boolean pollutedSharedLeaf(String leaf) {
-        return Set.of("shirts", "jackets", "sweatshirts", "sweaters", "kurta-sets", "t-shirts").contains(leaf);
-    }
-
-    private static void addFiltered(
-            TrendingCatalog.Category category,
-            List<TrendingHit> incoming,
-            List<TrendingHit> collected,
-            Set<String> seen
-    ) {
-        if (incoming == null || incoming.isEmpty()) {
-            return;
-        }
-        for (TrendingHit hit : incoming) {
-            if (!CategoryRelevance.matches(category.key(), hit.title())) {
-                continue;
-            }
-            String key = productKey(hit.productUrl(), hit.externalId());
-            if (key != null && seen.add(key)) {
-                collected.add(hit);
-                if (collected.size() >= TrendingCatalog.PAGE_SIZE) {
-                    return;
-                }
-            }
-        }
-    }
-
-    private boolean shouldFallbackToSearch(TrendingCatalog.Category category, List<TrendingHit> collected) {
-        if (!CategoryRelevance.isDepartmentChild(category.key())) {
-            return false;
-        }
-        if (!StringUtils.hasText(category.meeshoQuery())) {
-            return false;
-        }
-        // Shared Men fashion leaves (shirts/jackets/…) are women-dominated on Tingily —
-        // fill from search until we have a full page of positive Men matches.
-        if (CategoryRelevance.requiresPositiveDepartmentMatch(category.key())) {
-            return collected.size() < TrendingCatalog.PAGE_SIZE;
-        }
-        return collected.size() < TrendingCatalog.PAGE_SIZE / 2;
-    }
-
-    private List<TrendingHit> searchFallback(TrendingCatalog.Category category, int page) {
-        try {
-            return openAiMeeshoLookup.search(category.meeshoQuery(), page);
-        } catch (ApiException ex) {
-            log.warn("Meesho OpenAI fallback unavailable category={} {}", category.key(), ex.getMessage());
-            return List.of();
-        } catch (Exception ex) {
-            log.warn("Meesho OpenAI fallback failed category={} {}", category.key(), ex.getClass().getSimpleName());
-            return List.of();
-        }
-    }
-
-    private JsonNode fetchCatalog(String slug, int limit, int page) throws Exception {
-        String token = tingilyAuthService.bearerToken();
+    private JsonNode fetchCatalog(String slug, int limit, int page, String token) throws Exception {
         String url = tingilyAuthService.baseUrl()
                 + "/api/products/c/" + slug + "/best-sellers?limit=" + limit + "&page=" + page;
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
@@ -176,22 +123,40 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         }
         HttpResponse<String> response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            log.warn("Meesho catalog HTTP {} slug={} auth={}",
-                    response.statusCode(), slug, StringUtils.hasText(token));
             throw ApiException.unavailable("Meesho listings are not available for this category right now.");
         }
         return objectMapper.readTree(response.body() == null ? "{}" : response.body());
     }
 
-    static String catalogSlug(String categoryKey) {
+    /**
+     * Tingily {@code shirts}/{@code jackets} leaves are women-heavy. For Men children use the
+     * {@code men} feed and filter by product type instead.
+     */
+    public static String catalogSlug(String categoryKey) {
         if (categoryKey == null || categoryKey.isBlank() || "all".equals(categoryKey)) {
             return "popular";
         }
-        int split = categoryKey.lastIndexOf("--");
-        if (split >= 0 && split + 2 < categoryKey.length()) {
-            return categoryKey.substring(split + 2);
+        String key = categoryKey.trim().toLowerCase(Locale.ROOT);
+        if (usesParentMenFeed(key)) {
+            return "men";
         }
-        return categoryKey;
+        int split = key.lastIndexOf("--");
+        if (split >= 0 && split + 2 < key.length()) {
+            return key.substring(split + 2);
+        }
+        return key;
+    }
+
+    static boolean usesParentMenFeed(String categoryKey) {
+        if (categoryKey == null) {
+            return false;
+        }
+        String key = categoryKey.trim().toLowerCase(Locale.ROOT);
+        return key.equals("men--shirts")
+                || key.equals("men--jackets")
+                || key.equals("men--sweatshirts")
+                || key.equals("men--sweaters")
+                || key.equals("men--t-shirts");
     }
 
     static List<TrendingHit> parse(JsonNode root, int max) {
@@ -280,20 +245,8 @@ public class MeeshoTrendingClient implements TrendingMarketplaceClient {
         if (image == null || !image.startsWith("https://")) {
             return null;
         }
-        return upgradeMeeshoImage(image);
-    }
-
-    /** Prefer sharper Meesho CDN variants; keep product path (not catalog cover crops). */
-    static String upgradeMeeshoImage(String image) {
-        if (image == null || image.isBlank()) {
-            return image;
-        }
-        String upgraded = image.replaceAll("(?i)_512\\.(jpe?g|webp|png|avif)$", "_800.$1");
-        if (upgraded.contains("/images/catalogs/") && upgraded.contains("/cover/")) {
-            // Catalog covers are often extreme crops; keep but callers may still filter.
-            return upgraded;
-        }
-        return upgraded;
+        // Keep Tingily URL as-is (working for other categories). Only normalize common 512 path.
+        return image.replaceAll("(?i)_512\\.(jpe?g|webp|png)$", ".$1");
     }
 
     private static String productKey(String link, String fallback) {
