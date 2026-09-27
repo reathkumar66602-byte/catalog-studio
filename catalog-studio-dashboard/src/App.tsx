@@ -45,6 +45,7 @@ import { StaffAdminPage } from "./features/admin/StaffAdminPage";
 import { TransactionHistoryPage } from "./features/subscription/TransactionHistoryPage";
 import { EntitlementGate } from "./routes/EntitlementGate";
 import { GuestToolRedirect } from "./routes/GuestToolRedirect";
+import { PwaInstallBanner } from "./components/PwaInstallBanner";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ export default function App() {
         <LanguageProvider>
         <SiteProvider>
           <ExtensionBridge />
+          <PwaInstallBanner />
           <BrowserRouter>
             <Routes>
               <Route element={<MarketingLayout />}>
