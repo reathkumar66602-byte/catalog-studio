@@ -11,7 +11,7 @@ export function LanguageSelect({ compact = false }: { compact?: boolean }) {
         onChange={(event) => setLocale(event.target.value)}
         aria-label={t("lang.label")}
         className={`rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-teal-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${
-          compact ? "max-w-[10.5rem]" : "mt-1 w-full"
+          compact ? "max-w-[7.25rem] sm:max-w-[10.5rem]" : "mt-1 w-full"
         }`}
       >
         {LOCALES.map((item) => (

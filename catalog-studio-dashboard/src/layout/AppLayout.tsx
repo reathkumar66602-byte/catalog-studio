@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Calculator,
   Camera,
@@ -19,6 +19,7 @@ import {
   Shield,
   Users,
   Wallet,
+  X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -41,7 +42,9 @@ export function AppLayout() {
   const { user, updateUser, logout } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(true);
+  const location = useLocation();
+  const [desktopOpen, setDesktopOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { data: access } = useQuery({
     queryKey: ["sub"],
     queryFn: async () => (await api.get("/subscriptions/current")).data.data as SubscriptionStatus,
@@ -54,6 +57,19 @@ export function AppLayout() {
     enabled: Boolean(user),
     staleTime: 0,
   });
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     if (!me || !user) return;
@@ -121,60 +137,96 @@ export function AppLayout() {
     navigate("/login");
   }
 
+  function toggleMenu() {
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) {
+      setDesktopOpen((value) => !value);
+      return;
+    }
+    setMobileOpen((value) => !value);
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className="flex min-h-screen">
+    <div className="min-h-dvh bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <div className="flex min-h-dvh">
         <aside
-          className={`${open ? "w-64" : "w-20"} hidden shrink-0 border-r border-slate-200 bg-white transition-all dark:border-slate-800 dark:bg-slate-900 md:flex md:flex-col`}
+          className={`${desktopOpen ? "w-64" : "w-20"} hidden min-h-0 shrink-0 border-r border-slate-200 bg-white transition-all dark:border-slate-800 dark:bg-slate-900 md:flex md:flex-col`}
         >
           <div className="flex items-center gap-3 px-5 py-5">
             <img src="/logo.svg" alt="Catalog Studio" className="h-10 w-10 rounded-xl" />
-            {open && (
+            {desktopOpen && (
               <div>
                 <p className="font-semibold">Catalog Studio</p>
                 <p className="text-xs text-slate-500">{t("brand.workspace")}</p>
               </div>
             )}
           </div>
-          <nav className="flex-1 space-y-1 overflow-y-auto px-3">
-            {menu.staff.length > 0 && (
-              <>
-                {open && (
-                  <p className="px-3 pt-1 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
-                    {roleLabel(role)}
-                  </p>
-                )}
-                {menu.staff.map((link) => (
-                  <SideLink key={link.to} link={link} open={open} />
-                ))}
-                <div className="my-2 border-t border-slate-200 dark:border-slate-800" />
-              </>
-            )}
-            {menu.workspace.map((link) => (
-              <SideLink key={link.to} link={link} open={open} />
-            ))}
-          </nav>
+          <SidebarNav menu={menu} open={desktopOpen} role={role} />
           <button
             onClick={signOut}
             className="m-3 flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <LogOut size={18} />
-            {open && t("nav.logout")}
+            {desktopOpen && t("nav.logout")}
           </button>
         </aside>
+
+        {mobileOpen && (
+          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+            <button
+              type="button"
+              className="absolute inset-0 bg-slate-950/45"
+              aria-label="Close menu"
+              onClick={() => setMobileOpen(false)}
+            />
+            <aside className="absolute inset-y-0 left-0 flex w-[min(18rem,88vw)] flex-col bg-white shadow-2xl dark:bg-slate-900">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 dark:border-slate-800">
+                <div className="flex min-w-0 items-center gap-3">
+                  <img src="/logo.svg" alt="" className="h-9 w-9 shrink-0 rounded-xl" />
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">Catalog Studio</p>
+                    <p className="truncate text-xs text-slate-500">{t("brand.workspace")}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  aria-label="Close menu"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <SidebarNav menu={menu} open role={role} />
+              <button
+                onClick={signOut}
+                className="m-3 flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <LogOut size={18} />
+                {t("nav.logout")}
+              </button>
+            </aside>
+          </div>
+        )}
+
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-            <button className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setOpen(!open)}>
+          <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-800 dark:bg-slate-900 sm:px-4">
+            <button
+              type="button"
+              className="shrink-0 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileOpen}
+              onClick={toggleMenu}
+            >
               <Menu size={20} />
             </button>
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-4">
               <LanguageSelect compact />
               <NavLink to="/" className="hidden text-sm text-slate-500 hover:text-teal-700 sm:inline">
                 {t("header.website")}
               </NavLink>
-              <div className="text-right">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-slate-500">
+              <div className="min-w-0 text-right">
+                <p className="truncate text-sm font-medium max-w-[7.5rem] sm:max-w-[14rem]">{user?.name}</p>
+                <p className="truncate text-xs text-slate-500 max-w-[7.5rem] sm:max-w-[14rem]">
                   {isStaff(role)
                     ? roleLabel(role)
                     : access?.trialActive
@@ -184,7 +236,7 @@ export function AppLayout() {
               </div>
             </div>
           </header>
-          <main className="flex-1 p-4 md:p-8">
+          <main className="flex-1 overflow-x-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-8">
             {access?.trialActive && (
               <div className="mb-4 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900">
                 {access.daysRemaining <= 0
@@ -209,6 +261,37 @@ export function AppLayout() {
   );
 }
 
+function SidebarNav({
+  menu,
+  open,
+  role,
+}: {
+  menu: { workspace: MenuLink[]; staff: MenuLink[] };
+  open: boolean;
+  role?: string;
+}) {
+  return (
+    <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      {menu.staff.length > 0 && (
+        <>
+          {open && (
+            <p className="px-3 pt-1 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
+              {roleLabel(role)}
+            </p>
+          )}
+          {menu.staff.map((link) => (
+            <SideLink key={link.to} link={link} open={open} />
+          ))}
+          <div className="my-2 border-t border-slate-200 dark:border-slate-800" />
+        </>
+      )}
+      {menu.workspace.map((link) => (
+        <SideLink key={link.to} link={link} open={open} />
+      ))}
+    </nav>
+  );
+}
+
 function SideLink({ link, open }: { link: MenuLink; open: boolean }) {
   return (
     <NavLink
@@ -221,8 +304,8 @@ function SideLink({ link, open }: { link: MenuLink; open: boolean }) {
         }`
       }
     >
-      <link.icon size={18} />
-      {open && <span>{link.label}</span>}
+      <link.icon size={18} className="shrink-0" />
+      {open && <span className="truncate">{link.label}</span>}
     </NavLink>
   );
 }

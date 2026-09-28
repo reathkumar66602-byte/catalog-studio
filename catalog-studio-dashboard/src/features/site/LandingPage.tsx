@@ -24,7 +24,7 @@ export function LandingPage() {
           <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-300">{t("land.tagline")}</p>
-              <h1 className="mt-3 max-w-xl text-4xl font-semibold leading-tight tracking-tight md:text-5xl">{t("land.heroTitle")}</h1>
+              <h1 className="mt-3 max-w-xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl md:text-5xl">{t("land.heroTitle")}</h1>
               <p className="mt-5 max-w-xl text-sm leading-relaxed text-slate-300 md:text-base">{t("land.heroSub")}</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
