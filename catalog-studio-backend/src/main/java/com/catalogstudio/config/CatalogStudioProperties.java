@@ -62,7 +62,11 @@ public record CatalogStudioProperties(
             String model,
             int timeoutSeconds,
             String promptPath,
-            @DefaultValue("gpt-image-1") String imageModel
+            @DefaultValue("gpt-image-1") String imageModel,
+            /** OpenAI images quality: low | medium | high | auto */
+            @DefaultValue("high") String imageQuality,
+            /** OpenAI edits input_fidelity for gpt-image models: low | high */
+            @DefaultValue("high") String imageInputFidelity
     ) {}
 
     public record Upload(int maxImages, long maxFileBytes, List<String> allowedContentTypes) {}

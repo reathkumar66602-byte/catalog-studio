@@ -52,7 +52,7 @@ class ShootPlanTest {
         assertThat(jobs.get(0).prompt()).contains("Meesho");
         assertThat(jobs.get(0).prompt()).contains("not a plain studio");
         assertThat(jobs.get(0).prompt()).contains("flatters this exact outfit");
-        assertThat(jobs.get(0).prompt()).contains("beautiful Indian adult fashion model");
+        assertThat(jobs.get(0).prompt()).contains("cute, beautiful Indian adult fashion model");
         assertThat(jobs.get(0).prompt()).contains("Indian");
         assertThat(jobs.get(0).prompt()).contains("must not be plain white or pure white");
         assertThat(jobs.get(0).prompt()).doesNotContain("RGB 255 255 255");
@@ -83,7 +83,7 @@ class ShootPlanTest {
 
         assertThat(living.get(0).prompt()).contains("living room");
         assertThat(living.get(0).prompt()).contains("Use this exact setting");
-        assertThat(living.get(0).prompt()).contains("beautiful, adorable Indian child");
+        assertThat(living.get(0).prompt()).contains("cute, beautiful, adorable Indian child");
         assertThat(living.get(0).prompt()).doesNotContain("flatters this exact outfit");
 
         List<ShootPlan.Job> festive = ShootPlan.jobs(
@@ -165,7 +165,7 @@ class ShootPlanTest {
     @Test
     void childCatalogPromptStaysAModestClothingShoot() {
         String prompt = ShootPrompt.forKind("FRONT", "5-6");
-        assertThat(prompt).contains("beautiful, adorable Indian child");
+        assertThat(prompt).contains("cute, beautiful, adorable Indian child");
         assertThat(prompt).contains("modest children's clothing catalog");
         assertThat(prompt).contains("everyday kidswear only");
         assertThat(prompt).contains("photogenic");
@@ -175,7 +175,7 @@ class ShootPlanTest {
     @Test
     void teenCatalogPromptAsksForBeautifulModel() {
         String prompt = ShootPrompt.forKind("FRONT", "13-15", false, "LIVING_ROOM");
-        assertThat(prompt).contains("beautiful, fresh-faced Indian teenager");
+        assertThat(prompt).contains("cute, beautiful, fresh-faced Indian teenager");
         assertThat(prompt).contains("modest teen clothing catalog");
         assertThat(prompt).contains("photogenic");
     }
@@ -183,9 +183,10 @@ class ShootPlanTest {
     @Test
     void adultCatalogPromptAsksForBeautifulModel() {
         String prompt = ShootPrompt.forKind("FRONT", "21-25", false, "LIVING_ROOM");
-        assertThat(prompt).contains("beautiful Indian adult fashion model");
-        assertThat(prompt).contains("attractive face");
-        assertThat(prompt).contains("polished commercial catalog look");
+        assertThat(prompt).contains("cute, beautiful Indian adult fashion model");
+        assertThat(prompt).contains("attractive South Asian Indian face");
+        assertThat(prompt).contains("Photorealistic commercial fashion catalog");
+        assertThat(prompt).contains("not plastic CGI");
         assertThat(prompt).contains("living room");
     }
 

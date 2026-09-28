@@ -80,7 +80,10 @@ public class OpenAiCatalogImageEditor implements CatalogImageEditor {
                 ? size
                 : "auto";
         textPart(out, boundary, "size", imageSize);
-        textPart(out, boundary, "quality", "medium");
+        textPart(out, boundary, "quality", imageQuality());
+        if (model.toLowerCase().startsWith("gpt-image")) {
+            textPart(out, boundary, "input_fidelity", imageInputFidelity());
+        }
         int index = 1;
         String field = images.size() > 1 ? "image[]" : "image";
         for (ShootPlan.Ref image : images) {
@@ -91,6 +94,21 @@ public class OpenAiCatalogImageEditor implements CatalogImageEditor {
         }
         out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
         return out.toByteArray();
+    }
+
+    private String imageQuality() {
+        String raw = properties.ai().imageQuality();
+        String quality = StringUtils.hasText(raw) ? raw.trim().toLowerCase() : "high";
+        return switch (quality) {
+            case "low", "medium", "high", "auto" -> quality;
+            default -> "high";
+        };
+    }
+
+    private String imageInputFidelity() {
+        String raw = properties.ai().imageInputFidelity();
+        String fidelity = StringUtils.hasText(raw) ? raw.trim().toLowerCase() : "high";
+        return "low".equals(fidelity) ? "low" : "high";
     }
 
     private static void textPart(ByteArrayOutputStream out, String boundary, String name, String value) throws Exception {

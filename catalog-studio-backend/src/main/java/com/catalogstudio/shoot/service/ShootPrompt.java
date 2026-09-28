@@ -14,7 +14,9 @@ public final class ShootPrompt {
 
     public static String forKind(String kind, String modelAge, boolean whiteBackground, String meeshoBackground) {
         String angle = switch (kind) {
-            case "FRONT" -> "Front view of the same product. If a model is wearing it, the model faces the camera.";
+            case "FRONT" -> "Front view of the same product. If a model is wearing it, the model faces the camera "
+                    + "in a natural flattering catalog pose — relaxed shoulders, soft smile, "
+                    + "one hand lightly near the hair or waist only when it looks natural and modest.";
             case "BACK" -> "Back view. If a model is wearing it, the model is turned away. Follow the back reference photo for the garment back.";
             case "SIDE" -> "Three-quarter side view of the same product.";
             case "SHOP" -> whiteBackground
@@ -45,8 +47,8 @@ public final class ShootPrompt {
                     + "sunlit living room with sofa and plants for everyday wear; "
                     + "bright courtyard or veranda for light summer looks. "
                     + "Pick the single best match for this cloth — do not default to a plain beige wall. "
-                    + "The backdrop must show depth and decor. Do not use a seamless paper sweep, a plain beige wall, "
-                    + "a plain cream wall, or an empty studio. "
+                    + "The backdrop must show depth and decor with soft creamy bokeh behind the model. "
+                    + "Do not use a seamless paper sweep, a plain beige wall, a plain cream wall, or an empty studio. "
                     + "The background must not be plain white or pure white. This set is for Meesho.";
         }
         String scene = switch (choice) {
@@ -61,22 +63,27 @@ public final class ShootPrompt {
         };
         return "Place the model in a beautiful styled Meesho scene, not a plain studio. "
                 + "Use this exact setting: " + scene + ". "
+                + "Keep soft shallow depth of field so the model and garment stay sharp and the backdrop gently blurs. "
                 + "The backdrop must show depth and decor. Do not use a seamless paper sweep, a plain beige wall, "
                 + "a plain cream wall, or an empty studio. "
                 + "The background must not be plain white or pure white. This set is for Meesho.";
     }
 
     private static String base(String modelAge) {
-        return "Commercial fashion catalog photograph for an online clothing store. "
+        return "Photorealistic commercial fashion catalog photograph for an Indian online clothing store, "
+                + "shot like a real DSLR Meesho or Flipkart model shoot — sharp garment detail, natural skin texture, "
+                + "not plastic CGI, not over-smoothed beauty filter, not cartoon. "
                 + "Recreate the exact garment from the reference photo: same colour, print, embroidery, fabric, pattern, and design. "
                 + "Do not redesign the product. "
                 + ageLine(modelAge) + " "
                 + "The model must be Indian: an Indian woman, man, girl, boy, or older adult who matches the garment. "
                 + "Do not use a European, East Asian, African, or any non-Indian model. "
-                + "When a person is wearing the garment, the model must look beautiful and photogenic: "
-                + "flattering catalog face, healthy glowing skin, neat well-groomed hair, warm natural smile — "
-                + "still modest everyday styling appropriate for the model's age. "
-                + "Modest everyday catalog styling, fully clothed, natural standing pose, clean light, no text, no watermark, "
+                + "South Asian Indian facial features only. "
+                + "When a person is wearing the garment, the model must look cute, beautiful, and realistic: "
+                + "flattering catalog face, healthy glowing natural skin with real texture, neat well-groomed hair with soft volume, "
+                + "warm natural soft smile, photogenic eyes — still modest everyday styling appropriate for the model's age. "
+                + "Soft professional fashion lighting, sharp focus on the face and outfit. "
+                + "Modest everyday catalog styling, fully clothed, clean light, no text, no watermark, "
                 + "and no extra accessories that hide the product. "
                 + framing();
     }
@@ -93,25 +100,25 @@ public final class ShootPrompt {
     private static String ageLine(String modelAge) {
         String range = "50+".equals(modelAge) ? "50 years or older" : modelAge + " years";
         if (ShootOptions.childAge(modelAge)) {
-            return "The model is a beautiful, adorable Indian child in the " + range
+            return "The model is a cute, beautiful, adorable Indian child in the " + range
                     + " age range, photographed as a modest children's clothing catalog. "
-                    + "Cute photogenic face, soft healthy features, neat hair, bright cheerful smile, "
-                    + "camera-friendly kidswear catalog look — everyday kidswear only.";
+                    + "Cute photogenic face, soft healthy realistic features, neat hair, bright cheerful smile, "
+                    + "camera-friendly kidswear catalog look — everyday kidswear only, fully modest.";
         }
         if (ShootOptions.teenAge(modelAge)) {
-            return "The model is a beautiful, fresh-faced Indian teenager in the " + range
+            return "The model is a cute, beautiful, fresh-faced Indian teenager in the " + range
                     + " age range, photographed as a modest teen clothing catalog. "
-                    + "Attractive youthful face, clear glowing skin, neat hair, warm natural smile, "
-                    + "photogenic and camera-friendly — polished teen fashion catalog look.";
+                    + "Attractive youthful Indian face, clear glowing natural skin, soft neat hair with gentle volume, "
+                    + "warm natural smile, photogenic and camera-friendly — realistic polished teen fashion catalog look.";
         }
         if ("50+".equals(modelAge)) {
             return "The model is a beautiful, graceful, elegant older Indian adult, 50 years or older: "
-                    + "attractive mature face, clear healthy skin, well-groomed hair, warm pleasant smile, "
-                    + "photogenic and camera-friendly — polished commercial catalog look.";
+                    + "attractive mature Indian face, clear healthy natural skin, well-groomed hair, warm pleasant smile, "
+                    + "photogenic and camera-friendly — realistic polished commercial catalog look.";
         }
-        return "The model is a beautiful Indian adult fashion model in the " + range
-                + " age range: attractive face, clear glowing skin, well-groomed hair, "
-                + "pleasant natural smile, photogenic and camera-friendly — "
-                + "polished commercial catalog look like a professional Meesho or Flipkart model shoot.";
+        return "The model is a cute, beautiful Indian adult fashion model in the " + range
+                + " age range: attractive South Asian Indian face, clear glowing natural skin with realistic texture, "
+                + "well-groomed soft voluminous hair, pleasant soft natural smile, photogenic eyes, "
+                + "camera-friendly and highly realistic — polished commercial catalog look like a premium Meesho or Flipkart model shoot.";
     }
 }
