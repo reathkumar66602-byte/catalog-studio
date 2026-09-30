@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 
 type CampaignCapabilities = {
@@ -78,8 +79,12 @@ export function CampaignPanel() {
       <div>
         <h2 className="text-lg font-semibold">Campaigns & alerts</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Queue email or WhatsApp alerts for a batch of sellers. Templates live in the database. Deactivated accounts
-          are never included. WhatsApp needs an outbound API — otherwise those items are skipped.
+          Queue email or WhatsApp alerts for a batch of sellers. Edit message structure under{" "}
+          <Link to="/settings/email-templates" className="text-teal-700 underline">
+            Email templates → Campaigns
+          </Link>
+          . Deactivated accounts are never included. WhatsApp needs an outbound API — otherwise those items are
+          skipped.
         </p>
       </div>
       {caps.data && (

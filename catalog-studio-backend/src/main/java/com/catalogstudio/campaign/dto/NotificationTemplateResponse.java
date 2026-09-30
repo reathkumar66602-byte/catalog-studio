@@ -1,5 +1,7 @@
 package com.catalogstudio.campaign.dto;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record NotificationTemplateResponse(
@@ -10,5 +12,8 @@ public record NotificationTemplateResponse(
         String campaignType,
         String subject,
         String bodyText,
-        boolean enabled
+        String bodyHtml,
+        List<String> variables,
+        boolean enabled,
+        Instant updatedAt
 ) {}

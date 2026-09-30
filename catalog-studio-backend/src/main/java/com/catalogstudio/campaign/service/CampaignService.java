@@ -3,6 +3,7 @@ package com.catalogstudio.campaign.service;
 import com.catalogstudio.campaign.dto.CampaignRunResponse;
 import com.catalogstudio.campaign.dto.CampaignTriggerRequest;
 import com.catalogstudio.campaign.dto.NotificationTemplateResponse;
+import com.catalogstudio.campaign.dto.NotificationTemplateUpdateRequest;
 import com.catalogstudio.campaign.entity.CampaignRun;
 import com.catalogstudio.campaign.entity.CampaignRun.DeliveryChannel;
 import com.catalogstudio.campaign.entity.CampaignRun.RunStatus;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -63,10 +65,40 @@ public class CampaignService {
     @Transactional(readOnly = true)
     public List<NotificationTemplateResponse> templates() {
         return templateRepository.findAllByOrderByCampaignTypeAscChannelAsc().stream()
-                .map(t -> new NotificationTemplateResponse(
-                        t.getUuid(), t.getSlug(), t.getName(), t.getChannel().name(),
-                        t.getCampaignType().name(), t.getSubject(), t.getBodyText(), t.isEnabled()))
+                .map(this::toTemplateResponse)
                 .toList();
+    }
+
+    @Transactional
+    public NotificationTemplateResponse updateTemplate(UUID id, NotificationTemplateUpdateRequest request) {
+        NotificationTemplate template = templateRepository.findByUuid(id)
+                .orElseThrow(() -> ApiException.notFound("Campaign template not found"));
+        template.setName(request.name().trim());
+        template.setSubject(request.subject());
+        template.setBodyText(request.bodyText());
+        template.setBodyHtml(request.bodyHtml());
+        if (request.variables() != null) {
+            template.setVariablesJson(request.variables());
+        }
+        if (request.enabled() != null) {
+            template.setEnabled(request.enabled());
+        }
+        return toTemplateResponse(template);
+    }
+
+    private NotificationTemplateResponse toTemplateResponse(NotificationTemplate t) {
+        return new NotificationTemplateResponse(
+                t.getUuid(),
+                t.getSlug(),
+                t.getName(),
+                t.getChannel().name(),
+                t.getCampaignType().name(),
+                t.getSubject(),
+                t.getBodyText(),
+                t.getBodyHtml(),
+                t.getVariablesJson(),
+                t.isEnabled(),
+                t.getUpdatedAt());
     }
 
     @Transactional(readOnly = true)
