@@ -23,7 +23,8 @@ class LocalStorageServiceTest {
             new CatalogStudioProperties.Otp(false, 6, 10, 5, 60, true),
             new CatalogStudioProperties.Google(""),
             new CatalogStudioProperties.Billing("919560111849"),
-            new CatalogStudioProperties.Tingily("https://engine1.tingily.com", "", "", "", 40)
+            new CatalogStudioProperties.Tingily("https://engine1.tingily.com", "", "", "", 40),
+            new CatalogStudioProperties.Whatsapp(false, "", "")
     ));
 
     @Test

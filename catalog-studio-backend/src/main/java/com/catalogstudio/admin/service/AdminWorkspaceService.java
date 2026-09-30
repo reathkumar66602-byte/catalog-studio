@@ -68,15 +68,20 @@ public class AdminWorkspaceService {
     private final CatalogStudioProperties properties;
 
     @Transactional(readOnly = true)
+    public Page<AdminUserRow> listWorkspaceUsers(String query, String accessFilter, int page, int size, String sort) {
+        return listUsers(query, WORKSPACE_ROLES, accessFilter, page, size, sort);
+    }
+
+    @Transactional(readOnly = true)
     public Page<AdminUserRow> listWorkspaceUsers(String query, int page, int size, String sort) {
-        return listUsers(query, WORKSPACE_ROLES, page, size, sort);
+        return listWorkspaceUsers(query, "ALL", page, size, sort);
     }
 
     @Transactional(readOnly = true)
     public Page<AdminUserRow> listStaff(String tab, String query, int page, int size, String sort) {
         String normalized = tab == null ? "ADMIN" : tab.trim().toUpperCase(Locale.ROOT);
         List<User.Role> roles = "USER".equals(normalized) ? WORKSPACE_ROLES : ADMIN_ROLES;
-        return listUsers(query, roles, page, size, sort);
+        return listUsers(query, roles, "ALL", page, size, sort);
     }
 
     @Transactional
@@ -140,10 +145,46 @@ public class AdminWorkspaceService {
         return FeatureCatalog.ALL;
     }
 
-    private Page<AdminUserRow> listUsers(String query, List<User.Role> roles, int page, int size, String sort) {
-        Page<User> users = userRepository.findAll(
-                UserSpecifications.listing(query, roles),
-                pageable(page, size, sort));
+    private Page<AdminUserRow> listUsers(String query, List<User.Role> roles, String accessFilter, int page, int size, String sort) {
+        String filter = accessFilter == null ? "ALL" : accessFilter.trim().toUpperCase(Locale.ROOT);
+        boolean needsAccessFilter = switch (filter) {
+            case "PAID", "TRIAL", "EXPIRED" -> true;
+            default -> false;
+        };
+        if (!needsAccessFilter) {
+            Page<User> users = userRepository.findAll(
+                    UserSpecifications.listing(query, roles, filter),
+                    pageable(page, size, sort));
+            return mapUsers(users);
+        }
+        // Access-state filters need subscription snapshot; load a bounded working set then page in memory.
+        List<User> all = userRepository.findAll(
+                UserSpecifications.listing(query, roles, filter),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<Long> ids = all.stream().map(User::getId).toList();
+        Map<Long, Subscription> subscriptions = new HashMap<>();
+        if (!ids.isEmpty()) {
+            for (Subscription subscription : subscriptionRepository.findLatestForUsers(ids)) {
+                subscriptions.put(subscription.getUser().getId(), subscription);
+            }
+        }
+        List<User> matched = all.stream()
+                .filter(user -> matchesAccessFilter(filter, user, subscriptions.get(user.getId())))
+                .toList();
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 50);
+        int from = Math.min(safePage * safeSize, matched.size());
+        int to = Math.min(from + safeSize, matched.size());
+        List<User> slice = matched.subList(from, to);
+        Map<Long, Map<String, Boolean>> features = featureAccessService.mapForUsers(slice);
+        List<AdminUserRow> rows = slice.stream()
+                .map(user -> toRow(user, subscriptions.get(user.getId()),
+                        features.getOrDefault(user.getId(), FeatureCatalog.defaultsEnabled())))
+                .toList();
+        return new org.springframework.data.domain.PageImpl<>(rows, PageRequest.of(safePage, safeSize), matched.size());
+    }
+
+    private Page<AdminUserRow> mapUsers(Page<User> users) {
         List<Long> ids = users.getContent().stream().map(User::getId).toList();
         Map<Long, Subscription> subscriptions = new HashMap<>();
         if (!ids.isEmpty()) {
@@ -156,6 +197,23 @@ public class AdminWorkspaceService {
                 user,
                 subscriptions.get(user.getId()),
                 features.getOrDefault(user.getId(), FeatureCatalog.defaultsEnabled())));
+    }
+
+    private boolean matchesAccessFilter(String filter, User user, Subscription subscription) {
+        if (user.getStatus() == User.UserStatus.DISABLED) {
+            return false;
+        }
+        var access = subscriptionAccessService.statusOf(user);
+        return switch (filter) {
+            case "PAID" -> access.accessEntitled() && !access.trialActive();
+            case "TRIAL" -> access.trialActive();
+            case "EXPIRED" -> !access.accessEntitled();
+            default -> true;
+        };
+    }
+
+    private Page<AdminUserRow> listUsers(String query, List<User.Role> roles, int page, int size, String sort) {
+        return listUsers(query, roles, "ALL", page, size, sort);
     }
 
     private AdminUserRow activate(User actor, User target, AdminSubscriptionActionRequest request) {

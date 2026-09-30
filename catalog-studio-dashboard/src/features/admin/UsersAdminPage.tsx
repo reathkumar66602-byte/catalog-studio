@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../api/client";
 import { AdminDialog } from "./AdminDialog";
 import { AdminTableBar, SortHeader, StatusBadge } from "./AdminTableBar";
+import { CampaignPanel } from "./CampaignPanel";
 import type { AdminUserRow, PageResult, PlanOption } from "./adminTypes";
 
 type PendingAction = {
@@ -16,6 +17,7 @@ export function UsersAdminPage() {
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [accessFilter, setAccessFilter] = useState("ALL");
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState("createdAt,desc");
   const [drafts, setDrafts] = useState<Record<string, { plan: string; reference: string }>>({});
@@ -31,10 +33,13 @@ export function UsersAdminPage() {
   }, [query]);
 
   const list = useQuery({
-    queryKey: ["admin-users", debounced, page, sort],
+    queryKey: ["admin-users", debounced, accessFilter, page, sort],
     queryFn: async () =>
-      (await api.get("/admin/workspace/users", { params: { q: debounced || undefined, page, size: 20, sort } }))
-        .data.data as PageResult<AdminUserRow>,
+      (
+        await api.get("/admin/workspace/users", {
+          params: { q: debounced || undefined, accessFilter, page, size: 20, sort },
+        })
+      ).data.data as PageResult<AdminUserRow>,
   });
   const plans = useQuery({
     queryKey: ["plans"],
@@ -96,12 +101,32 @@ export function UsersAdminPage() {
       <div>
         <h1 className="text-2xl font-semibold">Users</h1>
         <p className="mt-1 text-sm text-slate-500">
-          After a seller sends the UPI screenshot on WhatsApp, select the plan and click Activate. That unlocks the
-          workspace for one billing period and writes a Transactions row. Change plan is only for sellers who already
-          have active access — it switches the plan without a new payment and does not extend dates. If access has
-          ended, Change plan stays off until you Activate. Deactivate locks tools until the next payment.
+          After a seller sends the UPI screenshot on WhatsApp, select the plan and click Activate. Filter by paid,
+          trial, expired, or deactivated accounts. Use campaigns below to email (or WhatsApp when configured) batches
+          of sellers.
         </p>
       </div>
+
+      <CampaignPanel />
+
+      <label className="inline-block text-sm">
+        <span className="mb-1 block text-slate-500">Access filter</span>
+        <select
+          value={accessFilter}
+          onChange={(event) => {
+            setAccessFilter(event.target.value);
+            setPage(0);
+          }}
+          className="rounded-xl border border-slate-200 px-3 py-2"
+        >
+          <option value="ALL">All users</option>
+          <option value="PAID">Active paid</option>
+          <option value="TRIAL">Trial active</option>
+          <option value="EXPIRED">Expired / needs recharge</option>
+          <option value="DEACTIVATED">Account deactivated</option>
+        </select>
+      </label>
+
       <AdminTableBar
         query={query}
         onQuery={setQuery}

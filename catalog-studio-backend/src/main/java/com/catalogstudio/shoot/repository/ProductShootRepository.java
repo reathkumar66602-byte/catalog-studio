@@ -14,4 +14,7 @@ public interface ProductShootRepository extends JpaRepository<ProductShoot, Long
 
     @EntityGraph(attributePaths = "images")
     List<ProductShoot> findTop12ByUser_IdOrderByCreatedAtDesc(Long userId);
+
+    @EntityGraph(attributePaths = "images")
+    List<ProductShoot> findByUser_Id(Long userId);
 }

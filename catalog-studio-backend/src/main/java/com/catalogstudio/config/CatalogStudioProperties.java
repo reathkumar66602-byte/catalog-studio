@@ -17,7 +17,8 @@ public record CatalogStudioProperties(
         @DefaultValue Otp otp,
         @DefaultValue Google google,
         @DefaultValue Billing billing,
-        @DefaultValue Tingily tingily
+        @DefaultValue Tingily tingily,
+        @DefaultValue Whatsapp whatsapp
 ) {
     public record Jwt(String secret, long accessTokenMinutes, long refreshTokenDays) {}
 
@@ -180,5 +181,15 @@ public record CatalogStudioProperties(
             @DefaultValue("") String password,
             @DefaultValue("") String token,
             @DefaultValue("40") int fetchLimit
+    ) {}
+
+    /**
+     * Optional outbound WhatsApp API. When disabled, campaign WhatsApp items are skipped
+     * (templates still live in DB). Users may have mobile numbers, but send requires a provider.
+     */
+    public record Whatsapp(
+            @DefaultValue("false") boolean sendEnabled,
+            @DefaultValue("") String apiUrl,
+            @DefaultValue("") String apiToken
     ) {}
 }

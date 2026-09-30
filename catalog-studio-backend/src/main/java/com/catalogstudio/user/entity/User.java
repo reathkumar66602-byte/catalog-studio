@@ -78,6 +78,10 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** When the user requested account deactivation; purge job deletes data 15 days later. */
+    @Column(name = "deactivated_at")
+    private Instant deactivatedAt;
+
     @PrePersist
     void prePersist() {
         Instant now = Instant.now();

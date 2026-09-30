@@ -25,6 +25,7 @@ import com.catalogstudio.user.dto.MeResponse;
 import com.catalogstudio.user.dto.UpdateProfileRequest;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
+import com.catalogstudio.user.service.AccountLifecycleService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -36,6 +37,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -59,6 +61,7 @@ public class AccountController {
     private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final FeatureAccessService featureAccessService;
+    private final AccountLifecycleService accountLifecycleService;
 
     @GetMapping("/me")
     @Transactional
@@ -209,6 +212,17 @@ public class AccountController {
                 "lastUsedAt", s.getLastUsedAt() == null ? "" : s.getLastUsedAt().toString(),
                 "createdAt", s.getCreatedAt().toString()
         )).toList());
+    }
+
+    @PostMapping("/me/deactivate")
+    @Transactional
+    public ApiResponse<Map<String, Object>> deactivateAccount() {
+        accountLifecycleService.deactivateOwnAccount();
+        return ApiResponse.ok("Account deactivated", Map.of(
+                "status", "DISABLED",
+                "purgeAfterDays", 15,
+                "message", "Your account is deactivated. Data will be permanently deleted after 15 days."
+        ));
     }
 
     private User user() {

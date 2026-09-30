@@ -1,7 +1,9 @@
 package com.catalogstudio.user.repository;
 
 import com.catalogstudio.user.entity.User;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -20,4 +22,6 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     long countByStatus(User.UserStatus status);
     long countByRole(User.Role role);
     long countByRoleIn(Collection<User.Role> roles);
+
+    List<User> findByStatusAndDeactivatedAtBefore(User.UserStatus status, Instant deactivatedAtBefore);
 }

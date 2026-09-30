@@ -283,6 +283,32 @@ export function SettingsPage() {
           </button>
         </div>
       </section>
+
+      <section className="rounded-2xl border border-rose-200 bg-rose-50/40 p-6">
+        <h2 className="font-medium text-rose-900">Deactivate account</h2>
+        <p className="mt-2 text-sm text-rose-800/80">
+          Deactivating locks your login immediately. After 15 days, Catalog Studio permanently deletes your account
+          data (listings, shoots, files) from the server. This cannot be undone after purge.
+        </p>
+        <button
+          type="button"
+          className="mt-4 rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+          onClick={async () => {
+            if (!window.confirm("Deactivate your account? You will be signed out. Data is purged after 15 days.")) {
+              return;
+            }
+            try {
+              await api.post("/me/deactivate");
+              logout();
+              navigate("/login");
+            } catch (err) {
+              setFormError(apiErrorMessage(err, "Could not deactivate account"));
+            }
+          }}
+        >
+          Deactivate my account
+        </button>
+      </section>
     </div>
   );
 }

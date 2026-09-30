@@ -14,4 +14,8 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     @Modifying
     @Query("update UserSession s set s.revoked = true where s.user.id = :userId and s.revoked = false")
     int revokeAllForUser(Long userId);
+
+    @Modifying
+    @Query("delete from UserSession s where s.user.id = :userId")
+    int deleteByUserId(Long userId);
 }

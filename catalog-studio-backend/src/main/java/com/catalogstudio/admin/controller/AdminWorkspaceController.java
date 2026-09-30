@@ -34,11 +34,12 @@ public class AdminWorkspaceController {
     @GetMapping("/users")
     public ApiResponse<Page<AdminUserRow>> users(
             @RequestParam(required = false) String q,
+            @RequestParam(required = false, defaultValue = "ALL") String accessFilter,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort
     ) {
-        return ApiResponse.ok(workspaceService.listWorkspaceUsers(q, page, size, sort));
+        return ApiResponse.ok(workspaceService.listWorkspaceUsers(q, accessFilter, page, size, sort));
     }
 
     @PutMapping("/users/{id}/subscription")
