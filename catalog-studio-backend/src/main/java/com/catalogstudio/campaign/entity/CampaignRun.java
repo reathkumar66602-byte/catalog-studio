@@ -48,6 +48,10 @@ public class CampaignRun {
     @Column(name = "promo_code", length = 40)
     private String promoCode;
 
+    /** Include users with prior SENT count for this campaign type <= this value. Null = no limit. */
+    @Column(name = "max_prior_sends")
+    private Integer maxPriorSends;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "triggered_by_user_id")
     private User triggeredBy;

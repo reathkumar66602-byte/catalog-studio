@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { api, apiErrorMessage } from "../../api/client";
 import type { AdminSiteBundle, SiteClient, SitePromo } from "../site/types";
 
@@ -281,14 +281,37 @@ function PromosPanel({
 }
 
 function EnquiriesPanel({ bundle, onSaved }: { bundle: AdminSiteBundle; onSaved: () => void }) {
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [openReplyId, setOpenReplyId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState("");
+
   const update = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api.post(`/admin/site/enquiries/${id}/status`, { status }),
     onSuccess: onSaved,
   });
+
+  const reply = useMutation({
+    mutationFn: ({ id, replyBody }: { id: string; replyBody: string }) =>
+      api.post(`/admin/site/enquiries/${id}/reply`, { replyBody }),
+    onSuccess: async () => {
+      setFeedback("Reply sent from support email.");
+      setOpenReplyId(null);
+      onSaved();
+    },
+    onError: (err) => setFeedback(apiErrorMessage(err, "Could not send reply")),
+  });
+
   return (
     <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6">
-      <h2 className="font-medium">Enquiries</h2>
+      <div>
+        <h2 className="font-medium">Enquiries</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Reply sends from your support / from-mail identity. Shell matches other Catalog Studio emails; only the reply
+          text you type is dynamic.
+        </p>
+      </div>
+      {feedback && <p className="text-sm text-teal-800">{feedback}</p>}
       {bundle.enquiries.length === 0 && <p className="text-sm text-slate-500">No enquiries yet.</p>}
       {bundle.enquiries.map((item) => (
         <div key={item.id} className="rounded-xl border px-4 py-3">
@@ -310,7 +333,58 @@ function EnquiriesPanel({ bundle, onSaved }: { bundle: AdminSiteBundle; onSaved:
           <p className="text-xs text-slate-500">
             {item.storeName || "No store"} · {item.subject || "No subject"} · {item.createdAt}
           </p>
-          <p className="mt-2 text-sm text-slate-700">{item.message}</p>
+          <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">{item.message}</p>
+          {item.replyBody && (
+            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              <p className="text-xs font-medium text-slate-500">Last reply {item.repliedAt || ""}</p>
+              <p className="mt-1 whitespace-pre-wrap">{item.replyBody}</p>
+            </div>
+          )}
+          <div className="mt-3">
+            {openReplyId === item.id ? (
+              <div className="space-y-2">
+                <textarea
+                  value={replyDrafts[item.id] || ""}
+                  onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                  rows={5}
+                  className="w-full rounded-xl border px-3 py-2 text-sm"
+                  placeholder="Type the reply the visitor should receive…"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={reply.isPending || !(replyDrafts[item.id] || "").trim()}
+                    onClick={() => {
+                      setFeedback("");
+                      reply.mutate({ id: item.id, replyBody: (replyDrafts[item.id] || "").trim() });
+                    }}
+                    className="rounded-xl bg-teal-700 px-4 py-2 text-sm text-white disabled:opacity-60"
+                  >
+                    {reply.isPending ? "Sending…" : "Send reply email"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpenReplyId(null)}
+                    className="rounded-xl border px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenReplyId(item.id);
+                  setFeedback("");
+                  setReplyDrafts((prev) => ({ ...prev, [item.id]: prev[item.id] || "" }));
+                }}
+                className="rounded-xl border border-teal-200 px-3 py-1.5 text-sm text-teal-800 hover:bg-teal-50"
+              >
+                Reply by email
+              </button>
+            )}
+          </div>
         </div>
       ))}
     </section>

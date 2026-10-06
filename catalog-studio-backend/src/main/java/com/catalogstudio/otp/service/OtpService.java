@@ -17,7 +17,9 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -29,10 +31,15 @@ public class OtpService {
     private final OtpChallengeRepository challengeRepository;
     private final TemplatedEmailService templatedEmailService;
     private final CatalogStudioProperties properties;
+    private final PlatformTransactionManager transactionManager;
 
+    /**
+     * Creates the OTP challenge and sends email after the DB work commits when used from
+     * {@link #issueOutsideTransaction}. Prefer that for registration so mail latency cannot roll back signup.
+     */
     @Transactional
-    public IssuedOtp issue(User user, OtpChallenge.Purpose purpose, boolean rememberDevice, String deviceName,
-                              String ip, String userAgent) {
+    public IssuedOtp createChallenge(User user, OtpChallenge.Purpose purpose, boolean rememberDevice, String deviceName,
+                                     String ip, String userAgent) {
         CatalogStudioProperties.Otp otp = properties.otp();
         String code = generateCode(otp.length());
         OtpChallenge challenge = challengeRepository.save(OtpChallenge.builder()
@@ -49,26 +56,67 @@ public class OtpService {
                 .userAgent(userAgent)
                 .lastSentAt(Instant.now())
                 .build());
-        send(challenge, user, code);
-        return new IssuedOtp(challenge, code);
+        return new IssuedOtp(challenge, user, code);
     }
 
+    public void deliverEmail(IssuedOtp issued) {
+        send(issued.challenge(), issued.user(), issued.code());
+    }
+
+    /** Challenge + email in one call (email still runs inside the caller's transaction if any). */
     @Transactional
-    public IssuedOtp resendIssued(UUID challengeId) {
-        OtpChallenge challenge = requireOpen(challengeId);
-        CatalogStudioProperties.Otp otp = properties.otp();
-        Instant earliest = challenge.getLastSentAt().plusSeconds(otp.resendSeconds());
-        if (Instant.now().isBefore(earliest)) {
-            long wait = Math.max(1, Duration.between(Instant.now(), earliest).toSeconds());
-            throw ApiException.tooManyRequests("Please wait " + wait + " seconds before requesting another OTP");
+    public IssuedOtp issue(User user, OtpChallenge.Purpose purpose, boolean rememberDevice, String deviceName,
+                              String ip, String userAgent) {
+        IssuedOtp issued = createChallenge(user, purpose, rememberDevice, deviceName, ip, userAgent);
+        deliverEmail(issued);
+        return issued;
+    }
+
+    /**
+     * Persist challenge in its own transaction, then send mail outside so provider delays/failures
+     * do not roll back the user row created by registration.
+     */
+    public IssuedOtp issueOutsideTransaction(User user, OtpChallenge.Purpose purpose, boolean rememberDevice,
+                                             String deviceName, String ip, String userAgent) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        IssuedOtp issued = tx.execute(status ->
+                createChallenge(user, purpose, rememberDevice, deviceName, ip, userAgent));
+        if (issued == null) {
+            throw ApiException.unavailable("Could not create verification challenge");
         }
-        String code = generateCode(otp.length());
-        challenge.setCodeHash(TokenHasher.sha256(code));
-        challenge.setExpiresAt(Instant.now().plus(otp.ttlMinutes(), ChronoUnit.MINUTES));
-        challenge.setAttempts(0);
-        challenge.setLastSentAt(Instant.now());
-        send(challenge, challenge.getUser(), code);
-        return new IssuedOtp(challenge, code);
+        deliverEmail(issued);
+        return issued;
+    }
+
+    public IssuedOtp resendIssued(UUID challengeId) {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        IssuedOtp issued = tx.execute(status -> {
+            OtpChallenge challenge = requireOpen(challengeId);
+            CatalogStudioProperties.Otp otp = properties.otp();
+            Instant earliest = challenge.getLastSentAt().plusSeconds(otp.resendSeconds());
+            if (Instant.now().isBefore(earliest)) {
+                long wait = Math.max(1, Duration.between(Instant.now(), earliest).toSeconds());
+                throw ApiException.tooManyRequests("Please wait " + wait + " seconds before requesting another OTP");
+            }
+            String code = generateCode(otp.length());
+            challenge.setCodeHash(TokenHasher.sha256(code));
+            challenge.setExpiresAt(Instant.now().plus(otp.ttlMinutes(), ChronoUnit.MINUTES));
+            challenge.setAttempts(0);
+            challenge.setLastSentAt(Instant.now());
+            User user = challenge.getUser();
+            // Touch fields while session is open
+            if (user != null) {
+                user.getEmail();
+                user.getName();
+                user.getUsername();
+            }
+            return new IssuedOtp(challenge, user, code);
+        });
+        if (issued == null) {
+            throw ApiException.unavailable("Could not resend verification code");
+        }
+        deliverEmail(issued);
+        return issued;
     }
 
     @Transactional
@@ -106,6 +154,10 @@ public class OtpService {
         if (properties.otp().logCode()) {
             log.info("OTP for {} [{}] is {}", challenge.getEmail(), challenge.getPurpose(), code);
         }
+        if (properties.mail() != null && !properties.mail().enabled()) {
+            log.error("OTP email skipped: mail is disabled (MAIL_ENABLED=false)");
+            throw ApiException.unavailable("Email sending is disabled. Contact support or try again later.");
+        }
         Map<String, String> vars = new LinkedHashMap<>();
         vars.put("otp", code);
         vars.put("name", user.getName());
@@ -120,7 +172,8 @@ public class OtpService {
         };
         boolean sent = templatedEmailService.send(slug, user.getEmail(), vars);
         if (!sent) {
-            log.error("OTP email was not delivered to {} via {}", user.getEmail(), properties.mail().resolvedHost());
+            log.error("OTP email was not delivered to {} via {}", user.getEmail(),
+                    properties.mail() == null ? "unknown" : properties.mail().resolvedHost());
             throw ApiException.unavailable("We could not send the verification email. Please try again in a minute.");
         }
         log.info("OTP email queued for {} [{}]", challenge.getEmail(), challenge.getPurpose());
@@ -133,5 +186,5 @@ public class OtpService {
         return String.valueOf(min + RANDOM.nextInt(bound - min));
     }
 
-    public record IssuedOtp(OtpChallenge challenge, String code) {}
+    public record IssuedOtp(OtpChallenge challenge, User user, String code) {}
 }

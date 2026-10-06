@@ -43,7 +43,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Slf4j
@@ -66,8 +68,8 @@ public class AuthService {
     private final OtpService otpService;
     private final TemplatedEmailService templatedEmailService;
     private final FeatureAccessService featureAccessService;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional
     public AuthFlowResponse register(RegisterRequest request, String ip, String userAgent) {
         if (!request.password().equals(request.confirmPassword())) {
             throw ApiException.badRequest("Password and confirm password do not match");
@@ -76,61 +78,78 @@ public class AuthService {
                 && !request.email().trim().equalsIgnoreCase(request.confirmEmail().trim())) {
             throw ApiException.badRequest("Email and confirm email do not match");
         }
-        String username = request.username().trim();
-        String email = request.email().trim().toLowerCase();
-        User existing = userRepository.findByEmailIgnoreCase(email).orElse(null);
-        if (existing != null && existing.getStatus() != User.UserStatus.PENDING) {
-            throw ApiException.conflict("An account with this email already exists");
-        }
-        boolean usernameTaken = userRepository.findByUsernameIgnoreCase(username)
-                .filter(found -> existing == null || !found.getId().equals(existing.getId()))
-                .isPresent();
-        if (usernameTaken) {
-            throw ApiException.conflict("This username is already taken");
-        }
-        String displayName = StringUtils.hasText(request.fullName()) ? request.fullName().trim() : username;
-        String businessName = StringUtils.hasText(request.businessName()) ? request.businessName().trim() : username;
-        String mobile = StringUtils.hasText(request.mobile()) ? request.mobile().trim() : null;
 
-        User user;
-        if (existing != null) {
-            user = existing;
-            user.setUsername(username);
-            user.setName(displayName);
-            user.setMobile(mobile);
-            user.setPasswordHash(passwordEncoder.encode(request.password()));
-        } else {
-            user = userRepository.save(User.builder()
-                    .name(displayName)
-                    .username(username)
-                    .email(email)
-                    .mobile(mobile)
-                    .passwordHash(passwordEncoder.encode(request.password()))
-                    .role(User.Role.SELLER)
-                    .status(properties.otp().enabled() ? User.UserStatus.PENDING : User.UserStatus.ACTIVE)
-                    .emailVerified(false)
-                    .build());
-            businessRepository.save(Business.builder()
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        class RegisterHold {
+            OtpService.IssuedOtp issued;
+            AuthResponse session;
+        }
+        RegisterHold hold = new RegisterHold();
+        tx.executeWithoutResult(status -> {
+            String username = request.username().trim();
+            String email = request.email().trim().toLowerCase();
+            User existing = userRepository.findByEmailIgnoreCase(email).orElse(null);
+            if (existing != null && existing.getStatus() != User.UserStatus.PENDING) {
+                throw ApiException.conflict("An account with this email already exists");
+            }
+            boolean usernameTaken = userRepository.findByUsernameIgnoreCase(username)
+                    .filter(found -> existing == null || !found.getId().equals(existing.getId()))
+                    .isPresent();
+            if (usernameTaken) {
+                throw ApiException.conflict("This username is already taken");
+            }
+            String displayName = StringUtils.hasText(request.fullName()) ? request.fullName().trim() : username;
+            String businessName = StringUtils.hasText(request.businessName()) ? request.businessName().trim() : username;
+            String mobile = StringUtils.hasText(request.mobile()) ? request.mobile().trim() : null;
+
+            User user;
+            if (existing != null) {
+                user = existing;
+                user.setUsername(username);
+                user.setName(displayName);
+                user.setMobile(mobile);
+                user.setPasswordHash(passwordEncoder.encode(request.password()));
+            } else {
+                user = userRepository.save(User.builder()
+                        .name(displayName)
+                        .username(username)
+                        .email(email)
+                        .mobile(mobile)
+                        .passwordHash(passwordEncoder.encode(request.password()))
+                        .role(User.Role.SELLER)
+                        .status(properties.otp().enabled() ? User.UserStatus.PENDING : User.UserStatus.ACTIVE)
+                        .emailVerified(false)
+                        .build());
+                businessRepository.save(Business.builder()
+                        .user(user)
+                        .businessName(businessName)
+                        .build());
+                assignPlan(user, request.referralCode());
+            }
+
+            String verifyToken = TokenHasher.randomToken(32);
+            emailTokenRepository.save(EmailVerificationToken.builder()
                     .user(user)
-                    .businessName(businessName)
+                    .tokenHash(TokenHasher.sha256(verifyToken))
+                    .expiresAt(Instant.now().plus(24, ChronoUnit.HOURS))
                     .build());
-            assignPlan(user, request.referralCode());
-        }
+            log.info("Email verification token created for {}", user.getEmail());
+            auditService.log(user, "USER_REGISTERED", "USER", user.getUuid().toString(), ip, Map.of("email", user.getEmail()));
+            if (properties.otp().enabled()) {
+                hold.issued = otpService.createChallenge(
+                        user, OtpChallenge.Purpose.REGISTER, false, "Registration", ip, userAgent);
+            } else {
+                user.setStatus(User.UserStatus.ACTIVE);
+                hold.session = issueTokens(user, false, "Registration", ip, userAgent);
+            }
+        });
 
-        String verifyToken = TokenHasher.randomToken(32);
-        emailTokenRepository.save(EmailVerificationToken.builder()
-                .user(user)
-                .tokenHash(TokenHasher.sha256(verifyToken))
-                .expiresAt(Instant.now().plus(24, ChronoUnit.HOURS))
-                .build());
-        log.info("Email verification token created for {}", user.getEmail());
-        auditService.log(user, "USER_REGISTERED", "USER", user.getUuid().toString(), ip, Map.of("email", user.getEmail()));
-        if (properties.otp().enabled()) {
-            return AuthFlowResponse.otp(toOtpView(otpService.issue(
-                    user, OtpChallenge.Purpose.REGISTER, false, "Registration", ip, userAgent)));
+        if (hold.issued != null) {
+            // Mail after DB commit — provider latency/failure no longer rolls back the new account.
+            otpService.deliverEmail(hold.issued);
+            return AuthFlowResponse.otp(toOtpView(hold.issued));
         }
-        user.setStatus(User.UserStatus.ACTIVE);
-        return AuthFlowResponse.session(issueTokens(user, false, "Registration", ip, userAgent));
+        return AuthFlowResponse.session(hold.session);
     }
 
     @Transactional

@@ -76,7 +76,15 @@ public class ZohoSmtpTransport implements MailTransport {
             }
             return false;
         } catch (Exception ex) {
-            log.error("Failed to send SMTP email to {}: {}", mail.to(), rootMessage(ex));
+            String detail = rootMessage(ex);
+            if (detail != null && detail.toLowerCase().contains("unusual sending activity")) {
+                log.error(
+                        "Zoho blocked outbound mail to {} (550 unusual activity). Unblock at https://mail.zoho.in/UnblockMe or use MAIL_PROVIDER=zeptomail. Detail: {}",
+                        mail.to(),
+                        detail);
+            } else {
+                log.error("Failed to send SMTP email to {}: {}", mail.to(), detail);
+            }
             return false;
         }
     }

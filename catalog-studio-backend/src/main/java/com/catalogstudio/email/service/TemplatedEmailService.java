@@ -50,6 +50,22 @@ public class TemplatedEmailService {
                 text = "New enquiry from " + vars.getOrDefault("name", "") + " (" + vars.getOrDefault("email", "") + "). "
                         + vars.getOrDefault("message", "");
                 html = "<p>" + text + "</p>";
+            } else if ("enquiry-reply".equalsIgnoreCase(slug)) {
+                String name = vars.getOrDefault("name", "there");
+                String replyBody = vars.getOrDefault("replyBody", "");
+                String original = vars.getOrDefault("message", "");
+                String subjectLine = vars.getOrDefault("subject", "your enquiry");
+                subject = "Re: " + subjectLine;
+                text = "Hi " + name + ",\n\n" + replyBody + "\n\n---\nYour original message (" + subjectLine + "):\n" + original;
+                html = "<div style=\"font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:24px;\">"
+                        + "<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;\">"
+                        + "<p style=\"margin:0 0 8px;color:#0f766e;font-size:12px;letter-spacing:.16em;text-transform:uppercase;\">Catalog Studio</p>"
+                        + "<h1 style=\"margin:0 0 16px;font-size:22px;color:#0f172a;\">Reply to your enquiry</h1>"
+                        + "<p style=\"margin:0 0 16px;color:#334155;line-height:1.6;\">Hi " + name + ",</p>"
+                        + "<p style=\"margin:0 0 16px;color:#334155;line-height:1.6;white-space:pre-wrap;\">" + replyBody + "</p>"
+                        + "<p style=\"margin:24px 0 8px;color:#64748b;font-size:13px;\"><strong>Your original message</strong></p>"
+                        + "<p style=\"margin:0;color:#64748b;font-size:13px;line-height:1.6;white-space:pre-wrap;\">" + original + "</p>"
+                        + "</div></div>";
             } else if ("plan-activated".equalsIgnoreCase(slug)) {
                 String name = vars.getOrDefault("name", "there");
                 String detail = vars.getOrDefault("planDetail", vars.getOrDefault("plan", "your plan"));

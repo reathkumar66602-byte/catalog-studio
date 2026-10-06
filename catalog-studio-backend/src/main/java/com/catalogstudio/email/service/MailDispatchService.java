@@ -63,7 +63,16 @@ public class MailDispatchService {
             return false;
         }
         if (properties.mail().smtpProvider()) {
-            return zohoSmtpTransport.send(mail);
+            boolean sent = zohoSmtpTransport.send(mail);
+            if (sent) {
+                return true;
+            }
+            // Zoho often returns 550 "Unusual sending activity" / UnblockMe — fall back when Zepto is configured.
+            if (StringUtils.hasText(properties.mail().zeptomailSendToken())) {
+                log.warn("SMTP send failed for {}; falling back to ZeptoMail", mail.to());
+                return zeptoMailTransport.send(mail);
+            }
+            return false;
         }
         String provider = properties.mail().provider() == null ? "zoho" : properties.mail().provider().trim();
         if ("zeptomail".equalsIgnoreCase(provider)) {

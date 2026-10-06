@@ -71,6 +71,8 @@ export type AdminSiteBundle = {
     subject?: string;
     message: string;
     status: string;
+    replyBody?: string | null;
+    repliedAt?: string | null;
     createdAt: string;
   }[];
 };

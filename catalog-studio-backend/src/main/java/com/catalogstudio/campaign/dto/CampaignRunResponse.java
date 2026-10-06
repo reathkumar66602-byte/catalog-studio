@@ -8,6 +8,7 @@ public record CampaignRunResponse(
         String campaignType,
         String channel,
         String promoCode,
+        Integer maxPriorSends,
         String status,
         int totalRecipients,
         int sentCount,

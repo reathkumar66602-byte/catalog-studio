@@ -57,7 +57,16 @@ public class ZeptoMailTransport implements MailTransport {
                     .header("Authorization", authorizationHeader(token))
                     .body(body)
                     .retrieve()
+                    .onStatus(status -> status.isError(), (request, resp) -> {
+                        String errBody = new String(resp.getBody().readAllBytes());
+                        log.error("ZeptoMail HTTP {} to {}: {}", resp.getStatusCode().value(), mail.to(), abbreviate(errBody));
+                        throw new IllegalStateException("ZeptoMail HTTP " + resp.getStatusCode().value() + ": " + abbreviate(errBody));
+                    })
                     .body(String.class);
+            if (!looksSuccessful(response, objectMapper)) {
+                log.error("ZeptoMail provider error to {}: {}", mail.to(), abbreviate(response));
+                return false;
+            }
             log.info("ZeptoMail accepted send to {} ref={} body={}", mail.to(), mail.clientReference(), abbreviate(response));
             return true;
         } catch (Exception ex) {

@@ -48,6 +48,16 @@ export function EmailTemplatesPage() {
     queryKey: ["campaign-templates"],
     queryFn: async () => (await api.get("/admin/campaigns/templates")).data.data as CampaignTemplate[],
   });
+  const mailStatus = useQuery({
+    queryKey: ["admin-mail-status"],
+    queryFn: async () => (await api.get("/admin/mail/status")).data.data as {
+      readyForOutbound: boolean;
+      hint: string;
+      provider?: string;
+      supportEmail?: string;
+      otpEnabled?: boolean;
+    },
+  });
 
   const [emailId, setEmailId] = useState<string | null>(null);
   const [campaignId, setCampaignId] = useState<string | null>(null);
@@ -133,8 +143,22 @@ export function EmailTemplatesPage() {
           Edit stored templates used for account mail and campaign email / WhatsApp. Placeholders:{" "}
           <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code>, <code>{"{{loginLink}}"}</code>,{" "}
           <code>{"{{promoLine}}"}</code>, <code>{"{{promoCode}}"}</code>, <code>{"{{plan}}"}</code>,{" "}
-          <code>{"{{endDate}}"}</code>, <code>{"{{daysLeft}}"}</code>, <code>{"{{otp}}"}</code>.
+          <code>{"{{endDate}}"}</code>, <code>{"{{daysLeft}}"}</code>, <code>{"{{otp}}"}</code>,{" "}
+          <code>{"{{replyBody}}"}</code>.
         </p>
+        {mailStatus.data && (
+          <p
+            className={`mt-3 rounded-xl px-3 py-2 text-sm ${
+              mailStatus.data.readyForOutbound ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-900"
+            }`}
+          >
+            Mail {mailStatus.data.readyForOutbound ? "ready" : "not ready"}
+            {mailStatus.data.provider ? ` · ${mailStatus.data.provider}` : ""}
+            {mailStatus.data.supportEmail ? ` · support ${mailStatus.data.supportEmail}` : ""}
+            {mailStatus.data.otpEnabled === false ? " · OTP disabled" : ""}
+            . {mailStatus.data.hint}
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2">

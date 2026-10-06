@@ -135,11 +135,12 @@ public class CampaignService {
             }
         }
 
-        List<User> audience = selectAudience(type);
+        List<User> audience = selectAudience(type, request.maxPriorSends());
         CampaignRun run = runRepository.save(CampaignRun.builder()
                 .campaignType(type)
                 .channel(channel)
                 .promoCode(promo)
+                .maxPriorSends(request.maxPriorSends())
                 .triggeredBy(actor)
                 .status(RunStatus.PENDING)
                 .totalRecipients(audience.size())
@@ -337,7 +338,7 @@ public class CampaignService {
         run.setFinishedAt(java.time.Instant.now());
     }
 
-    private List<User> selectAudience(CampaignType type) {
+    private List<User> selectAudience(CampaignType type, Integer maxPriorSends) {
         List<User> workspace = userRepository.findAll().stream()
                 .filter(User::isWorkspaceUser)
                 .filter(u -> u.getStatus() == User.UserStatus.ACTIVE)
@@ -358,7 +359,26 @@ public class CampaignService {
                 matched.add(user);
             }
         }
-        return matched;
+        if (maxPriorSends == null) {
+            return matched;
+        }
+        if (maxPriorSends < 0) {
+            throw ApiException.badRequest("maxPriorSends must be 0 or greater");
+        }
+        if (matched.isEmpty()) {
+            return matched;
+        }
+        List<Long> matchedIds = matched.stream().map(User::getId).toList();
+        Map<Long, Long> priorSends = new HashMap<>();
+        for (Object[] row : itemRepository.countSentByUserIdsAndCampaignType(matchedIds, type)) {
+            if (row[0] != null) {
+                priorSends.put((Long) row[0], (Long) row[1]);
+            }
+        }
+        int max = maxPriorSends;
+        return matched.stream()
+                .filter(u -> priorSends.getOrDefault(u.getId(), 0L) <= max)
+                .toList();
     }
 
     private boolean matches(CampaignType type, Subscription sub, LocalDate today) {
@@ -437,6 +457,7 @@ public class CampaignService {
                 run.getCampaignType().name(),
                 run.getChannel().name(),
                 run.getPromoCode(),
+                run.getMaxPriorSends(),
                 run.getStatus().name(),
                 run.getTotalRecipients(),
                 run.getSentCount(),

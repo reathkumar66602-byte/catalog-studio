@@ -117,6 +117,8 @@ public record SitePublicResponse(
             String subject,
             String message,
             String status,
+            String replyBody,
+            Instant repliedAt,
             Instant createdAt
     ) {}
 

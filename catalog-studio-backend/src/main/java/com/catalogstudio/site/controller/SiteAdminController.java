@@ -3,6 +3,7 @@ package com.catalogstudio.site.controller;
 import com.catalogstudio.common.api.ApiResponse;
 import com.catalogstudio.site.dto.ClientPromoRequest;
 import com.catalogstudio.site.dto.ClientStoreRequest;
+import com.catalogstudio.site.dto.EnquiryReplyRequest;
 import com.catalogstudio.site.dto.EnquiryStatusRequest;
 import com.catalogstudio.site.dto.SitePublicResponse.AdminSiteBundle;
 import com.catalogstudio.site.dto.SitePublicResponse.ClientAdminResponse;
@@ -82,5 +83,13 @@ public class SiteAdminController {
             @Valid @RequestBody EnquiryStatusRequest request
     ) {
         return ApiResponse.ok(siteService.updateEnquiryStatus(id, request));
+    }
+
+    @PostMapping("/enquiries/{id}/reply")
+    public ApiResponse<EnquiryAdminResponse> enquiryReply(
+            @PathVariable UUID id,
+            @Valid @RequestBody EnquiryReplyRequest request
+    ) {
+        return ApiResponse.ok("Reply sent", siteService.replyToEnquiry(id, request));
     }
 }

@@ -52,6 +52,15 @@ public class Enquiry {
     @Column(nullable = false, length = 32)
     private String status;
 
+    @Column(name = "reply_body", columnDefinition = "text")
+    private String replyBody;
+
+    @Column(name = "replied_at")
+    private Instant repliedAt;
+
+    @Column(name = "replied_by_user_id")
+    private Long repliedByUserId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

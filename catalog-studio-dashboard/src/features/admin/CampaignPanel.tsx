@@ -14,6 +14,7 @@ type CampaignRun = {
   campaignType: string;
   channel: string;
   promoCode?: string | null;
+  maxPriorSends?: number | null;
   status: string;
   totalRecipients: number;
   sentCount: number;
@@ -29,11 +30,21 @@ type PromoOption = {
   description?: string;
 };
 
+/** Empty string = no filter (all matching users). */
+const PRIOR_SEND_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Any prior sends (all matching)" },
+  { value: "0", label: "Never sent before (0 times)" },
+  { value: "1", label: "Sent at most 1 time (0 or 1)" },
+  { value: "2", label: "Sent at most 2 times (0–2)" },
+  { value: "3", label: "Sent at most 3 times (0–3)" },
+];
+
 export function CampaignPanel() {
   const qc = useQueryClient();
   const [campaignType, setCampaignType] = useState("TRIAL_EXPIRED");
   const [channel, setChannel] = useState("EMAIL");
   const [promoCode, setPromoCode] = useState("");
+  const [maxPriorSends, setMaxPriorSends] = useState("0");
   const [message, setMessage] = useState("");
 
   const caps = useQuery({
@@ -62,11 +73,14 @@ export function CampaignPanel() {
         campaignType,
         channel,
         promoCode: promoCode || undefined,
+        maxPriorSends: maxPriorSends === "" ? undefined : Number(maxPriorSends),
       }),
     onSuccess: async (res) => {
       const run = res.data.data as CampaignRun;
+      const filter =
+        run.maxPriorSends == null ? "any prior sends" : `prior sends ≤ ${run.maxPriorSends}`;
       setMessage(
-        `Queued ${run.campaignType} for ${run.totalRecipients} users (${run.channel}). Backend job sends in batches.`,
+        `Queued ${run.campaignType} for ${run.totalRecipients} users (${run.channel}, ${filter}). Backend job sends in batches.`,
       );
       await qc.invalidateQueries({ queryKey: ["admin-campaign-runs"] });
     },
@@ -83,14 +97,14 @@ export function CampaignPanel() {
           <Link to="/settings/email-templates" className="text-teal-700 underline">
             Email templates → Campaigns
           </Link>
-          . Deactivated accounts are never included. WhatsApp needs an outbound API — otherwise those items are
-          skipped.
+          . Use “Prior sends” so you do not re-blast users already contacted many times. Deactivated accounts are never
+          included. WhatsApp needs an outbound API — otherwise those items are skipped.
         </p>
       </div>
       {caps.data && (
         <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">{caps.data.whatsappMessage}</p>
       )}
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
         <label className="text-sm">
           <span className="mb-1 block text-slate-500">Audience</span>
           <select
@@ -109,6 +123,20 @@ export function CampaignPanel() {
             <option value="EMAIL">Email</option>
             <option value="WHATSAPP">WhatsApp</option>
             <option value="BOTH">Email + WhatsApp</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-slate-500">Prior sends filter</span>
+          <select
+            value={maxPriorSends}
+            onChange={(e) => setMaxPriorSends(e.target.value)}
+            className="w-full rounded-lg border px-2 py-2"
+          >
+            {PRIOR_SEND_OPTIONS.map((opt) => (
+              <option key={opt.value || "any"} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="text-sm">
@@ -140,11 +168,12 @@ export function CampaignPanel() {
       {trigger.isError && <p className="text-sm text-red-600">{apiErrorMessage(trigger.error)}</p>}
       {(runs.data || []).length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-xs">
+          <table className="w-full min-w-[720px] text-left text-xs">
             <thead className="text-slate-500">
               <tr>
                 <th className="py-2">Type</th>
                 <th>Channel</th>
+                <th>Prior ≤</th>
                 <th>Promo</th>
                 <th>Status</th>
                 <th>Recipients</th>
@@ -157,6 +186,7 @@ export function CampaignPanel() {
                 <tr key={run.id} className="border-t">
                   <td className="py-2 font-medium">{run.campaignType}</td>
                   <td>{run.channel}</td>
+                  <td>{run.maxPriorSends == null ? "any" : run.maxPriorSends}</td>
                   <td>{run.promoCode || "—"}</td>
                   <td>{run.status}</td>
                   <td>{run.totalRecipients}</td>

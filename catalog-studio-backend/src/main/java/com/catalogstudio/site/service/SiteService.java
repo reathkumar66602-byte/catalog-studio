@@ -4,8 +4,10 @@ import com.catalogstudio.common.exception.ApiException;
 import com.catalogstudio.email.dto.MailIdentity;
 import com.catalogstudio.email.service.MailIdentityService;
 import com.catalogstudio.email.service.TemplatedEmailService;
+import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.site.dto.ClientPromoRequest;
 import com.catalogstudio.site.dto.ClientStoreRequest;
+import com.catalogstudio.site.dto.EnquiryReplyRequest;
 import com.catalogstudio.site.dto.EnquiryRequest;
 import com.catalogstudio.site.dto.EnquiryStatusRequest;
 import com.catalogstudio.site.dto.SitePublicResponse;
@@ -31,6 +33,7 @@ import com.catalogstudio.site.repository.EnquiryRepository;
 import com.catalogstudio.site.repository.SiteSettingsRepository;
 import com.catalogstudio.subscription.service.BillingSettingsService;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -226,6 +229,42 @@ public class SiteService {
         return toEnquiryAdmin(enquiry);
     }
 
+    @Transactional
+    public EnquiryAdminResponse replyToEnquiry(UUID id, EnquiryReplyRequest request) {
+        Enquiry enquiry = enquiryRepository.findByUuid(id).orElseThrow(() -> ApiException.notFound("Enquiry not found"));
+        String replyBody = request.replyBody() == null ? "" : request.replyBody().trim();
+        if (!StringUtils.hasText(replyBody)) {
+            throw ApiException.badRequest("Enter a reply message");
+        }
+        if (!StringUtils.hasText(enquiry.getEmail())) {
+            throw ApiException.badRequest("Enquiry has no visitor email");
+        }
+
+        MailIdentity identity = mailIdentityService.current();
+        String support = StringUtils.hasText(identity.supportEmail())
+                ? identity.supportEmail()
+                : currentSettings().getSupportEmail();
+
+        Map<String, String> vars = enquiryMailVars(enquiry);
+        vars.put("replyBody", replyBody);
+        vars.put("supportEmail", blank(support));
+        if (!StringUtils.hasText(vars.get("subject"))) {
+            vars.put("subject", "your enquiry");
+        }
+
+        boolean sent = templatedEmailService.send("enquiry-reply", enquiry.getEmail().trim(), support, vars);
+        if (!sent) {
+            throw ApiException.unavailable("Could not send the reply email. Check mail settings and try again.");
+        }
+
+        enquiry.setReplyBody(replyBody);
+        enquiry.setRepliedAt(Instant.now());
+        enquiry.setRepliedByUserId(SecurityUtils.currentUserId());
+        enquiry.setStatus("REPLIED");
+        log.info("Enquiry reply sent to {} by user {}", enquiry.getEmail(), SecurityUtils.currentUserId());
+        return toEnquiryAdmin(enquiry);
+    }
+
     private SiteSettings currentSettings() {
         return settingsRepository.findBySiteKey(DEFAULT_KEY).orElseGet(() -> settingsRepository.save(SiteSettings.builder()
                 .siteKey(DEFAULT_KEY)
@@ -410,6 +449,8 @@ public class SiteService {
                 enquiry.getSubject(),
                 enquiry.getMessage(),
                 enquiry.getStatus(),
+                enquiry.getReplyBody(),
+                enquiry.getRepliedAt(),
                 enquiry.getCreatedAt()
         );
     }
