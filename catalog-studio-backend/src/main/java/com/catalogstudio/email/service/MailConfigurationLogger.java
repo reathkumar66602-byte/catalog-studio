@@ -42,10 +42,19 @@ public class MailConfigurationLogger implements ApplicationRunner {
         }
         if ("zeptomail".equalsIgnoreCase(mail.provider())) {
             if (!StringUtils.hasText(mail.zeptomailSendToken())) {
-                log.error("MAIL_PROVIDER=zeptomail but ZEPTOMAIL_SEND_TOKEN is empty. OTP and enquiry emails will not send.");
+                if (mail.smtpReady()) {
+                    log.error(
+                            "MAIL_PROVIDER=zeptomail but ZEPTOMAIL_SEND_TOKEN is empty. Falling back to SMTP ({}). Set the Zepto token or set MAIL_PROVIDER=zoho.",
+                            mail.maskedUsername());
+                    return;
+                }
+                log.error("MAIL_PROVIDER=zeptomail but ZEPTOMAIL_SEND_TOKEN is empty and SMTP is not configured. OTP and enquiry emails will not send.");
                 return;
             }
             log.info("ZeptoMail ready api={}", mail.zeptomailApiUrl());
+            if (mail.smtpReady()) {
+                log.info("SMTP also configured as fallback for ZeptoMail failures");
+            }
             return;
         }
         log.warn("Unknown MAIL_PROVIDER '{}'. OTP and enquiry emails will not send.", mail.provider());

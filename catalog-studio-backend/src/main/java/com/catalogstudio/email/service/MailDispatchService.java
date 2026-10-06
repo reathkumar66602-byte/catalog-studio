@@ -62,13 +62,16 @@ public class MailDispatchService {
             log.info("Mail disabled; skip send to {}", mail.to());
             return false;
         }
+        boolean smtpReady = properties.mail().smtpReady();
+        boolean zeptoReady = StringUtils.hasText(properties.mail().zeptomailSendToken());
+
         if (properties.mail().smtpProvider()) {
             boolean sent = zohoSmtpTransport.send(mail);
             if (sent) {
                 return true;
             }
             // Zoho often returns 550 "Unusual sending activity" / UnblockMe — fall back when Zepto is configured.
-            if (StringUtils.hasText(properties.mail().zeptomailSendToken())) {
+            if (zeptoReady) {
                 log.warn("SMTP send failed for {}; falling back to ZeptoMail", mail.to());
                 return zeptoMailTransport.send(mail);
             }
@@ -76,7 +79,26 @@ public class MailDispatchService {
         }
         String provider = properties.mail().provider() == null ? "zoho" : properties.mail().provider().trim();
         if ("zeptomail".equalsIgnoreCase(provider)) {
-            return zeptoMailTransport.send(mail);
+            if (zeptoReady) {
+                boolean sent = zeptoMailTransport.send(mail);
+                if (sent) {
+                    return true;
+                }
+                if (smtpReady) {
+                    log.warn("ZeptoMail send failed for {}; falling back to SMTP", mail.to());
+                    return zohoSmtpTransport.send(mail);
+                }
+                return false;
+            }
+            // Misconfiguration: MAIL_PROVIDER=zeptomail but token empty — use SMTP if available instead of failing OTP.
+            if (smtpReady) {
+                log.error(
+                        "MAIL_PROVIDER=zeptomail but ZEPTOMAIL_SEND_TOKEN is empty; sending via SMTP for {}",
+                        mail.to());
+                return zohoSmtpTransport.send(mail);
+            }
+            log.error("MAIL_PROVIDER=zeptomail but ZEPTOMAIL_SEND_TOKEN is empty and SMTP is not configured");
+            return false;
         }
         log.warn("Unknown MAIL_PROVIDER '{}'; skip send", provider);
         return false;
