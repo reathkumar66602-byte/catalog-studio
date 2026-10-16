@@ -5,8 +5,8 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 70MB
+      max-file-size: 200MB
+      max-request-size: 220MB
   jackson:
     default-property-inclusion: non_null
     serialization:
@@ -59,6 +59,8 @@ springdoc:
     tags-sorter: alpha
 
 catalogstudio:
+  worker:
+    enabled: false
   jwt:
     secret: ${JWT_SECRET:change-this-to-a-256-bit-secret-key-for-catalog-studio-dev-only}
     access-token-minutes: ${JWT_ACCESS_MINUTES:15}
@@ -121,3 +123,36 @@ catalogstudio:
     password: ${TINGILY_PASSWORD:}
     token: ${TINGILY_TOKEN:}
     fetch-limit: ${TINGILY_FETCH_LIMIT:40}
+  meesho-panel:
+    base-url: ${MEESHO_PANEL_BASE_URL:https://supplier.meesho.com}
+    live-auth-required: ${MEESHO_PANEL_LIVE_AUTH_REQUIRED:false}
+  wholesale:
+    gst:
+      # mock | gstinapi | http — use gstinapi for production GST verification
+      provider: ${WHOLESALE_GST_PROVIDER:mock}
+      http-url: ${WHOLESALE_GST_HTTP_URL:}
+      http-api-key: ${WHOLESALE_GST_HTTP_API_KEY:}
+      name-match-threshold: ${WHOLESALE_GST_NAME_MATCH_THRESHOLD:0.72}
+      # gstinapi.in — GET /v1/gstin/{gstin} with x-api-key header
+      gstinapi-base-url: ${GSTINAPI_BASE_URL:https://www.gstinapi.in}
+      gstinapi-api-key: ${GSTINAPI_API_KEY:}
+  # Platform OMS credentials (Base.com-style) — set in .env / .env.gcp, not the browser.
+  oms:
+    flipkart:
+      enabled: ${FLIPKART_OMS_ENABLED:false}
+      app-id: ${FLIPKART_APP_ID:}
+      app-secret: ${FLIPKART_APP_SECRET:}
+      location-id: ${FLIPKART_LOCATION_ID:}
+    amazon:
+      enabled: ${AMAZON_OMS_ENABLED:false}
+      client-id: ${AMAZON_LWA_CLIENT_ID:}
+      client-secret: ${AMAZON_LWA_CLIENT_SECRET:}
+      refresh-token: ${AMAZON_LWA_REFRESH_TOKEN:}
+      marketplace-id: ${AMAZON_MARKETPLACE_ID:A21TJRUUN4KGV}
+      sandbox: ${AMAZON_SP_API_SANDBOX:true}
+    meesho:
+      enabled: ${MEESHO_OMS_ENABLED:false}
+      email: ${MEESHO_PANEL_EMAIL:}
+      password: ${MEESHO_PANEL_PASSWORD:}
+      base-url: ${MEESHO_PANEL_BASE_URL:https://supplier.meesho.com}
+      live-auth-required: ${MEESHO_PANEL_LIVE_AUTH_REQUIRED:false}

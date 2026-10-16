@@ -124,7 +124,9 @@ class AdminWorkspaceServiceTest {
         assertThat(expired.getEndDate()).isEqualTo(LocalDate.now().plusMonths(1));
         verify(paymentTransactionService).record(
                 eq(seller), eq(basic), eq(TransactionType.ACTIVATION), eq(TransactionStatus.SUCCESS),
-                eq("MANUAL"), eq("UTR123"), eq("Activated after WhatsApp payment confirmation"));
+                eq("MANUAL"), eq("UTR123"),
+                eq("Activated after WhatsApp payment confirmation · no promo code"),
+                org.mockito.ArgumentMatchers.any());
         verify(templatedEmailService).send(
                 eq("plan-activated"), eq("seller@example.com"), org.mockito.ArgumentMatchers.<Map<String, String>>any());
     }

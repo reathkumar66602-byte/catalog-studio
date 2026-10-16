@@ -1,5 +1,6 @@
 package com.catalogstudio.campaign.entity;
 
+import com.catalogstudio.tips.entity.TipVideo;
 import com.catalogstudio.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -78,6 +79,10 @@ public class CampaignRun {
 
     @Column(columnDefinition = "text")
     private String notes;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "tip_video_id")
+    private TipVideo tipVideo;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

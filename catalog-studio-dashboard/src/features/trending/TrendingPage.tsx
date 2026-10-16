@@ -73,16 +73,14 @@ export function TrendingPage() {
   const needle = query.trim().toLowerCase();
   const visible = useMemo(() => {
     if (!needle) return groups;
-    return groups
-      .map((group) => {
-        const parentHit = group.label.toLowerCase().includes(needle);
-        const children = (group.children || []).filter(
-          (child) => parentHit || child.label.toLowerCase().includes(needle),
-        );
-        if (!parentHit && children.length === 0) return null;
-        return { ...group, children };
-      })
-      .filter((group): group is Category => group !== null);
+    return groups.flatMap((group) => {
+      const parentHit = group.label.toLowerCase().includes(needle);
+      const children = (group.children || []).filter(
+        (child) => parentHit || child.label.toLowerCase().includes(needle),
+      );
+      if (!parentHit && children.length === 0) return [];
+      return [{ ...group, children }];
+    });
   }, [groups, needle]);
   const view = products.data;
   const from = view && view.products.length > 0 ? view.page * view.pageSize + 1 : 0;

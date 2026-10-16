@@ -32,7 +32,20 @@ public class MarketplaceService {
             Map<String, Object> card = new java.util.LinkedHashMap<>();
             card.put("marketplace", adapter.getMarketplace());
             card.put("supportedFields", adapter.getSupportedFields());
-            card.put("features", List.of("AI Listing", "Autofill", "Profiles"));
+            List<String> features = new java.util.ArrayList<>(List.of("AI Listing", "Autofill", "Profiles"));
+            if (connection != null && "PANEL_LOGIN".equalsIgnoreCase(connection.getConnectionType())
+                    && "MEESHO".equalsIgnoreCase(adapter.getMarketplace())) {
+                features.add("Panel OMS (orders/stock/labels)");
+            }
+            if (connection != null && "SELLER_API".equalsIgnoreCase(connection.getConnectionType())
+                    && "FLIPKART".equalsIgnoreCase(adapter.getMarketplace())) {
+                features.add("Seller API (stock/orders)");
+            }
+            if (connection != null && "SP_API".equalsIgnoreCase(connection.getConnectionType())
+                    && "AMAZON".equalsIgnoreCase(adapter.getMarketplace())) {
+                features.add("SP-API (stock/orders)");
+            }
+            card.put("features", features);
             card.put("status", connection == null ? "NOT_CONNECTED" : connection.getStatus().name());
             card.put("connectionType", connection == null ? "EXTENSION" : connection.getConnectionType());
             card.put("lastActivityAt", connection == null ? null : connection.getLastActivityAt());

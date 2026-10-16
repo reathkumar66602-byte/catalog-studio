@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 import type { AnalysisResult, Product } from "../../types";
+import { ProductVariantsPanel } from "../inventory/ProductVariantsPanel";
 
 const fields = [
   ["productType", "Product type"],
@@ -167,6 +168,7 @@ export function ReviewPage() {
           />
         </label>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {id && <ProductVariantsPanel productId={id} />}
         <div className="flex flex-wrap gap-3">
           <button onClick={() => save("DRAFT")} className="rounded-xl border border-slate-300 px-4 py-2">
             Save draft

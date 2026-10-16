@@ -21,6 +21,9 @@ public class LocalStorageService implements StorageService {
     private static final Logger log = LoggerFactory.getLogger(LocalStorageService.class);
     private static final Set<String> ALLOWED = Set.of(
             "image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp");
+    private static final Set<String> VIDEO_ALLOWED = Set.of(
+            "video/mp4", "video/webm", "video/quicktime");
+    private static final long MAX_VIDEO_BYTES = 200L * 1024 * 1024;
 
     private final CatalogStudioProperties properties;
 
@@ -54,6 +57,47 @@ public class LocalStorageService implements StorageService {
     }
 
     @Override
+    public StoredFile storeVideo(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw ApiException.badRequest("Video file is required");
+        }
+        if (file.getSize() > MAX_VIDEO_BYTES) {
+            throw ApiException.badRequest("Each tip video must be 200MB or smaller");
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        if (contentType.contains(";")) {
+            contentType = contentType.substring(0, contentType.indexOf(';')).trim();
+        }
+        if ("video/mov".equals(contentType)) {
+            contentType = "video/quicktime";
+        }
+        String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        if (!VIDEO_ALLOWED.contains(contentType)) {
+            if (original.endsWith(".mp4")) {
+                contentType = "video/mp4";
+            } else if (original.endsWith(".webm")) {
+                contentType = "video/webm";
+            } else if (original.endsWith(".mov")) {
+                contentType = "video/quicktime";
+            } else {
+                throw ApiException.badRequest("Only MP4, WebM, and MOV tip videos are allowed");
+            }
+        }
+        String ext = extension(contentType);
+        String key = UUID.randomUUID() + ext;
+        Path dir = storageDir();
+        try {
+            Files.createDirectories(dir);
+            file.transferTo(dir.resolve(key));
+        } catch (IOException e) {
+            log.warn("Could not write tip video to {}: {}", dir, e.toString());
+            throw ApiException.badRequest("Could not store tip video");
+        }
+        String url = properties.storage().publicBaseUrl().replaceAll("/$", "") + "/" + key;
+        return new StoredFile(key, url, contentType, file.getSize(), new byte[0]);
+    }
+
+    @Override
     public StoredFile storeBytes(byte[] bytes, String contentType) {
         if (bytes == null || bytes.length == 0) {
             throw ApiException.badRequest("Generated image was empty");
@@ -77,8 +121,8 @@ public class LocalStorageService implements StorageService {
 
     @Override
     public byte[] read(String storageKey) {
-        if (storageKey == null || !storageKey.matches("[a-fA-F0-9\\-]{36}\\.(jpg|png|webp)")) {
-            throw ApiException.notFound("Image not found");
+        if (storageKey == null || !storageKey.matches("[a-fA-F0-9\\-]{36}\\.(jpg|png|webp|mp4|webm|mov)")) {
+            throw ApiException.notFound("File not found");
         }
         Path path = storageDir().resolve(storageKey).normalize();
         if (!path.startsWith(storageDir())) {
@@ -159,6 +203,9 @@ public class LocalStorageService implements StorageService {
         return switch (contentType) {
             case "image/png" -> ".png";
             case "image/webp" -> ".webp";
+            case "video/mp4" -> ".mp4";
+            case "video/webm" -> ".webm";
+            case "video/quicktime" -> ".mov";
             default -> ".jpg";
         };
     }

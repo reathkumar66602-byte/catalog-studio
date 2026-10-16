@@ -1,4 +1,4 @@
-import { FORM_CATALOG } from "./catalog.forms";
+﻿import { FORM_CATALOG } from "./catalog.forms";
 import { UI_CATALOG } from "./catalog.ui";
 
 export const LOCALES = [
@@ -165,6 +165,42 @@ export const CATALOG: Catalog = {
     ur: "کروم ایکسٹینشن",
     ja: "Chrome拡張機能",
     zh: "Chrome 扩展",
+  },
+  "nav.inventory": {
+    en: "Inventory",
+    hi: "Inventory",
+    bn: "Inventory",
+    mr: "Inventory",
+    ta: "Inventory",
+    kn: "Inventory",
+    pa: "Inventory",
+    ur: "Inventory",
+    ja: "Inventory",
+    zh: "Inventory",
+  },
+  "nav.tips": {
+    en: "E-commerce Tips",
+    hi: "ई-कॉमर्स टिप्स",
+    bn: "ই-কমার্স টিপস",
+    mr: "ई-कॉमर्स टिप्स",
+    ta: "இ-காமர்ஸ் குறிப்புகள்",
+    kn: "ಇ-ಕಾಮರ್ಸ್ ಟಿಪ್ಸ್",
+    pa: "ਈ-ਕਾਮਰਸ ਟਿਪਸ",
+    ur: "ای کامرس ٹپس",
+    ja: "Eコマース Tips",
+    zh: "电商 Tips",
+  },
+  "nav.tipsAdmin": {
+    en: "Tips videos",
+    hi: "टिप्स वीडियो",
+    bn: "টিপস ভিডিও",
+    mr: "टिप्स व्हिडिओ",
+    ta: "குறிப்பு வீடியோ",
+    kn: "ಟಿಪ್ಸ್ ವೀಡಿಯೊ",
+    pa: "ਟਿਪਸ ਵੀਡੀਓ",
+    ur: "ٹپس ویڈیوز",
+    ja: "Tips動画管理",
+    zh: "Tips 视频管理",
   },
   "nav.subscription": {
     en: "Subscription",

@@ -4,6 +4,8 @@ import {
   Camera,
   Chrome,
   CreditCard,
+  Boxes,
+  ClipboardList,
   Globe,
   History,
   KeyRound,
@@ -13,12 +15,17 @@ import {
   Mail,
   MapPin,
   Menu,
+  Package,
+  PlayCircle,
   Receipt,
   Scissors,
   Settings,
   Shield,
+  ShoppingBag,
+  Store,
   Users,
   Wallet,
+  Warehouse,
   X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +36,7 @@ import type { AccountProfile, SubscriptionStatus, UserSummary } from "../types";
 import { useI18n } from "../i18n/LanguageProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import { hasFeature, isStaff, isSuperAdmin, roleLabel } from "../routes/roles";
+import { canSupply } from "../features/wholesale/wholesale";
 
 type MenuLink = {
   to: string;
@@ -36,6 +44,8 @@ type MenuLink = {
   icon: typeof LayoutDashboard;
   feature?: string;
   superAdminOnly?: boolean;
+  /** Visible only when the plan allows running a wholesale supplier store. */
+  supplierOnly?: boolean;
 };
 
 export function AppLayout() {
@@ -103,6 +113,13 @@ export function AppLayout() {
     { to: "/tools/labels", label: t("nav.labels"), icon: Scissors, feature: "labels" },
     { to: "/tools/meesho-calculator", label: t("nav.calculator"), icon: Calculator, feature: "meesho_calculator" },
     { to: "/extension", label: t("nav.extension"), icon: Chrome, feature: "extension" },
+    { to: "/tips", label: t("nav.tips"), icon: PlayCircle, feature: "ecommerce_tips" },
+    { to: "/inventory", label: t("nav.inventory"), icon: Package, feature: "inventory" },
+    { to: "/live-stock", label: t("nav.liveStock"), icon: Store, feature: "live_stock" },
+    { to: "/live-stock/orders", label: t("nav.wholesaleOrders"), icon: ShoppingBag, feature: "live_stock" },
+    { to: "/supplier/store", label: t("nav.supplierStore"), icon: Warehouse, feature: "wholesale_supplier", supplierOnly: true },
+    { to: "/supplier/inventory", label: t("nav.supplierInventory"), icon: Boxes, feature: "wholesale_supplier", supplierOnly: true },
+    { to: "/supplier/orders", label: t("nav.supplierOrders"), icon: ClipboardList, feature: "wholesale_supplier", supplierOnly: true },
     { to: "/subscription", label: t("nav.subscription"), icon: CreditCard, feature: "subscription" },
     { to: "/transactions", label: t("nav.transactions"), icon: Receipt, feature: "transactions" },
     { to: "/analysis", label: t("nav.analysis"), icon: History, feature: "analysis" },
@@ -110,22 +127,29 @@ export function AppLayout() {
     { to: "/settings", label: t("nav.settings"), icon: Settings, feature: "settings" },
   ];
   const staffLinks: MenuLink[] = [
+    { to: "/orders", label: "Order Manager", icon: ClipboardList, superAdminOnly: true },
+    { to: "/marketplaces", label: "OMS / Marketplaces", icon: Store, superAdminOnly: true },
     { to: "/admin/users", label: t("nav.users"), icon: Users },
     { to: "/admin/access", label: t("nav.access"), icon: KeyRound },
+    { to: "/admin/tips", label: t("nav.tipsAdmin"), icon: PlayCircle },
     { to: "/admin/staff", label: t("nav.admin"), icon: Shield, superAdminOnly: true },
     { to: "/admin/site", label: t("nav.websiteSettings"), icon: Globe },
     { to: "/admin/billing", label: t("nav.trialPayment"), icon: Wallet },
     { to: "/settings/email-templates", label: t("nav.emailTemplates"), icon: Mail },
   ];
   const menu = useMemo(() => {
+    // Staff always see supplier tools; sellers need SUPPLIER / wholesaleSupplier plan.
+    const staffUser = isStaff(role);
     const workspace = links.filter(
-      (link) => !link.feature || hasFeature({ role, enabledFeatures }, link.feature),
+      (link) =>
+        (!link.feature || hasFeature({ role, enabledFeatures }, link.feature)) &&
+        (!link.supplierOnly || staffUser || canSupply(access)),
     );
-    const staff = isStaff(role)
+    const staff = staffUser
       ? staffLinks.filter((link) => !link.superAdminOnly || isSuperAdmin(role))
       : [];
     return { workspace, staff };
-  }, [role, enabledFeatures, t]);
+  }, [role, enabledFeatures, access, t]);
 
   async function signOut() {
     try {

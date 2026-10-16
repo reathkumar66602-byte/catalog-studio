@@ -25,6 +25,8 @@ import com.catalogstudio.subscription.entity.Subscription;
 import com.catalogstudio.subscription.entity.Subscription.SubscriptionStatus;
 import com.catalogstudio.subscription.repository.BillingPromoCodeRepository;
 import com.catalogstudio.subscription.repository.SubscriptionRepository;
+import com.catalogstudio.tips.entity.TipVideo;
+import com.catalogstudio.tips.service.TipVideoService;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
 import java.time.LocalDate;
@@ -60,6 +62,7 @@ public class CampaignService {
     private final CampaignRunItemRepository itemRepository;
     private final MailDispatchService mailDispatchService;
     private final WhatsAppOutboundService whatsAppOutboundService;
+    private final TipVideoService tipVideoService;
     private final CatalogStudioProperties properties;
 
     @Transactional(readOnly = true)
@@ -135,6 +138,11 @@ public class CampaignService {
             }
         }
 
+        TipVideo tipVideo = null;
+        if (request.tipVideoId() != null) {
+            tipVideo = tipVideoService.requireByUuid(request.tipVideoId());
+        }
+
         List<User> audience = selectAudience(type, request.maxPriorSends());
         CampaignRun run = runRepository.save(CampaignRun.builder()
                 .campaignType(type)
@@ -145,6 +153,7 @@ public class CampaignService {
                 .status(RunStatus.PENDING)
                 .totalRecipients(audience.size())
                 .notes(request.notes())
+                .tipVideo(tipVideo)
                 .build());
 
         List<CampaignRunItem> items = new ArrayList<>();
@@ -301,6 +310,14 @@ public class CampaignService {
         vars.put("appName", "Catalog Studio");
         String origin = properties.cors() == null ? "https://catalogstudio.in" : properties.cors().publicAppOrigin();
         vars.put("loginLink", origin + "/subscription");
+        TipVideo tip = run.getTipVideo();
+        if (tip != null) {
+            vars.put("tipVideoTitle", nullToEmpty(tip.getTitle()));
+            vars.put("tipVideoLink", origin + "/tips");
+        } else {
+            vars.put("tipVideoTitle", "E-commerce Tips");
+            vars.put("tipVideoLink", origin + "/tips");
+        }
         vars.put("promoCode", nullToEmpty(run.getPromoCode()));
         if (StringUtils.hasText(run.getPromoCode())) {
             vars.put("promoLine", "Use promo code " + run.getPromoCode() + " at checkout. ");
@@ -386,7 +403,26 @@ public class CampaignService {
             case NO_PURCHASE -> neverPurchased(sub, today);
             case TRIAL_EXPIRED -> trialExpired(sub, today);
             case EXPIRING_SOON -> expiringSoon(sub, today);
+            case PAID_ACTIVE -> paidActive(sub, today);
+            case TRIAL_ACTIVE -> trialActive(sub, today);
         };
+    }
+
+    private boolean paidActive(Subscription sub, LocalDate today) {
+        if (sub == null || sub.getPlan() == null) {
+            return false;
+        }
+        return sub.getStatus() == SubscriptionStatus.ACTIVE
+                && (sub.getEndDate() == null || !today.isAfter(sub.getEndDate()))
+                && isPaidPlan(sub);
+    }
+
+    private boolean trialActive(Subscription sub, LocalDate today) {
+        if (sub == null) {
+            return false;
+        }
+        return sub.getStatus() == SubscriptionStatus.TRIAL
+                && (sub.getEndDate() == null || !today.isAfter(sub.getEndDate()));
     }
 
     /** No active paid window — trial/free/expired/never paid. */
@@ -439,7 +475,8 @@ public class CampaignService {
         try {
             return CampaignType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (Exception ex) {
-            throw ApiException.badRequest("campaignType must be NO_PURCHASE, TRIAL_EXPIRED, or EXPIRING_SOON");
+            throw ApiException.badRequest(
+                    "campaignType must be NO_PURCHASE, TRIAL_EXPIRED, EXPIRING_SOON, PAID_ACTIVE, or TRIAL_ACTIVE");
         }
     }
 
@@ -452,6 +489,7 @@ public class CampaignService {
     }
 
     private CampaignRunResponse toResponse(CampaignRun run) {
+        TipVideo tip = run.getTipVideo();
         return new CampaignRunResponse(
                 run.getUuid(),
                 run.getCampaignType().name(),
@@ -464,6 +502,8 @@ public class CampaignService {
                 run.getSkippedCount(),
                 run.getFailedCount(),
                 run.getNotes(),
+                tip == null ? null : tip.getUuid(),
+                tip == null ? null : tip.getTitle(),
                 run.getCreatedAt(),
                 run.getStartedAt(),
                 run.getFinishedAt(),

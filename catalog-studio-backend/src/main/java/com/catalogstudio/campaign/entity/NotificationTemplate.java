@@ -99,6 +99,10 @@ public class NotificationTemplate {
     }
 
     public enum CampaignType {
-        NO_PURCHASE, TRIAL_EXPIRED, EXPIRING_SOON
+        NO_PURCHASE,
+        TRIAL_EXPIRED,
+        EXPIRING_SOON,
+        PAID_ACTIVE,
+        TRIAL_ACTIVE
     }
 }

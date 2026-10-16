@@ -1,0 +1,10 @@
+# Optional profile for a dedicated worker replica of the same jar.
+# Example: SPRING_PROFILES_ACTIVE=prod,worker
+catalogstudio:
+  worker:
+    enabled: true
+
+logging:
+  level:
+    com.catalogstudio.campaign.job: INFO
+    com.catalogstudio.tips: INFO

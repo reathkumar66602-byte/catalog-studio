@@ -26,3 +26,10 @@ catalogstudio:
     log-code: false
   billing:
     whatsapp-number: ${BILLING_WHATSAPP_NUMBER:919560111849}
+  wholesale:
+    gst:
+      # Production default: gstinapi.in
+      provider: ${WHOLESALE_GST_PROVIDER:gstinapi}
+      gstinapi-base-url: ${GSTINAPI_BASE_URL:https://www.gstinapi.in}
+      gstinapi-api-key: ${GSTINAPI_API_KEY:}
+      name-match-threshold: ${WHOLESALE_GST_NAME_MATCH_THRESHOLD:0.72}

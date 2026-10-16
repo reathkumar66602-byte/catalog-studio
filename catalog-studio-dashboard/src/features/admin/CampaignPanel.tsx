@@ -45,6 +45,7 @@ export function CampaignPanel() {
   const [channel, setChannel] = useState("EMAIL");
   const [promoCode, setPromoCode] = useState("");
   const [maxPriorSends, setMaxPriorSends] = useState("0");
+  const [tipVideoId, setTipVideoId] = useState("");
   const [message, setMessage] = useState("");
 
   const caps = useQuery({
@@ -66,6 +67,17 @@ export function CampaignPanel() {
       }
     },
   });
+  const tipVideos = useQuery({
+    queryKey: ["admin-tip-videos"],
+    queryFn: async () => {
+      try {
+        const res = await api.get("/admin/tips");
+        return (res.data.data || []) as { id: string; title: string }[];
+      } catch {
+        return [] as { id: string; title: string }[];
+      }
+    },
+  });
 
   const trigger = useMutation({
     mutationFn: () =>
@@ -74,6 +86,7 @@ export function CampaignPanel() {
         channel,
         promoCode: promoCode || undefined,
         maxPriorSends: maxPriorSends === "" ? undefined : Number(maxPriorSends),
+        tipVideoId: tipVideoId || undefined,
       }),
     onSuccess: async (res) => {
       const run = res.data.data as CampaignRun;
@@ -104,7 +117,7 @@ export function CampaignPanel() {
       {caps.data && (
         <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">{caps.data.whatsappMessage}</p>
       )}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <label className="text-sm">
           <span className="mb-1 block text-slate-500">Audience</span>
           <select
@@ -115,6 +128,8 @@ export function CampaignPanel() {
             <option value="NO_PURCHASE">No paid purchase yet</option>
             <option value="TRIAL_EXPIRED">Trial expired</option>
             <option value="EXPIRING_SOON">Paid plan ends in 5/4/3/1/0 days</option>
+            <option value="PAID_ACTIVE">Paid active subscribers</option>
+            <option value="TRIAL_ACTIVE">Trial active users</option>
           </select>
         </label>
         <label className="text-sm">
@@ -146,6 +161,21 @@ export function CampaignPanel() {
             {activePromos.map((p) => (
               <option key={p.code} value={p.code}>
                 {p.code}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-slate-500">Tip video (optional)</span>
+          <select
+            value={tipVideoId}
+            onChange={(e) => setTipVideoId(e.target.value)}
+            className="w-full rounded-lg border px-2 py-2"
+          >
+            <option value="">No tip video link</option>
+            {(tipVideos.data || []).map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.title}
               </option>
             ))}
           </select>

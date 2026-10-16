@@ -100,6 +100,15 @@ public class Product {
     @Column(columnDefinition = "text")
     private String description;
 
+    @Column(length = 80)
+    private String sku;
+
+    @Column(name = "base_price", precision = 12, scale = 2)
+    private java.math.BigDecimal basePrice;
+
+    @Column(precision = 12, scale = 2)
+    private java.math.BigDecimal mrp;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private ProductStatus status;

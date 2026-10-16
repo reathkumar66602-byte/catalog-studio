@@ -317,4 +317,12 @@ export const UI_CATALOG: Record<string, Row> = {
   "ext.pageSupplier": L("Meesho supplier page. When you add a product, Catalog Studio will pick it up automatically.", "मीशो सप्लायर पेज। प्रोडक्ट जोड़ने पर Catalog Studio उसे अपने आप लेगा।", "মীশো সাপ্লায়ার পেজ। প্রোডাক্ট যোগ করলে Catalog Studio নিজে নেবে।", "मीशो सप्लायर पृष्ठ. प्रॉडक्ट जोडल्यावर Catalog Studio तो आपोआप घेईल.", "மீஷோ சப்ளையர் பக்கம். தயாரிப்பு சேர்த்தால் Catalog Studio தானாக எடுக்கும்.", "ಮೀಶೋ ಸಪ್ಲೈಯರ್ ಪುಟ. ಉತ್ಪನ್ನ ಸೇರಿಸಿದಾಗ Catalog Studio ಸ್ವಯಂ ತೆಗೆದುಕೊಳ್ಳುತ್ತದೆ.", "ਮੀਸ਼ੋ ਸਪਲਾਇਰ ਪੰਨਾ। ਪ੍ਰੋਡਕਟ ਜੋੜਨ ਤੇ Catalog Studio ਆਪਣੇ ਆਪ ਲਵੇਗਾ।", "میشو سپلائر صفحہ۔ پروڈکٹ شامل کرنے پر Catalog Studio خود لے گا۔", "Meesho出品者ページ。商品を追加するとCatalog Studioが自動取得します。", "Meesho 供应商页。添加商品后 Catalog Studio 会自动选取。"),
   "ext.pageOther": L("{{name}} page. Pair, pick a product, then autofill.", "{{name}} पेज। पेयर करें, प्रोडक्ट चुनें, फिर ऑटोफिल।", "{{name}} পেজ। পেয়ার করুন, প্রোডাক্ট বেছে নিন, তারপর অটোফিল।", "{{name}} पृष्ठ. पेअर करा, प्रॉडक्ट निवडा, नंतर ऑटोफिल.", "{{name}} பக்கம். இணைத்து, தயாரிப்பை தேர்ந்தெடுத்து, தானியக்க நிரப்புங்கள்.", "{{name}} ಪುಟ. ಜೋಡಿಸಿ, ಉತ್ಪನ್ನ ಆಯ್ಕೆಮಾಡಿ, ನಂತರ ಆಟೋಫಿಲ್.", "{{name}} ਪੰਨਾ। ਪੇਅਰ ਕਰੋ, ਪ੍ਰੋਡਕਟ ਚੁਣੋ, ਫਿਰ ਆਟੋਫਿਲ।", "{{name}} صفحہ۔ جوڑیں، پروڈکٹ منتخب کریں، پھر آٹو فل۔", "{{name}} ページ。ペアして商品を選び、自動入力。", "{{name}} 页面。配对、选择商品，然后自动填写。"),
   "nav.shoot": L("Shoot", "शूट", "শুট", "शूट", "ஷூட்", "ಶೂಟ್", "ਸ਼ੂਟ", "شوٹ", "撮影", "拍摄"),
+  "nav.tips": L("E-commerce Tips", "ई-कॉमर्स टिप्स", "ই-কমার্স টিপস", "ई-कॉमर्स टिप्स", "இ-காமர்ஸ் குறிப்புகள்", "ಇ-ಕಾಮರ್ಸ್ ಟಿಪ್ಸ್", "ਈ-ਕਾਮਰਸ ਟਿਪਸ", "ای کامرس ٹپس", "Eコマース Tips", "电商 Tips"),
+  "nav.inventory": L("Inventory", "इन्वेंटरी", "ইনভেন্টরি", "इन्व्हेंटरी", "இருப்பு", "ದಾಸ್ತಾನು", "ਇਨਵੈਂਟਰੀ", "انوینٹری", "在庫", "库存"),
+  "nav.liveStock": { en: "Live Stock", hi: "लाइव स्टॉक" },
+  "nav.wholesaleOrders": { en: "Wholesale orders", hi: "होलसेल ऑर्डर" },
+  "nav.supplierStore": { en: "Supplier store", hi: "सप्लायर स्टोर" },
+  "nav.supplierInventory": { en: "Supplier inventory", hi: "सप्लायर इन्वेंटरी" },
+  "nav.supplierOrders": { en: "Supplier orders", hi: "सप्लायर ऑर्डर" },
+  "nav.tipsAdmin": L("Tips videos", "टिप्स वीडियो", "টিপস ভিডিও", "टिप्स व्हिडिओ", "குறிப்பு வீடியோ", "ಟಿಪ್ಸ್ ವೀಡಿಯೊ", "ਟਿਪਸ ਵੀਡੀਓ", "ٹپس ویڈیوز", "Tips動画管理", "Tips 视频管理"),
 };

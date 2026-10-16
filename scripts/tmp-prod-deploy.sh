@@ -34,7 +34,7 @@ server {
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     root /usr/share/nginx/html;
     index index.html;
-    client_max_body_size 50m;
+    client_max_body_size 220m;
 
     location /api/ {
         proxy_pass http://backend:8080/api/;

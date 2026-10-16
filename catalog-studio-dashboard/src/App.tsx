@@ -17,6 +17,7 @@ import { ReviewPage } from "./features/analysis/ReviewPage";
 import { ProductsPage } from "./features/products/ProductsPage";
 import { TemplatesPage, ProfilesPage } from "./features/templates/TemplatesPage";
 import { MarketplacesPage } from "./features/marketplaces/MarketplacesPage";
+import { OrderManagerPage } from "./features/oms/OrderManagerPage";
 import { AnalysisHistoryPage } from "./features/analysis/AnalysisHistoryPage";
 import { ExtensionPage } from "./features/extension/ExtensionPage";
 import { ExtensionBridge } from "./features/extension/ExtensionBridge";
@@ -32,6 +33,15 @@ import { FlipkartCropPage } from "./features/labels/FlipkartCropPage";
 import { MeeshoCalculatorPage } from "./features/calculator/MeeshoCalculatorPage";
 import { ShootPage } from "./features/shoot/ShootPage";
 import { TrendingPage } from "./features/trending/TrendingPage";
+import { TipsPage } from "./features/tips/TipsPage";
+import { TipsAdminPage } from "./features/admin/TipsAdminPage";
+import { InventoryPage } from "./features/inventory/InventoryPage";
+import { LiveStockPage } from "./features/wholesale/LiveStockPage";
+import { WholesaleProductDetailPage } from "./features/wholesale/WholesaleProductDetailPage";
+import { BuyerOrdersPage } from "./features/wholesale/BuyerOrdersPage";
+import { SupplierStorePage } from "./features/wholesale/SupplierStorePage";
+import { SupplierInventoryPage } from "./features/wholesale/SupplierInventoryPage";
+import { SupplierOrdersPage } from "./features/wholesale/SupplierOrdersPage";
 import { useTheme } from "./hooks/useTheme";
 import { SiteProvider } from "./features/site/useSite";
 import { MarketingLayout } from "./features/site/MarketingLayout";
@@ -108,6 +118,22 @@ export default function App() {
                   <Route element={<FeatureRoute feature="extension" />}>
                     <Route path="/extension" element={<ExtensionPage />} />
                   </Route>
+                  <Route element={<FeatureRoute feature="ecommerce_tips" />}>
+                    <Route path="/tips" element={<TipsPage />} />
+                  </Route>
+                  <Route element={<FeatureRoute feature="inventory" />}>
+                    <Route path="/inventory" element={<InventoryPage />} />
+                  </Route>
+                  <Route element={<FeatureRoute feature="live_stock" />}>
+                    <Route path="/live-stock" element={<LiveStockPage />} />
+                    <Route path="/live-stock/orders" element={<BuyerOrdersPage />} />
+                    <Route path="/live-stock/:idOrSlug" element={<WholesaleProductDetailPage />} />
+                  </Route>
+                  <Route element={<FeatureRoute feature="wholesale_supplier" />}>
+                    <Route path="/supplier/store" element={<SupplierStorePage />} />
+                    <Route path="/supplier/inventory" element={<SupplierInventoryPage />} />
+                    <Route path="/supplier/orders" element={<SupplierOrdersPage />} />
+                  </Route>
                   <Route element={<FeatureRoute feature="subscription" />}>
                     <Route path="/subscription" element={<SubscriptionPage />} />
                     <Route path="/subscription/pay" element={<SubscriptionPaymentPage />} />
@@ -123,9 +149,11 @@ export default function App() {
                     <Route path="/admin/access" element={<AccessAdminPage />} />
                     <Route path="/admin/site" element={<SiteAdminPage />} />
                     <Route path="/admin/billing" element={<BillingAdminPage />} />
+                    <Route path="/admin/tips" element={<TipsAdminPage />} />
                     <Route path="/settings/email-templates" element={<EmailTemplatesPage />} />
                   </Route>
                   <Route element={<SuperAdminRoute />}>
+                    <Route path="/orders" element={<OrderManagerPage />} />
                     <Route path="/admin/staff" element={<StaffAdminPage />} />
                   </Route>
                   </Route>

@@ -18,7 +18,10 @@ public record CatalogStudioProperties(
         @DefaultValue Google google,
         @DefaultValue Billing billing,
         @DefaultValue Tingily tingily,
-        @DefaultValue Whatsapp whatsapp
+        @DefaultValue Whatsapp whatsapp,
+        @DefaultValue MeeshoPanel meeshoPanel,
+        @DefaultValue Oms oms,
+        @DefaultValue Wholesale wholesale
 ) {
     public record Jwt(String secret, long accessTokenMinutes, long refreshTokenDays) {}
 
@@ -192,4 +195,116 @@ public record CatalogStudioProperties(
             @DefaultValue("") String apiUrl,
             @DefaultValue("") String apiToken
     ) {}
+
+    /** Wholesale marketplace (Live Stock) settings. */
+    public record Wholesale(@DefaultValue Gst gst) {
+        /**
+         * GST verification.
+         * <ul>
+         *   <li>{@code mock} — local/dev (format only)</li>
+         *   <li>{@code gstinapi} — gstinapi.in (recommended for prod)</li>
+         *   <li>{@code http} — generic GET/POST registry API</li>
+         * </ul>
+         */
+        public record Gst(
+                @DefaultValue("mock") String provider,
+                @DefaultValue("") String httpUrl,
+                @DefaultValue("") String httpApiKey,
+                @DefaultValue("0.72") double nameMatchThreshold,
+                @DefaultValue("https://www.gstinapi.in") String gstinapiBaseUrl,
+                @DefaultValue("") String gstinapiApiKey
+        ) {
+            public String providerKey() {
+                return provider == null ? "mock" : provider.trim().toLowerCase();
+            }
+
+            public boolean mockProvider() {
+                return "mock".equals(providerKey()) || providerKey().isBlank();
+            }
+
+            public boolean gstinapiProvider() {
+                return "gstinapi".equals(providerKey());
+            }
+
+            public boolean httpProvider() {
+                return "http".equals(providerKey());
+            }
+
+            public boolean liveProvider() {
+                return gstinapiProvider() || httpProvider();
+            }
+
+            public boolean gstinapiConfigured() {
+                return notBlank(gstinapiApiKey);
+            }
+
+            public String gstinapiLookupUrl(String gstin) {
+                String base = notBlank(gstinapiBaseUrl)
+                        ? gstinapiBaseUrl.trim().replaceAll("/+$", "")
+                        : "https://www.gstinapi.in";
+                return base + "/v1/gstin/" + gstin;
+            }
+
+            private static boolean notBlank(String value) {
+                return value != null && !value.isBlank();
+            }
+        }
+    }
+
+    /** Meesho Supplier Panel OMS connector (email/password, Base-style). */
+    public record MeeshoPanel(
+            @DefaultValue("https://supplier.meesho.com") String baseUrl,
+            /** When true, connect fails unless Meesho login probe verifies. */
+            @DefaultValue("false") boolean liveAuthRequired
+    ) {}
+
+    /**
+     * Platform OMS credentials (Base.com-style). Prefer env / property file — not UI paste.
+     * Super admin triggers sync; secrets stay in .env / .env.gcp.
+     */
+    public record Oms(
+            @DefaultValue Flipkart flipkart,
+            @DefaultValue Amazon amazon,
+            @DefaultValue Meesho meesho
+    ) {
+        public record Flipkart(
+                @DefaultValue("false") boolean enabled,
+                @DefaultValue("") String appId,
+                @DefaultValue("") String appSecret,
+                @DefaultValue("") String locationId
+        ) {
+            public boolean configured() {
+                return notBlank(appId) && notBlank(appSecret);
+            }
+        }
+
+        public record Amazon(
+                @DefaultValue("false") boolean enabled,
+                @DefaultValue("") String clientId,
+                @DefaultValue("") String clientSecret,
+                @DefaultValue("") String refreshToken,
+                @DefaultValue("A21TJRUUN4KGV") String marketplaceId,
+                @DefaultValue("true") boolean sandbox
+        ) {
+            public boolean configured() {
+                return notBlank(clientId) && notBlank(clientSecret) && notBlank(refreshToken);
+            }
+        }
+
+        public record Meesho(
+                @DefaultValue("false") boolean enabled,
+                @DefaultValue("") String email,
+                @DefaultValue("") String password,
+                @DefaultValue("https://supplier.meesho.com") String baseUrl,
+                @DefaultValue("false") boolean liveAuthRequired
+        ) {
+            public boolean configured() {
+                return notBlank(email) && notBlank(password);
+            }
+        }
+
+        private static boolean notBlank(String value) {
+            return value != null && !value.isBlank();
+        }
+    }
 }
