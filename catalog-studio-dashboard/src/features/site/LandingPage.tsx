@@ -1,6 +1,18 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Calculator, Chrome, Copy, Scissors } from "lucide-react";
+import {
+  BookOpen,
+  Calculator,
+  Camera,
+  Chrome,
+  Copy,
+  GraduationCap,
+  Scissors,
+  Sparkles,
+  Store,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 import { FlipkartLogo, MeeshoLogo, MergePdfLogo } from "../labels/logos";
 import { EnquiryForm } from "./EnquiryForm";
 import { HeroIllustration } from "./HeroIllustration";
@@ -49,6 +61,11 @@ export function LandingPage() {
             <ServiceChip logo={<MergePdfLogo className="h-11 w-11" />} label={t("land.merge")} hint={t("land.mergeHint")} />
             <ServiceChip logo={<CalcMark />} label={t("land.profit")} hint={t("land.profitHint")} />
             <ServiceChip logo={<ExtMark />} label={t("land.extChip")} hint={t("land.extHint")} />
+            <ServiceChip logo={<ChipMark icon={TrendingUp} tone="violet" />} label={t("land.trendChip")} hint={t("land.trendHint")} />
+            <ServiceChip logo={<ChipMark icon={Camera} tone="rose" />} label={t("land.shootChip")} hint={t("land.shootHint")} />
+            <ServiceChip logo={<ChipMark icon={Sparkles} tone="amber" />} label={t("land.analyzeChip")} hint={t("land.analyzeHint")} />
+            <ServiceChip logo={<ChipMark icon={Store} tone="emerald" />} label={t("land.stockChip")} hint={t("land.stockHint")} />
+            <ServiceChip logo={<ChipMark icon={BookOpen} tone="indigo" />} label={t("land.guideChip")} hint={t("land.guideHint")} />
           </div>
         </div>
       </section>
@@ -60,10 +77,38 @@ export function LandingPage() {
       <section className="mx-auto max-w-6xl px-4 py-14">
         <h2 className="text-2xl font-semibold">{t("land.offers")}</h2>
         <p className="mt-2 max-w-2xl text-slate-600">{t("land.offersSub")}</p>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Feature icon={Scissors} title={t("land.featCrop")} text={t("land.featCropText")} />
           <Feature icon={Calculator} title={t("land.featCalc")} text={t("land.featCalcText")} />
           <Feature icon={Chrome} title={t("land.featExt")} text={t("land.featExtText")} />
+          <Feature icon={TrendingUp} title={t("land.featTrend")} text={t("land.featTrendText")} />
+          <Feature icon={Camera} title={t("land.featShoot")} text={t("land.featShootText")} />
+          <Feature icon={Sparkles} title={t("land.featAnalyze")} text={t("land.featAnalyzeText")} />
+          <Feature icon={Store} title={t("land.featStock")} text={t("land.featStockText")} />
+          <Feature icon={BookOpen} title={t("land.featGuide")} text={t("land.featGuideText")} />
+          <Feature icon={GraduationCap} title={t("land.featTutorials")} text={t("land.featTutorialsText")} />
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-14">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-700">{t("land.leadership")}</p>
+        <h2 className="mt-2 text-2xl font-semibold">{t("land.leadershipTitle")}</h2>
+        <p className="mt-2 max-w-2xl text-slate-600">{t("land.leadershipSub")}</p>
+        <div className="mt-8 flex flex-wrap justify-center gap-6 sm:justify-start">
+          <article className="flex w-full max-w-xs flex-col items-center rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:items-start sm:text-left">
+            <img
+              src="/team-raju-das.jpg"
+              alt={t("land.rajuDasName")}
+              width={160}
+              height={160}
+              className="h-36 w-36 rounded-full object-cover object-top ring-4 ring-teal-700/10"
+            />
+            <h3 className="mt-5 text-lg font-semibold text-slate-900">{t("land.rajuDasName")}</h3>
+            <p className="mt-1 text-sm font-semibold uppercase tracking-[0.16em] text-teal-700">
+              {t("land.rajuDasRole")}
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">{t("land.rajuDasBio")}</p>
+          </article>
         </div>
       </section>
 
@@ -124,7 +169,7 @@ function Feature({
   title,
   text,
 }: {
-  icon: typeof Scissors;
+  icon: LucideIcon;
   title: string;
   text: string;
 }) {
@@ -192,18 +237,28 @@ function PromoCard({
   );
 }
 
-function CalcMark() {
+const CHIP_TONES = {
+  teal: "bg-teal-700",
+  sky: "bg-sky-800",
+  violet: "bg-violet-700",
+  rose: "bg-rose-700",
+  amber: "bg-amber-600",
+  emerald: "bg-emerald-700",
+  indigo: "bg-indigo-700",
+} as const;
+
+function ChipMark({ icon: Icon, tone }: { icon: LucideIcon; tone: keyof typeof CHIP_TONES }) {
   return (
-    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-700 text-white">
-      <Calculator size={18} />
+    <div className={`flex h-11 w-11 items-center justify-center rounded-xl text-white ${CHIP_TONES[tone]}`}>
+      <Icon size={18} />
     </div>
   );
 }
 
+function CalcMark() {
+  return <ChipMark icon={Calculator} tone="teal" />;
+}
+
 function ExtMark() {
-  return (
-    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-800 text-white">
-      <Chrome size={18} />
-    </div>
-  );
+  return <ChipMark icon={Chrome} tone="sky" />;
 }
