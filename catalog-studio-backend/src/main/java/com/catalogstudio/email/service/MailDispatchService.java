@@ -31,6 +31,36 @@ public class MailDispatchService {
                 "catalog-studio"));
     }
 
+    /**
+     * Bulk campaign sends: prefer ZeptoMail when configured (Zoho SMTP is transactional and
+     * hits 550 unusual-activity blocks under volume). Falls back to SMTP if Zepto fails.
+     */
+    public boolean sendCampaignHtml(String to, String subject, String htmlBody, String textBody) {
+        if (!properties.mail().enabled()) {
+            log.info("Mail disabled; skip campaign send to {}", to);
+            return false;
+        }
+        MailIdentity identity = identityService.current();
+        OutboundMail mail = new OutboundMail(
+                identity.fromEmail(),
+                identity.fromName(),
+                to,
+                identity.supportEmail(),
+                subject,
+                htmlBody,
+                textBody,
+                "campaign");
+        boolean zeptoReady = StringUtils.hasText(properties.mail().zeptomailSendToken());
+        if (zeptoReady) {
+            boolean sent = zeptoMailTransport.send(mail);
+            if (sent) {
+                return true;
+            }
+            log.warn("ZeptoMail campaign send failed for {}; falling back to SMTP", to);
+        }
+        return zohoSmtpTransport.send(mail);
+    }
+
     public boolean sendHtml(String to, String replyTo, String subject, String htmlBody, String textBody, String reference) {
         MailIdentity identity = identityService.current();
         return send(new OutboundMail(

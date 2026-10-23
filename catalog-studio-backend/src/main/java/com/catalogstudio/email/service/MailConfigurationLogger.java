@@ -38,6 +38,14 @@ public class MailConfigurationLogger implements ApplicationRunner {
                     mail.port(),
                     mail.maskedUsername(),
                     mail.smtpFromAddress());
+            if (!StringUtils.hasText(mail.zeptomailSendToken())) {
+                log.warn(
+                        "ZEPTOMAIL_SEND_TOKEN is empty. If Zoho returns 550 unusual activity "
+                                + "(https://mail.zoho.in/UnblockMe), OTP/reset emails cannot fall back to ZeptoMail. "
+                                + "Set a Zepto send token or unblock the Zoho mailbox.");
+            } else {
+                log.info("ZeptoMail token present — will be used as fallback when Zoho SMTP fails");
+            }
             return;
         }
         if ("zeptomail".equalsIgnoreCase(mail.provider())) {

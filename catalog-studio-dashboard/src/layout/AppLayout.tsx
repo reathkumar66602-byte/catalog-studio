@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Calculator,
   Camera,
+  ChevronDown,
   Chrome,
   CreditCard,
   Boxes,
@@ -17,15 +18,19 @@ import {
   Menu,
   Package,
   PlayCircle,
+  BookOpen,
+  GraduationCap,
   Receipt,
   Scissors,
   Settings,
   Shield,
   ShoppingBag,
   Store,
+  TicketPercent,
   Users,
   Wallet,
   Warehouse,
+  Wrench,
   X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -33,6 +38,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../store/auth";
 import { api } from "../api/client";
 import type { AccountProfile, SubscriptionStatus, UserSummary } from "../types";
+import type { LocaleCode } from "../i18n/catalog";
 import { useI18n } from "../i18n/LanguageProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import { hasFeature, isStaff, isSuperAdmin, roleLabel } from "../routes/roles";
@@ -48,9 +54,16 @@ type MenuLink = {
   supplierOnly?: boolean;
 };
 
+type MenuGroup = {
+  id: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  links: MenuLink[];
+};
+
 export function AppLayout() {
   const { user, updateUser, logout } = useAuth();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const [desktopOpen, setDesktopOpen] = useState(true);
@@ -106,49 +119,92 @@ export function AppLayout() {
 
   const role = me?.role || user?.role;
   const enabledFeatures = me?.enabledFeatures || user?.enabledFeatures;
-  const links: MenuLink[] = [
-    { to: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard, feature: "dashboard" },
-    { to: "/trending", label: t("nav.trending"), icon: TrendingUp, feature: "trending" },
-    { to: "/shoot", label: t("nav.shoot"), icon: Camera, feature: "shoot" },
-    { to: "/tools/labels", label: t("nav.labels"), icon: Scissors, feature: "labels" },
-    { to: "/tools/meesho-calculator", label: t("nav.calculator"), icon: Calculator, feature: "meesho_calculator" },
-    { to: "/extension", label: t("nav.extension"), icon: Chrome, feature: "extension" },
-    { to: "/tips", label: t("nav.tips"), icon: PlayCircle, feature: "ecommerce_tips" },
-    { to: "/inventory", label: t("nav.inventory"), icon: Package, feature: "inventory" },
-    { to: "/live-stock", label: t("nav.liveStock"), icon: Store, feature: "live_stock" },
-    { to: "/live-stock/orders", label: t("nav.wholesaleOrders"), icon: ShoppingBag, feature: "live_stock" },
-    { to: "/supplier/store", label: t("nav.supplierStore"), icon: Warehouse, feature: "wholesale_supplier", supplierOnly: true },
-    { to: "/supplier/inventory", label: t("nav.supplierInventory"), icon: Boxes, feature: "wholesale_supplier", supplierOnly: true },
-    { to: "/supplier/orders", label: t("nav.supplierOrders"), icon: ClipboardList, feature: "wholesale_supplier", supplierOnly: true },
-    { to: "/subscription", label: t("nav.subscription"), icon: CreditCard, feature: "subscription" },
-    { to: "/transactions", label: t("nav.transactions"), icon: Receipt, feature: "transactions" },
-    { to: "/analysis", label: t("nav.analysis"), icon: History, feature: "analysis" },
-    { to: "/billing-address", label: t("nav.billing"), icon: MapPin, feature: "billing_address" },
-    { to: "/settings", label: t("nav.settings"), icon: Settings, feature: "settings" },
-  ];
-  const staffLinks: MenuLink[] = [
-    { to: "/orders", label: "Order Manager", icon: ClipboardList, superAdminOnly: true },
-    { to: "/marketplaces", label: "OMS / Marketplaces", icon: Store, superAdminOnly: true },
-    { to: "/admin/users", label: t("nav.users"), icon: Users },
-    { to: "/admin/access", label: t("nav.access"), icon: KeyRound },
-    { to: "/admin/tips", label: t("nav.tipsAdmin"), icon: PlayCircle },
-    { to: "/admin/staff", label: t("nav.admin"), icon: Shield, superAdminOnly: true },
-    { to: "/admin/site", label: t("nav.websiteSettings"), icon: Globe },
-    { to: "/admin/billing", label: t("nav.trialPayment"), icon: Wallet },
-    { to: "/settings/email-templates", label: t("nav.emailTemplates"), icon: Mail },
-  ];
+
   const menu = useMemo(() => {
-    // Staff always see supplier tools; sellers need SUPPLIER / wholesaleSupplier plan.
     const staffUser = isStaff(role);
-    const workspace = links.filter(
-      (link) =>
-        (!link.feature || hasFeature({ role, enabledFeatures }, link.feature)) &&
-        (!link.supplierOnly || staffUser || canSupply(access)),
-    );
+    const allow = (link: MenuLink) =>
+      (!link.feature || hasFeature({ role, enabledFeatures }, link.feature)) &&
+      (!link.supplierOnly || staffUser || canSupply(access));
+
+    const overview: MenuLink[] = [
+      { to: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard, feature: "dashboard" },
+    ].filter(allow);
+
+    const groups: MenuGroup[] = [
+      {
+        id: "seller-tools",
+        label: t("nav.groupSellerTools"),
+        icon: Wrench,
+        links: [
+          { to: "/trending", label: t("nav.trending"), icon: TrendingUp, feature: "trending" },
+          { to: "/shoot", label: t("nav.shoot"), icon: Camera, feature: "shoot" },
+          { to: "/tools/labels", label: t("nav.labels"), icon: Scissors, feature: "labels" },
+          { to: "/tools/meesho-calculator", label: t("nav.calculator"), icon: Calculator, feature: "meesho_calculator" },
+          { to: "/extension", label: t("nav.extension"), icon: Chrome, feature: "extension" },
+          { to: "/analysis", label: t("nav.analysis"), icon: History, feature: "analysis" },
+          { to: "/inventory", label: t("nav.inventory"), icon: Package, feature: "inventory" },
+        ].filter(allow),
+      },
+      {
+        id: "learn",
+        label: t("nav.groupLearn"),
+        icon: BookOpen,
+        links: [
+          { to: "/app-guide", label: t("nav.appGuide"), icon: BookOpen, feature: "app_guide" },
+          { to: "/tutorials", label: t("nav.tutorials"), icon: GraduationCap, feature: "ecommerce_tutorials" },
+        ].filter(allow),
+      },
+      {
+        id: "live-stock",
+        label: t("nav.groupLiveStock"),
+        icon: Store,
+        links: [
+          { to: "/live-stock", label: t("nav.liveStock"), icon: Store, feature: "live_stock" },
+          { to: "/live-stock/orders", label: t("nav.wholesaleOrders"), icon: ShoppingBag, feature: "live_stock" },
+          { to: "/live-stock/bills", label: t("nav.buyerBills"), icon: Receipt, feature: "live_stock" },
+        ].filter(allow),
+      },
+      {
+        id: "supplier",
+        label: t("nav.groupSupplier"),
+        icon: Warehouse,
+        links: [
+          { to: "/supplier/store", label: t("nav.supplierStore"), icon: Warehouse, feature: "wholesale_supplier", supplierOnly: true },
+          { to: "/supplier/inventory", label: t("nav.supplierInventory"), icon: Boxes, feature: "wholesale_supplier", supplierOnly: true },
+          { to: "/supplier/coupons", label: t("nav.supplierCoupons"), icon: TicketPercent, feature: "wholesale_supplier", supplierOnly: true },
+          { to: "/supplier/orders", label: t("nav.supplierOrders"), icon: ClipboardList, feature: "wholesale_supplier", supplierOnly: true },
+          { to: "/supplier/bills", label: t("nav.supplierBills"), icon: Receipt, feature: "wholesale_supplier", supplierOnly: true },
+        ].filter(allow),
+      },
+      {
+        id: "account",
+        label: t("nav.groupAccount"),
+        icon: CreditCard,
+        links: [
+          { to: "/subscription", label: t("nav.subscription"), icon: CreditCard, feature: "subscription" },
+          { to: "/transactions", label: t("nav.transactions"), icon: Receipt, feature: "transactions" },
+          { to: "/billing-address", label: t("nav.billing"), icon: MapPin, feature: "billing_address" },
+          { to: "/settings", label: t("nav.settings"), icon: Settings, feature: "settings" },
+        ].filter(allow),
+      },
+    ].filter((group) => group.links.length > 0);
+
+    const staffLinks: MenuLink[] = [
+      { to: "/orders", label: t("nav.orderManager"), icon: ClipboardList, superAdminOnly: true },
+      { to: "/marketplaces", label: t("nav.marketplaces"), icon: Store, superAdminOnly: true },
+      { to: "/admin/users", label: t("nav.users"), icon: Users },
+      { to: "/admin/access", label: t("nav.access"), icon: KeyRound },
+      { to: "/admin/tips", label: t("nav.tipsAdmin"), icon: PlayCircle },
+      { to: "/admin/staff", label: t("nav.admin"), icon: Shield, superAdminOnly: true },
+      { to: "/admin/site", label: t("nav.websiteSettings"), icon: Globe },
+      { to: "/admin/billing", label: t("nav.trialPayment"), icon: Wallet },
+      { to: "/settings/email-templates", label: t("nav.emailTemplates"), icon: Mail },
+    ];
     const staff = staffUser
       ? staffLinks.filter((link) => !link.superAdminOnly || isSuperAdmin(role))
       : [];
-    return { workspace, staff };
+
+    return { overview, groups, staff };
   }, [role, enabledFeatures, access, t]);
 
   async function signOut() {
@@ -184,7 +240,7 @@ export function AppLayout() {
               </div>
             )}
           </div>
-          <SidebarNav menu={menu} open={desktopOpen} role={role} />
+          <SidebarNav menu={menu} open={desktopOpen} role={role} locale={locale} pathname={location.pathname} />
           <button
             onClick={signOut}
             className="m-3 flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -199,7 +255,7 @@ export function AppLayout() {
             <button
               type="button"
               className="absolute inset-0 bg-slate-950/45"
-              aria-label="Close menu"
+              aria-label={t("common.closeMenu")}
               onClick={() => setMobileOpen(false)}
             />
             <aside className="absolute inset-y-0 left-0 flex w-[min(18rem,88vw)] flex-col bg-white shadow-2xl dark:bg-slate-900">
@@ -214,13 +270,13 @@ export function AppLayout() {
                 <button
                   type="button"
                   className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  aria-label="Close menu"
+                  aria-label={t("common.closeMenu")}
                   onClick={() => setMobileOpen(false)}
                 >
                   <X size={20} />
                 </button>
               </div>
-              <SidebarNav menu={menu} open role={role} />
+              <SidebarNav menu={menu} open role={role} locale={locale} pathname={location.pathname} />
               <button
                 onClick={signOut}
                 className="m-3 flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -237,7 +293,7 @@ export function AppLayout() {
             <button
               type="button"
               className="shrink-0 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-label={mobileOpen ? t("common.closeMenu") : t("common.openMenu")}
               aria-expanded={mobileOpen}
               onClick={toggleMenu}
             >
@@ -252,7 +308,7 @@ export function AppLayout() {
                 <p className="truncate text-sm font-medium max-w-[7.5rem] sm:max-w-[14rem]">{user?.name}</p>
                 <p className="truncate text-xs text-slate-500 max-w-[7.5rem] sm:max-w-[14rem]">
                   {isStaff(role)
-                    ? roleLabel(role)
+                    ? roleLabel(role, locale)
                     : access?.trialActive
                       ? t("header.trialLeft", { days: access.daysRemaining })
                       : t("header.plan", { plan: user?.plan || access?.plan || "FREE" })}
@@ -285,14 +341,22 @@ export function AppLayout() {
   );
 }
 
+function pathMatches(pathname: string, to: string) {
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
 function SidebarNav({
   menu,
   open,
   role,
+  locale,
+  pathname,
 }: {
-  menu: { workspace: MenuLink[]; staff: MenuLink[] };
+  menu: { overview: MenuLink[]; groups: MenuGroup[]; staff: MenuLink[] };
   open: boolean;
   role?: string;
+  locale: LocaleCode;
+  pathname: string;
 }) {
   return (
     <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
@@ -300,7 +364,7 @@ function SidebarNav({
         <>
           {open && (
             <p className="px-3 pt-1 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
-              {roleLabel(role)}
+              {roleLabel(role, locale)}
             </p>
           )}
           {menu.staff.map((link) => (
@@ -309,26 +373,85 @@ function SidebarNav({
           <div className="my-2 border-t border-slate-200 dark:border-slate-800" />
         </>
       )}
-      {menu.workspace.map((link) => (
+      {menu.overview.map((link) => (
         <SideLink key={link.to} link={link} open={open} />
+      ))}
+      {menu.groups.map((group) => (
+        <NavGroup key={group.id} group={group} open={open} pathname={pathname} />
       ))}
     </nav>
   );
 }
 
-function SideLink({ link, open }: { link: MenuLink; open: boolean }) {
+function NavGroup({ group, open, pathname }: { group: MenuGroup; open: boolean; pathname: string }) {
+  const active = group.links.some((link) => pathMatches(pathname, link.to));
+  const [expanded, setExpanded] = useState(active);
+
+  useEffect(() => {
+    if (active) setExpanded(true);
+  }, [active]);
+
+  if (!open) {
+    return (
+      <div className="space-y-1">
+        {group.links.map((link) => (
+          <SideLink key={link.to} link={link} open={false} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-1">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${
+          active
+            ? "bg-teal-50/70 text-teal-900 dark:bg-teal-900/30 dark:text-teal-100"
+            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+        }`}
+      >
+        <group.icon size={18} className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{group.label}</span>
+        <ChevronDown size={16} className={`shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="mt-0.5 space-y-0.5 border-l border-slate-200 ml-4 pl-2 dark:border-slate-700">
+          {group.links.map((link) => (
+            <SideLink key={link.to} link={link} open nested />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SideLink({
+  link,
+  open,
+  nested = false,
+}: {
+  link: MenuLink;
+  open: boolean;
+  nested?: boolean;
+}) {
   return (
     <NavLink
       to={link.to}
+      end={link.to === "/dashboard" || link.to === "/live-stock" || link.to === "/supplier/store"}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${
+        `flex items-center gap-3 rounded-xl px-3 text-sm font-medium ${
+          nested ? "py-2" : "py-2.5"
+        } ${
           isActive
             ? "bg-teal-50 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200"
             : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
         }`
       }
     >
-      <link.icon size={18} className="shrink-0" />
+      <link.icon size={nested ? 16 : 18} className="shrink-0" />
       {open && <span className="truncate">{link.label}</span>}
     </NavLink>
   );

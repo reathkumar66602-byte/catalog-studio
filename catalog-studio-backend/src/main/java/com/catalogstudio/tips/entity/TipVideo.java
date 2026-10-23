@@ -3,6 +3,8 @@ package com.catalogstudio.tips.entity;
 import com.catalogstudio.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -29,6 +31,18 @@ import lombok.Setter;
 @Table(name = "tip_videos")
 public class TipVideo {
 
+    public enum Kind {
+        APP_GUIDE,
+        ECOMMERCE_TUTORIAL
+    }
+
+    /** Spoken / dubbed language for AI multi-language uploads. */
+    public enum Language {
+        EN,
+        HI,
+        BN
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -38,6 +52,20 @@ public class TipVideo {
 
     @Column(nullable = false, length = 200)
     private String title;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private Kind kind = Kind.ECOMMERCE_TUTORIAL;
+
+    /** Groups EN/HI/BN variants of the same lesson. */
+    @Column(name = "series_key", nullable = false)
+    private UUID seriesKey;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 8)
+    private Language language = Language.EN;
 
     @Column(name = "storage_key", nullable = false, length = 255)
     private String storageKey;
@@ -66,6 +94,15 @@ public class TipVideo {
         Instant now = Instant.now();
         if (uuid == null) {
             uuid = UUID.randomUUID();
+        }
+        if (kind == null) {
+            kind = Kind.ECOMMERCE_TUTORIAL;
+        }
+        if (language == null) {
+            language = Language.EN;
+        }
+        if (seriesKey == null) {
+            seriesKey = uuid != null ? uuid : UUID.randomUUID();
         }
         createdAt = now;
         updatedAt = now;

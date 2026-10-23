@@ -13,6 +13,7 @@ import com.catalogstudio.security.AuthUser;
 import com.catalogstudio.storage.StorageService;
 import com.catalogstudio.tips.entity.TipVideo;
 import com.catalogstudio.tips.entity.TipVideoSettings;
+import com.catalogstudio.tips.repository.TipVideoCommentRepository;
 import com.catalogstudio.tips.repository.TipVideoRepository;
 import com.catalogstudio.tips.repository.TipVideoSettingsRepository;
 import com.catalogstudio.user.entity.User;
@@ -34,19 +35,28 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class TipVideoServiceTest {
 
     @Mock TipVideoRepository tipVideoRepository;
+    @Mock TipVideoCommentRepository commentRepository;
     @Mock TipVideoSettingsRepository settingsRepository;
     @Mock StorageService storageService;
     @Mock UserRepository userRepository;
+    @Mock TutorialAccessService tutorialAccessService;
 
     TipVideoService service;
     User admin;
 
     @BeforeEach
     void setUp() {
-        service = new TipVideoService(tipVideoRepository, settingsRepository, storageService, userRepository);
+        service = new TipVideoService(
+                tipVideoRepository,
+                commentRepository,
+                settingsRepository,
+                storageService,
+                userRepository,
+                tutorialAccessService);
         admin = User.builder()
                 .id(9L)
                 .uuid(UUID.randomUUID())
+                .name("Admin")
                 .email("admin@test.com")
                 .passwordHash("x")
                 .role(User.Role.ADMIN)
@@ -85,24 +95,28 @@ class TipVideoServiceTest {
         TipVideo oldest = TipVideo.builder()
                 .uuid(UUID.randomUUID())
                 .title("old")
+                .kind(TipVideo.Kind.ECOMMERCE_TUTORIAL)
                 .storageKey(UUID.randomUUID() + ".mp4")
                 .publicUrl("http://x/a.mp4")
                 .contentType("video/mp4")
                 .sizeBytes(100)
                 .build();
         when(tipVideoRepository.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(oldest));
+        when(tipVideoRepository.findBySeriesKeyAndLanguage(any(), any())).thenReturn(Optional.empty());
         when(storageService.storeVideo(any())).thenReturn(
                 new StorageService.StoredFile("new.mp4", "http://x/new.mp4", "video/mp4", 200, new byte[0]));
         when(tipVideoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         MockMultipartFile file = new MockMultipartFile("file", "new.mp4", "video/mp4", new byte[200]);
-        service.upload("Fresh tip", file);
+        service.upload("Fresh tip", file, "APP_GUIDE");
 
         verify(tipVideoRepository).delete(oldest);
         verify(storageService).delete(oldest.getStorageKey());
         ArgumentCaptor<TipVideo> captor = ArgumentCaptor.forClass(TipVideo.class);
         verify(tipVideoRepository).save(captor.capture());
         assertEquals("Fresh tip", captor.getValue().getTitle());
+        assertEquals(TipVideo.Kind.APP_GUIDE, captor.getValue().getKind());
+        assertEquals(TipVideo.Language.EN, captor.getValue().getLanguage());
         verify(storageService, times(1)).storeVideo(any());
     }
 }

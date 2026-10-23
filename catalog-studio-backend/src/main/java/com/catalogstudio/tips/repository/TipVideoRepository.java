@@ -13,6 +13,10 @@ public interface TipVideoRepository extends JpaRepository<TipVideo, Long> {
 
     List<TipVideo> findAllByOrderByCreatedAtDesc();
 
+    List<TipVideo> findByKindOrderByCreatedAtDesc(TipVideo.Kind kind);
+
+    Optional<TipVideo> findBySeriesKeyAndLanguage(UUID seriesKey, TipVideo.Language language);
+
     Optional<TipVideo> findFirstByOrderByCreatedAtAsc();
 
     long count();

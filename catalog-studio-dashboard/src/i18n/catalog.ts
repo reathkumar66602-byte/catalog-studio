@@ -1,4 +1,5 @@
 ﻿import { FORM_CATALOG } from "./catalog.forms";
+import { PAGES_CATALOG } from "./catalog.pages";
 import { UI_CATALOG } from "./catalog.ui";
 
 export const LOCALES = [
@@ -143,16 +144,16 @@ export const CATALOG: Catalog = {
     zh: "面单工具",
   },
   "nav.calculator": {
-    en: "Meesho calculator",
-    hi: "मीशो कैलकुलेटर",
-    bn: "মীশো ক্যালকুলেটর",
-    mr: "मीशो कॅल्क्युलेटर",
-    ta: "மீஷோ கணிப்பான்",
-    kn: "ಮೀಶೋ ಕ್ಯಾಲ್ಕುಲೇಟರ್",
-    pa: "ਮੀਸ਼ੋ ਕੈਲਕੁਲੇਟਰ",
-    ur: "میشو کیلکولیٹر",
-    ja: "Meesho計算機",
-    zh: "Meesho 计算器",
+    en: "Profit calculator",
+    hi: "प्रॉफिट कैलकुलेटर",
+    bn: "প্রফিট ক্যালকুলেটর",
+    mr: "नफा कॅल्क्युलेटर",
+    ta: "லாபக் கணிப்பான்",
+    kn: "ಲಾಭ ಕ್ಯಾಲ್ಕುಲೇಟರ್",
+    pa: "ਲਾਭ ਕੈਲਕੁਲੇਟਰ",
+    ur: "منافع کیلکولیٹر",
+    ja: "利益計算機",
+    zh: "利润计算器",
   },
   "nav.extension": {
     en: "Chrome Extension",
@@ -167,16 +168,16 @@ export const CATALOG: Catalog = {
     zh: "Chrome 扩展",
   },
   "nav.inventory": {
-    en: "Inventory",
-    hi: "Inventory",
-    bn: "Inventory",
-    mr: "Inventory",
-    ta: "Inventory",
-    kn: "Inventory",
-    pa: "Inventory",
-    ur: "Inventory",
-    ja: "Inventory",
-    zh: "Inventory",
+    en: "E-commerce Inventory",
+    hi: "ई-कॉमर्स इन्वेंटरी",
+    bn: "ই-কমার্স ইনভেন্টরি",
+    mr: "ई-कॉमर्स इन्व्हेंटरी",
+    ta: "இ-காமர்ஸ் இருப்பு",
+    kn: "ಇ-ಕಾಮರ್ಸ್ ದಾಸ್ತಾನು",
+    pa: "ਈ-ਕਾਮਰਸ ਇਨਵੈਂਟਰੀ",
+    ur: "ای کامرس انوینٹری",
+    ja: "EC在庫",
+    zh: "电商库存",
   },
   "nav.tips": {
     en: "E-commerce Tips",
@@ -190,17 +191,41 @@ export const CATALOG: Catalog = {
     ja: "Eコマース Tips",
     zh: "电商 Tips",
   },
+  "nav.appGuide": {
+    en: "App guide",
+    hi: "ऐप गाइड",
+    bn: "অ্যাপ গাইড",
+    mr: "अॅप गाइड",
+    ta: "ஆப் வழிகாட்டி",
+    kn: "ಆ್ಯಪ್ ಗೈಡ್",
+    pa: "ਐਪ ਗਾਈਡ",
+    ur: "ایپ گائیڈ",
+    ja: "アプリガイド",
+    zh: "应用指南",
+  },
+  "nav.tutorials": {
+    en: "E-commerce tips tutorial",
+    hi: "ई-कॉमर्स टिप्स ट्यूटोरियल",
+    bn: "ই-কমার্স টিপস টিউটোরিয়াল",
+    mr: "ई-कॉमर्स टिप्स ट्यूटोरियल",
+    ta: "இ-காமர்ஸ் குறிப்பு பயிற்சி",
+    kn: "ಇ-ಕಾಮರ್ಸ್ ಟಿಪ್ಸ್ ಟ್ಯುಟೋರಿಯಲ್",
+    pa: "ਈ-ਕਾਮਰਸ ਟਿਪਸ ਟਿਊਟੋਰੀਅਲ",
+    ur: "ای کامرس ٹپس ٹیوٹوریل",
+    ja: "Eコマース Tipsチュートリアル",
+    zh: "电商技巧教程",
+  },
   "nav.tipsAdmin": {
-    en: "Tips videos",
-    hi: "टिप्स वीडियो",
-    bn: "টিপস ভিডিও",
-    mr: "टिप्स व्हिडिओ",
-    ta: "குறிப்பு வீடியோ",
-    kn: "ಟಿಪ್ಸ್ ವೀಡಿಯೊ",
-    pa: "ਟਿਪਸ ਵੀਡੀਓ",
-    ur: "ٹپس ویڈیوز",
-    ja: "Tips動画管理",
-    zh: "Tips 视频管理",
+    en: "Video libraries",
+    hi: "वीडियो लाइब्रेरी",
+    bn: "ভিডিও লাইব্রেরি",
+    mr: "व्हिडिओ लायब्ररी",
+    ta: "வீடியோ நூலகம்",
+    kn: "ವೀಡಿಯೊ ಲೈಬ್ರರಿ",
+    pa: "ਵੀਡੀਓ ਲਾਇਬ੍ਰੇਰੀ",
+    ur: "ویڈیو لائبریری",
+    ja: "動画ライブラリ",
+    zh: "视频库",
   },
   "nav.subscription": {
     en: "Subscription",
@@ -1321,7 +1346,7 @@ export const CATALOG: Catalog = {
 };
 
 export function translate(locale: LocaleCode, key: string, vars?: Record<string, string | number>): string {
-  const row = CATALOG[key] || UI_CATALOG[key] || FORM_CATALOG[key];
+  const row = CATALOG[key] || UI_CATALOG[key] || FORM_CATALOG[key] || PAGES_CATALOG[key];
   let text = row?.[locale] || row?.en || key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {

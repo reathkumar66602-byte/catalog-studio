@@ -1,6 +1,9 @@
 package com.catalogstudio.tips.controller;
 
 import com.catalogstudio.common.api.ApiResponse;
+import com.catalogstudio.tips.dto.TipVideoCommentInboxItem;
+import com.catalogstudio.tips.dto.TipVideoCommentReplyRequest;
+import com.catalogstudio.tips.dto.TipVideoCommentResponse;
 import com.catalogstudio.tips.dto.TipVideoResponse;
 import com.catalogstudio.tips.dto.TipVideoSettingsResponse;
 import com.catalogstudio.tips.dto.TipVideoSettingsUpdateRequest;
@@ -52,13 +55,29 @@ public class TipVideoAdminController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<TipVideoResponse> upload(
             @RequestParam("title") String title,
-            @RequestParam("file") MultipartFile file) {
-        return ApiResponse.ok("Tip video uploaded", tipVideoService.upload(title, file));
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "kind", required = false, defaultValue = "ECOMMERCE_TUTORIAL") String kind,
+            @RequestParam(value = "language", required = false, defaultValue = "EN") String language,
+            @RequestParam(value = "seriesKey", required = false) String seriesKey) {
+        return ApiResponse.ok(
+                "Tip video uploaded", tipVideoService.upload(title, file, kind, language, seriesKey));
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable UUID id) {
         tipVideoService.delete(id);
         return ApiResponse.okMessage("Tip video deleted");
+    }
+
+    @GetMapping("/comments")
+    public ApiResponse<List<TipVideoCommentInboxItem>> commentInbox() {
+        return ApiResponse.ok(tipVideoService.commentInbox());
+    }
+
+    @PostMapping("/comments/{id}/reply")
+    public ApiResponse<TipVideoCommentResponse> reply(
+            @PathVariable UUID id,
+            @Valid @RequestBody TipVideoCommentReplyRequest request) {
+        return ApiResponse.ok("Reply posted", tipVideoService.replyToComment(id, request));
     }
 }
