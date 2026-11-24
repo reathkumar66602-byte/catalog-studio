@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * Entity -> DTO mapping with batched lookups (open-in-view is off; no lazy associations are used).
@@ -93,6 +94,9 @@ public class WholesaleMapper {
                     store.getDescription(),
                     store.getCity(),
                     store.getState(),
+                    ownerView ? store.getAddressLine() : null,
+                    ownerView ? store.getPincode() : null,
+                    ownerView ? store.getPan() : null,
                     store.getStatus().name(),
                     store.getProductCount(),
                     storeCategories,
@@ -100,8 +104,15 @@ public class WholesaleMapper {
                     ownerView ? store.getGstLegalName() : null,
                     ownerView ? store.getGstVerificationStatus() : null,
                     ownerView ? store.getGstVerifiedAt() : null,
-                    ownerView ? store.getPhone() : null,
-                    ownerView ? store.getEmail() : null));
+                    store.getPhone(),
+                    ownerView ? store.getEmail() : null,
+                    store.getGstPercent(),
+                    ownerView ? store.getBankAccountName() : null,
+                    ownerView ? store.getBankAccountNumber() : null,
+                    ownerView ? store.getBankName() : null,
+                    ownerView ? store.getBankIfsc() : null,
+                    ownerView ? store.getBankBranch() : null,
+                    ownerView ? store.getInvoiceTerms() : null));
         }
         return result;
     }
@@ -201,7 +212,13 @@ public class WholesaleMapper {
                 product.getBookedCount(),
                 category(category),
                 new ProductDetailResponse.StoreSummary(
-                        store.getUuid(), store.getStoreName(), store.getSlug(), store.getCity(), store.getState()),
+                        store.getUuid(),
+                        store.getStoreName(),
+                        store.getSlug(),
+                        store.getCity(),
+                        store.getState(),
+                        store.getPhone(),
+                        store.getEmail()),
                 images.stream()
                         .map(i -> new ProductImageResponse(i.getUuid(), i.getPublicUrl(), i.getColorLabel(), i.getSortOrder()))
                         .toList(),
@@ -283,8 +300,13 @@ public class WholesaleMapper {
                 .stream().collect(Collectors.toMap(WholesaleStore::getId, s -> s));
         Map<Long, User> buyers = new HashMap<>();
         if (!buyerView) {
-            userRepository.findAllById(orders.stream().map(WholesaleOrder::getBuyerUserId).collect(Collectors.toSet()))
-                    .forEach(u -> buyers.put(u.getId(), u));
+            Set<Long> buyerIds = orders.stream()
+                    .map(WholesaleOrder::getBuyerUserId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!buyerIds.isEmpty()) {
+                userRepository.findAllById(buyerIds).forEach(u -> buyers.put(u.getId(), u));
+            }
         }
 
         List<OrderResponse> result = new ArrayList<>(orders.size());
@@ -299,36 +321,68 @@ public class WholesaleMapper {
                             i.getColorLabel(),
                             i.getSizeLabel(),
                             i.getSku(),
+                            i.getHsnSac(),
                             i.getUnitPrice(),
                             i.getAcceptedUnitPrice(),
                             i.getQuantity(),
                             i.getLineTotal()))
                     .toList();
             OrderResponse.SupplierContact contact = null;
-            if (buyerView && store != null
-                    && (order.getStatus() == WholesaleOrder.Status.ACCEPTED
-                    || order.getStatus() == WholesaleOrder.Status.FULFILLED)) {
+            if (buyerView && store != null) {
                 contact = new OrderResponse.SupplierContact(store.getPhone(), store.getEmail());
             }
             OrderResponse.BuyerInfo buyer = null;
             if (!buyerView) {
-                User user = buyers.get(order.getBuyerUserId());
-                if (user != null) {
-                    buyer = new OrderResponse.BuyerInfo(user.getName(), user.getEmail(), user.getMobile());
+                if (order.getSource() == WholesaleOrder.Source.MANUAL || order.getBuyerUserId() == null) {
+                    buyer = new OrderResponse.BuyerInfo(
+                            order.getBuyerName(),
+                            order.getBuyerEmail(),
+                            order.getBuyerMobile(),
+                            order.getBuyerGstin(),
+                            order.getBuyerAddress());
+                } else {
+                    User user = buyers.get(order.getBuyerUserId());
+                    if (user != null) {
+                        String mobile = StringUtils.hasText(order.getBuyerMobile())
+                                ? order.getBuyerMobile()
+                                : user.getMobile();
+                        String name = StringUtils.hasText(order.getBuyerName())
+                                ? order.getBuyerName()
+                                : user.getName();
+                        String email = StringUtils.hasText(order.getBuyerEmail())
+                                ? order.getBuyerEmail()
+                                : user.getEmail();
+                        buyer = new OrderResponse.BuyerInfo(
+                                name, email, mobile, order.getBuyerGstin(), order.getBuyerAddress());
+                    }
                 }
             }
             result.add(new OrderResponse(
                     order.getUuid(),
                     order.getOrderNumber(),
                     order.getStatus().name(),
+                    order.getSource() == null ? WholesaleOrder.Source.ONLINE.name() : order.getSource().name(),
                     order.getBuyerNote(),
                     order.getSupplierNote(),
                     order.getSubtotal(),
+                    nz(order.getDiscountAmount()),
+                    order.getTaxableAmount() != null ? order.getTaxableAmount() : nz(order.getSubtotal()),
+                    nz(order.getCgstAmount()),
+                    nz(order.getSgstAmount()),
+                    order.getGstPercent(),
+                    order.getGrandTotal() != null ? order.getGrandTotal() : nz(order.getSubtotal()),
+                    order.getCouponCode(),
+                    order.getBuyerName(),
+                    order.getBuyerEmail(),
+                    order.getBuyerMobile(),
+                    order.getBuyerGstin(),
+                    order.getBuyerAddress(),
                     order.getAcceptedTotal(),
                     order.getCurrency(),
                     order.getPlacedAt(),
                     order.getAcceptedAt(),
                     order.getRejectedAt(),
+                    order.getBillPdfUrl(),
                     store == null ? null : store.getUuid(),
                     store == null ? null : store.getStoreName(),
                     items,
@@ -336,5 +390,9 @@ public class WholesaleMapper {
                     buyer));
         }
         return result;
+    }
+
+    private static java.math.BigDecimal nz(java.math.BigDecimal value) {
+        return value == null ? java.math.BigDecimal.ZERO : value;
     }
 }

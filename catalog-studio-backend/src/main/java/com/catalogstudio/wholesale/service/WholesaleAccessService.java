@@ -6,6 +6,7 @@ import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.service.SubscriptionAccessService;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,7 +52,7 @@ public class WholesaleAccessService {
             throw ApiException.paymentRequired("An active subscription is required.");
         }
         if (!hasSupplierCapability(status)) {
-            throw ApiException.forbidden("Upgrade to the SUPPLIER plan to open a wholesale store.");
+            throw ApiException.forbidden("Upgrade to a Supplier plan to open a wholesale store.");
         }
     }
 
@@ -61,7 +62,8 @@ public class WholesaleAccessService {
     }
 
     static boolean hasSupplierCapability(SubscriptionStatusResponse status) {
-        if (SUPPLIER_PLAN.equalsIgnoreCase(status.plan())) {
+        String plan = status.plan() == null ? "" : status.plan().toUpperCase(Locale.ROOT);
+        if (SUPPLIER_PLAN.equals(plan) || plan.startsWith("SUPPLIER_")) {
             return true;
         }
         Map<String, Object> features = status.features();

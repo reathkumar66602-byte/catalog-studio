@@ -5,25 +5,25 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.5</version>
-        <relativePath/>
+        <groupId>com.catalogstudio</groupId>
+        <artifactId>catalog-studio-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>com.catalogstudio</groupId>
     <artifactId>catalog-studio-backend</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-    <name>Catalog Studio Backend</name>
-    <description>AI-powered marketplace listing, product analysis, and autofill platform</description>
-
-    <properties>
-        <java.version>21</java.version>
-        <jjwt.version>0.12.6</jjwt.version>
-        <springdoc.version>2.8.6</springdoc.version>
-    </properties>
+    <name>Catalog Studio Backend (Platform API)</name>
+    <description>Transitional platform API hosting non-extracted CatalogStudio domains</description>
 
     <dependencies>
+        <dependency>
+            <groupId>com.catalogstudio</groupId>
+            <artifactId>platform-events</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -31,6 +31,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -104,6 +108,16 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>1.3.39</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+        <dependency>
             <groupId>com.google.zxing</groupId>
             <artifactId>core</artifactId>
             <version>3.5.3</version>
@@ -112,6 +126,11 @@
             <groupId>com.google.zxing</groupId>
             <artifactId>javase</artifactId>
             <version>3.5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.auth</groupId>
+            <artifactId>google-auth-library-oauth2-http</artifactId>
+            <version>1.30.0</version>
         </dependency>
     </dependencies>
 

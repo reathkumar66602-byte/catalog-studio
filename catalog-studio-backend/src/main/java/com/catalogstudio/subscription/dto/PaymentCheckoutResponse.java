@@ -6,6 +6,7 @@ public record PaymentCheckoutResponse(
         String provider,
         String checkoutUrl,
         String sessionId,
+        String paymentSessionId,
         String plan,
         BigDecimal amount,
         String billingCycle,

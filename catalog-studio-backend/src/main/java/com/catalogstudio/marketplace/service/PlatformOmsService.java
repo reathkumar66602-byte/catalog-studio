@@ -55,9 +55,9 @@ public class PlatformOmsService {
     public OmsPlatformStatusResponse status() {
         CatalogStudioProperties.Oms oms = properties.oms();
         return new OmsPlatformStatusResponse(
-                "PROPERTY_FILE",
+                "CATALOG_STUDIO",
                 List.of(flipkartStatus(oms.flipkart()), amazonStatus(oms.amazon()), meeshoStatus(oms.meesho())),
-                "Credentials from .env / .env.gcp. Super admin runs Sync. Live Flipkart/Amazon/Meesho clients are active.");
+                null);
     }
 
     @Transactional(readOnly = true)
@@ -309,8 +309,7 @@ public class PlatformOmsService {
             case MEESHO -> oms.meesho().enabled() && oms.meesho().configured();
         };
         if (!ok) {
-            throw ApiException.badRequest(channel.name()
-                    + " OMS is not configured in property file (enabled + credentials).");
+            throw ApiException.badRequest(channelTitle(channel) + " is not connected yet.");
         }
     }
 
@@ -320,10 +319,8 @@ public class PlatformOmsService {
                 cfg.enabled(),
                 cfg.configured(),
                 false,
-                maskId(cfg.appId()),
-                cfg.configured()
-                        ? "Live Flipkart Seller API ready (token + orders + inventory)"
-                        : "Set FLIPKART_OMS_ENABLED=true and FLIPKART_APP_ID / SECRET / LOCATION_ID");
+                null,
+                null);
     }
 
     private OmsChannelStatusResponse amazonStatus(CatalogStudioProperties.Oms.Amazon cfg) {
@@ -332,10 +329,8 @@ public class PlatformOmsService {
                 cfg.enabled(),
                 cfg.configured(),
                 cfg.sandbox(),
-                maskId(cfg.clientId()),
-                cfg.configured()
-                        ? "Live Amazon SP-API ready (LWA + orders + inventory)"
-                        : "Set AMAZON_OMS_ENABLED=true and AMAZON_LWA_* credentials");
+                null,
+                null);
     }
 
     private OmsChannelStatusResponse meeshoStatus(CatalogStudioProperties.Oms.Meesho cfg) {
@@ -344,14 +339,20 @@ public class PlatformOmsService {
                 cfg.enabled(),
                 cfg.configured(),
                 false,
-                maskEmail(cfg.email()),
-                cfg.configured()
-                        ? "Meesho panel client ready (orders/stock/labels best-effort live routes)"
-                        : "Set MEESHO_OMS_ENABLED=true and MEESHO_PANEL_EMAIL / PASSWORD");
+                null,
+                null);
     }
 
     private Long platformUserId() {
         return SecurityUtils.currentUserId();
+    }
+
+    private static String channelTitle(OmsChannel channel) {
+        return switch (channel) {
+            case FLIPKART -> "Flipkart";
+            case AMAZON -> "Amazon";
+            case MEESHO -> "Meesho";
+        };
     }
 
     private static OmsChannel parseChannel(String raw) {
@@ -390,27 +391,6 @@ public class PlatformOmsService {
                 run.getMessage(),
                 run.getStartedAt(),
                 run.getFinishedAt());
-    }
-
-    private static String maskId(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        if (value.length() <= 8) {
-            return "****";
-        }
-        return value.substring(0, 4) + "****" + value.substring(value.length() - 4);
-    }
-
-    private static String maskEmail(String email) {
-        if (!StringUtils.hasText(email)) {
-            return null;
-        }
-        int at = email.indexOf('@');
-        if (at <= 1) {
-            return "***";
-        }
-        return email.charAt(0) + "***" + email.substring(at);
     }
 
     private record SyncCounts(int ok, int failed, String message) {}

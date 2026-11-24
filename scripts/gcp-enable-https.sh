@@ -20,7 +20,7 @@ cp /etc/letsencrypt/live/catalogstudio.in/fullchain.pem "$APP_DIR/certs/fullchai
 cp /etc/letsencrypt/live/catalogstudio.in/privkey.pem "$APP_DIR/certs/privkey.pem"
 chmod 644 "$APP_DIR/certs/"*.pem
 
-cat > "$APP_DIR/catalog-studio-dashboard/nginx.conf" <<'NGINX'
+cat > "$APP_DIR/catalog-studio-dashboard/nginx.prod.conf" <<'NGINX'
 server {
     listen 80;
     server_name catalogstudio.in www.catalogstudio.in;
@@ -39,22 +39,42 @@ server {
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     root /usr/share/nginx/html;
     index index.html;
-    client_max_body_size 50m;
+    client_max_body_size 220m;
 
     location /api/ {
         proxy_pass http://backend:8080/api/;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 180s;
+        proxy_read_timeout 180s;
     }
 
     location /swagger-ui {
         proxy_pass http://backend:8080/swagger-ui;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
     }
 
     location /v3/api-docs {
         proxy_pass http://backend:8080/v3/api-docs;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Service-Worker-Allowed "/";
+        try_files $uri =404;
+    }
+
+    location = /manifest.webmanifest {
+        add_header Cache-Control "no-cache";
+        default_type application/manifest+json;
+        try_files $uri =404;
     }
 
     location / {

@@ -21,13 +21,17 @@ public record CatalogStudioProperties(
         @DefaultValue Whatsapp whatsapp,
         @DefaultValue MeeshoPanel meeshoPanel,
         @DefaultValue Oms oms,
-        @DefaultValue Wholesale wholesale
+        @DefaultValue Wholesale wholesale,
+        @DefaultValue CloudCost cloudCost,
+        @DefaultValue Modules modules
 ) {
     public record Jwt(String secret, long accessTokenMinutes, long refreshTokenDays) {}
 
     public record Cors(List<String> allowedOrigins) {
         public String publicAppOrigin() {
             if (allowedOrigins != null) {
+                String www = null;
+                String apex = null;
                 String local = null;
                 for (String raw : allowedOrigins) {
                     if (raw == null || raw.isBlank()) {
@@ -38,12 +42,21 @@ public record CatalogStudioProperties(
                         continue;
                     }
                     String lower = origin.toLowerCase();
-                    if (lower.contains("catalogstudio.in")) {
-                        return origin;
-                    }
-                    if (local == null && (lower.contains("localhost") || lower.contains("127.0.0.1"))) {
+                    // Prefer www so Cashfree return_url matches the host sellers actually use
+                    // (localStorage auth is origin-scoped; apex vs www must not diverge).
+                    if (lower.startsWith("https://www.catalogstudio.in")) {
+                        www = origin;
+                    } else if (lower.startsWith("https://catalogstudio.in") && apex == null) {
+                        apex = origin;
+                    } else if (local == null && (lower.contains("localhost") || lower.contains("127.0.0.1"))) {
                         local = origin;
                     }
+                }
+                if (www != null) {
+                    return www;
+                }
+                if (apex != null) {
+                    return apex;
                 }
                 if (local != null) {
                     return local;
@@ -54,7 +67,27 @@ public record CatalogStudioProperties(
                     }
                 }
             }
-            return "http://localhost:5173";
+            return "https://www.catalogstudio.in";
+        }
+
+        /** True when origin is an allowed app origin (scheme + host), used to trust Cashfree return URLs. */
+        public boolean isAllowedAppOrigin(String candidate) {
+            if (candidate == null || candidate.isBlank()) {
+                return false;
+            }
+            String normalized = candidate.trim().replaceAll("/+$", "");
+            if (allowedOrigins == null) {
+                return false;
+            }
+            for (String raw : allowedOrigins) {
+                if (raw == null || raw.isBlank() || raw.contains("*")) {
+                    continue;
+                }
+                if (normalized.equalsIgnoreCase(raw.trim().replaceAll("/+$", ""))) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -284,6 +317,8 @@ public record CatalogStudioProperties(
                 @DefaultValue("") String clientSecret,
                 @DefaultValue("") String refreshToken,
                 @DefaultValue("A21TJRUUN4KGV") String marketplaceId,
+                /** Selling Partner ID (Seller Central → Account Info). Required for Listings Items path. */
+                @DefaultValue("") String sellerId,
                 @DefaultValue("true") boolean sandbox
         ) {
             public boolean configured() {
@@ -307,4 +342,40 @@ public record CatalogStudioProperties(
             return value != null && !value.isBlank();
         }
     }
+
+    /**
+     * GCP cloud cost dashboard (superadmin). Uses Billing Budgets API + optional BigQuery export.
+     */
+    public record CloudCost(
+            @DefaultValue("true") boolean enabled,
+            @DefaultValue("012AA3-8490F8-BDB5E6") String billingAccountId,
+            @DefaultValue("INR") String currencyCode,
+            @DefaultValue("30000") long annualBudgetInr,
+            @DefaultValue("catalog-studio-prod") String quotaProjectId,
+            @DefaultValue BigQueryExport bigQuery,
+            List<TrackedProject> projects
+    ) {
+        public record BigQueryExport(
+                @DefaultValue("true") boolean enabled,
+                @DefaultValue("catalog-studio-prod") String projectId,
+                @DefaultValue("gcp_billing_export") String datasetId,
+                /** Empty = auto-discover gcp_billing_export_v1_* table. */
+                @DefaultValue("") String tableId
+        ) {}
+
+        public record TrackedProject(
+                String id,
+                String name,
+                @DefaultValue("") String note
+        ) {}
+    }
+
+    /**
+     * Feature flags for strangler-fig extraction.
+     * When wholesaleEnabled=false, supplier-service owns /api/v1/wholesale/**.
+     */
+    public record Modules(
+            @DefaultValue("true") boolean wholesaleEnabled,
+            @DefaultValue("catalog-studio-internal") String internalApiKey
+    ) {}
 }

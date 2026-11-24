@@ -1,3 +1,5 @@
+import { detectLocale, translate, type LocaleCode } from "../i18n/catalog";
+
 export function isStaff(role?: string | null) {
   return role === "ADMIN" || role === "SUPERADMIN";
 }
@@ -20,8 +22,9 @@ export function hasFeature(
   return user.enabledFeatures.includes(feature);
 }
 
-export function roleLabel(role?: string | null) {
-  if (role === "SUPERADMIN") return "Super admin";
-  if (role === "ADMIN") return "Admin";
-  return "User";
+export function roleLabel(role?: string | null, locale?: LocaleCode) {
+  const loc = locale ?? detectLocale();
+  if (role === "SUPERADMIN") return translate(loc, "role.superAdmin");
+  if (role === "ADMIN") return translate(loc, "role.admin");
+  return translate(loc, "role.user");
 }

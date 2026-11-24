@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 import type { AnalysisResult, Product } from "../../types";
-import { ProductVariantsPanel } from "../inventory/ProductVariantsPanel";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 const fields = [
   ["productType", "Product type"],
-  ["category", "Category"],
+  ["category", "SEO category"],
   ["subCategory", "Subcategory"],
   ["gender", "Gender"],
   ["primaryColor", "Primary color"],
@@ -21,11 +21,13 @@ const fields = [
 ] as const;
 
 export function ReviewPage() {
+  const { t } = useI18n();
   const { id } = useParams();
   const navigate = useNavigate();
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
-  const [description, setDescription] = useState("");
+  const [descriptions, setDescriptions] = useState<string[]>(["", "", "", ""]);
+  const [keywords, setKeywords] = useState("");
   const [titles, setTitles] = useState<string[]>([]);
   const [selectedTitle, setSelectedTitle] = useState(0);
   const [error, setError] = useState("");
@@ -54,10 +56,17 @@ export function ReviewPage() {
         occasion: product.occasion || "",
         style: product.style || "",
       });
-      setDescription(product.description || "");
-      setTitles(product.titles?.map((t) => t.title) || [product.name]);
+      setDescriptions(padDescriptions([product.description || ""]));
+      setKeywords("");
+      setTitles(product.titles?.map((row) => row.title) || [product.name]);
     });
   }, [id]);
+
+  function padDescriptions(values: string[]) {
+    const next = [...values.filter((item) => item != null), "", "", "", ""].slice(0, 4);
+    while (next.length < 4) next.push("");
+    return next;
+  }
 
   function apply(result: AnalysisResult) {
     setAnalysis(result);
@@ -77,7 +86,13 @@ export function ReviewPage() {
       occasion: p.occasion || "",
       style: p.style || "",
     });
-    setDescription(p.productDescription || "");
+    const fromAi = p.suggestedDescriptions?.filter((item) => item?.trim()) || [];
+    if (fromAi.length > 0) {
+      setDescriptions(padDescriptions(fromAi));
+    } else {
+      setDescriptions(padDescriptions([p.productDescription || ""]));
+    }
+    setKeywords((p.keywords || []).join(", "));
     setTitles(p.suggestedTitles || []);
   }
 
@@ -91,25 +106,32 @@ export function ReviewPage() {
           : field === "primaryColor"
             ? analysis?.product.colorConfidence
             : analysis?.product.overallConfidence;
-    if (uncertain || (conf != null && conf < 0.6)) return { label: "Low confidence", className: "bg-amber-100 text-amber-800" };
-    if (conf != null && conf >= 0.85) return { label: "High confidence", className: "bg-emerald-100 text-emerald-800" };
-    return { label: "Medium confidence", className: "bg-slate-100 text-slate-700" };
+    if (uncertain || (conf != null && conf < 0.6)) return { label: t("review.lowConf"), className: "bg-amber-100 text-amber-800" };
+    if (conf != null && conf >= 0.85) return { label: t("review.highConf"), className: "bg-emerald-100 text-emerald-800" };
+    return { label: t("review.medConf"), className: "bg-slate-100 text-slate-700" };
   }
 
   async function save(status: "DRAFT" | "ACTIVE", next?: string) {
     setError("");
+    const primaryDescription =
+      descriptions.find((item) => item.trim()) || descriptions[0] || "";
     try {
       await api.put(`/products/${id}`, {
         name: titles[selectedTitle] || form.productType,
         ...form,
         subcategory: form.subCategory,
-        description,
+        description: primaryDescription,
         status,
         titles,
+        keywords: keywords
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        suggestedDescriptions: descriptions.map((item) => item.trim()).filter(Boolean),
       });
       navigate(next || "/products");
     } catch (err) {
-      setError(apiErrorMessage(err, "Could not save product"));
+      setError(apiErrorMessage(err, t("review.saveFail")));
     }
   }
 
@@ -122,8 +144,8 @@ export function ReviewPage() {
       </aside>
       <section className="space-y-6 rounded-3xl bg-white p-6 dark:bg-slate-900">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Review AI suggestions</h1>
-          <p className="text-sm text-slate-500">Edit anything. AI never publishes a listing.</p>
+          <h1 className="text-xl font-semibold">{t("review.title")}</h1>
+          <p className="text-sm text-slate-500">{t("review.subtitle")}</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {fields.map(([key, label]) => {
@@ -144,7 +166,7 @@ export function ReviewPage() {
           })}
         </div>
         <div>
-          <h2 className="mb-2 font-medium">Suggested titles</h2>
+          <h2 className="mb-2 font-medium">{t("review.suggestedTitles")}</h2>
           <div className="space-y-2">
             {titles.map((title, index) => (
               <label key={index} className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2">
@@ -152,32 +174,47 @@ export function ReviewPage() {
                 <input
                   className="flex-1 border-none bg-transparent outline-none"
                   value={title}
-                  onChange={(e) => setTitles(titles.map((t, i) => (i === index ? e.target.value : t)))}
+                  onChange={(e) => setTitles(titles.map((row, i) => (i === index ? e.target.value : row)))}
                 />
               </label>
             ))}
           </div>
         </div>
         <label className="block text-sm">
-          Description
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
+          {t("review.seoKeywords")}
+          <input
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            placeholder={t("review.seoKeywordsPh")}
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
           />
         </label>
+        <div className="space-y-3">
+          <h2 className="font-medium">{t("review.fourDescriptions")}</h2>
+          {descriptions.map((value, index) => (
+            <label key={index} className="block text-sm">
+              {t("review.descriptionN", { n: index + 1 })}
+              <textarea
+                value={value}
+                onChange={(e) =>
+                  setDescriptions(descriptions.map((row, i) => (i === index ? e.target.value : row)))
+                }
+                rows={3}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"
+              />
+            </label>
+          ))}
+        </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
-        {id && <ProductVariantsPanel productId={id} />}
         <div className="flex flex-wrap gap-3">
           <button onClick={() => save("DRAFT")} className="rounded-xl border border-slate-300 px-4 py-2">
-            Save draft
+            {t("review.saveDraft")}
           </button>
           <button onClick={() => save("ACTIVE")} className="rounded-xl bg-slate-900 px-4 py-2 text-white">
-            Save product
+            {t("review.saveProduct")}
           </button>
-          <button onClick={() => save("ACTIVE", "/marketplaces")} className="rounded-xl bg-teal-700 px-4 py-2 text-white">
-            Continue to marketplace
+          <button onClick={() => save("ACTIVE", "/extension")} className="rounded-xl bg-teal-700 px-4 py-2 text-white">
+            {t("review.continueMp")}
           </button>
         </div>
       </section>

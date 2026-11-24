@@ -2,12 +2,14 @@ package com.catalogstudio.subscription.controller;
 
 import com.catalogstudio.common.api.ApiResponse;
 import com.catalogstudio.security.SecurityUtils;
+import com.catalogstudio.subscription.dto.AdminPaymentLedgerItem;
 import com.catalogstudio.subscription.dto.BillingPromoCodeRequest;
 import com.catalogstudio.subscription.dto.BillingPromoCodeResponse;
 import com.catalogstudio.subscription.dto.BillingSettingsRequest;
 import com.catalogstudio.subscription.dto.BillingSettingsResponse;
 import com.catalogstudio.subscription.service.BillingPromoService;
 import com.catalogstudio.subscription.service.BillingSettingsService;
+import com.catalogstudio.subscription.service.PaymentTransactionService;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,7 +17,11 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +30,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,6 +43,7 @@ public class BillingAdminController {
 
     private final BillingSettingsService billingSettingsService;
     private final BillingPromoService billingPromoService;
+    private final PaymentTransactionService paymentTransactionService;
     private final UserRepository userRepository;
 
     @GetMapping
@@ -76,5 +84,29 @@ public class BillingAdminController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void disablePromo(@PathVariable UUID id) {
         billingPromoService.disable(id);
+    }
+
+    @GetMapping("/payments")
+    public ApiResponse<Page<AdminPaymentLedgerItem>> payments(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        int safePage = Math.max(page, 0);
+        return ApiResponse.ok(paymentTransactionService.adminLedger(
+                q,
+                provider,
+                status,
+                type,
+                PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))));
+    }
+
+    @GetMapping(value = "/payments/{id}/bill", produces = MediaType.TEXT_HTML_VALUE)
+    public String paymentBill(@PathVariable UUID id) {
+        return paymentTransactionService.renderBillHtmlAdmin(id);
     }
 }

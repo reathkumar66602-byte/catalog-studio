@@ -80,7 +80,10 @@ public class ProductService {
         product.setFit(request.fit());
         product.setOccasion(request.occasion());
         product.setStyle(request.style());
-        product.setDescription(request.description());
+        String primaryDescription = StringUtils.hasText(request.description())
+                ? request.description().trim()
+                : firstNonBlank(request.suggestedDescriptions());
+        product.setDescription(primaryDescription);
         if (StringUtils.hasText(request.status())) {
             product.setStatus(Product.ProductStatus.valueOf(request.status().toUpperCase()));
         }
@@ -98,6 +101,22 @@ public class ProductService {
         fields.put("fit", request.fit());
         fields.put("occasion", request.occasion());
         fields.put("style", request.style());
+        if (request.keywords() != null && !request.keywords().isEmpty()) {
+            fields.put("seoKeywords", String.join(", ", request.keywords().stream()
+                    .filter(StringUtils::hasText)
+                    .map(String::trim)
+                    .toList()));
+        }
+        if (request.suggestedDescriptions() != null) {
+            int index = 1;
+            for (String text : request.suggestedDescriptions()) {
+                if (!StringUtils.hasText(text) || index > 4) {
+                    continue;
+                }
+                fields.put("description" + index, text.trim());
+                index += 1;
+            }
+        }
         attributeRepository.deleteByProductId(product.getId());
         fields.forEach((name, value) -> {
             if (value != null && !value.isBlank()) {
@@ -136,5 +155,17 @@ public class ProductService {
     private Product require(Long userId, UUID id) {
         return productRepository.findByUuidAndUserId(id, userId)
                 .orElseThrow(() -> ApiException.notFound("Product not found"));
+    }
+
+    private static String firstNonBlank(List<String> values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

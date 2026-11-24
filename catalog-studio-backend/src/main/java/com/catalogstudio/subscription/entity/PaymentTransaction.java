@@ -100,6 +100,21 @@ public class PaymentTransaction {
     @Column(name = "invoice_number", length = 40)
     private String invoiceNumber;
 
+    @Column(name = "gateway_link_id", length = 80)
+    private String gatewayLinkId;
+
+    @Column(name = "gateway_cf_link_id", length = 40)
+    private String gatewayCfLinkId;
+
+    @Column(name = "gateway_order_id", length = 120)
+    private String gatewayOrderId;
+
+    @Column(name = "gateway_payment_id", length = 120)
+    private String gatewayPaymentId;
+
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

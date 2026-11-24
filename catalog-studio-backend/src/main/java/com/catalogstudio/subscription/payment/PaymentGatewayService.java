@@ -1,5 +1,6 @@
 package com.catalogstudio.subscription.payment;
 
+import com.catalogstudio.common.exception.ApiException;
 import com.catalogstudio.subscription.entity.BillingSettings;
 import com.catalogstudio.subscription.service.BillingSettingsService;
 import java.util.List;
@@ -14,26 +15,36 @@ public class PaymentGatewayService {
 
     private final List<PaymentProvider> providers;
     private final BillingSettingsService billingSettingsService;
+    private final CashfreeProperties cashfreeProperties;
 
     public PaymentProvider active() {
         BillingSettings settings = billingSettingsService.current();
         String requested = StringUtils.hasText(settings.getPaymentProvider())
                 ? settings.getPaymentProvider().trim().toUpperCase(Locale.ROOT)
-                : "MANUAL";
+                : "CASHFREE";
+        // Prefer live Cashfree whenever credentials exist, even if DB still says MANUAL.
+        if (cashfreeProperties.configured()
+                && ("CASHFREE".equals(requested) || "MANUAL".equals(requested) || !StringUtils.hasText(requested))) {
+            return providers.stream()
+                    .filter(provider -> "CASHFREE".equalsIgnoreCase(provider.name()) && provider.enabled())
+                    .findFirst()
+                    .orElseThrow(() -> ApiException.badRequest("Cashfree payment gateway is not available"));
+        }
         return providers.stream()
                 .filter(provider -> requested.equalsIgnoreCase(provider.name()) && provider.enabled())
                 .findFirst()
-                .orElseGet(this::manual);
+                .orElseGet(this::fallbackManual);
     }
 
-    public PaymentProvider.CheckoutSession checkout(Long userId, String planName) {
-        return active().createCheckout(userId, planName);
+    public PaymentProvider.CheckoutSession checkout(PaymentCheckoutCommand command) {
+        return active().createCheckout(command);
     }
 
-    private PaymentProvider manual() {
+    private PaymentProvider fallbackManual() {
         return providers.stream()
-                .filter(provider -> "MANUAL".equalsIgnoreCase(provider.name()))
+                .filter(provider -> "MANUAL".equalsIgnoreCase(provider.name()) && provider.enabled())
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Manual payment provider is not registered"));
+                .orElseThrow(() -> ApiException.badRequest(
+                        "No payment gateway is configured. Set Cashfree credentials on the server."));
     }
 }

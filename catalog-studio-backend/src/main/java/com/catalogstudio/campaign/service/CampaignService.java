@@ -271,7 +271,7 @@ public class CampaignService {
                     StringUtils.hasText(template.getBodyHtml()) ? template.getBodyHtml() : template.getBodyText(),
                     vars);
             String text = EmailTemplateRenderer.render(template.getBodyText(), vars);
-            boolean sent = mailDispatchService.sendHtml(user.getEmail().trim(), subject, html, text);
+            boolean sent = mailDispatchService.sendCampaignHtml(user.getEmail().trim(), subject, html, text);
             return sent ? null : "ERROR:Email provider did not accept message";
         } catch (Exception ex) {
             log.warn("Campaign email failed for {}: {}", user.getEmail(), ex.toString());

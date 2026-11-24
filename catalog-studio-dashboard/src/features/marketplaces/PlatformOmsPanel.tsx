@@ -7,30 +7,34 @@ type ChannelStatus = {
   enabled: boolean;
   configured: boolean;
   sandbox: boolean;
-  detailMasked?: string | null;
-  note?: string | null;
 };
 
 type PlatformStatus = {
-  source: string;
   channels: ChannelStatus[];
-  guidance?: string | null;
 };
 
 type SyncResult = {
   syncType: string;
   status: string;
-  itemsOk: number;
-  itemsFailed: number;
   message?: string | null;
+};
+
+const CHANNEL_COPY: Record<string, { title: string; detail: string }> = {
+  FLIPKART: { title: "Flipkart", detail: "Orders, stock, and shipping labels" },
+  AMAZON: { title: "Amazon", detail: "Orders, stock, and shipping labels" },
+  MEESHO: { title: "Meesho", detail: "Orders, stock, and shipping labels" },
 };
 
 const SYNC_KINDS = [
   ["orders", "Sync orders"],
-  ["stock", "Push stock"],
-  ["labels", "Fetch labels"],
-  ["full", "Full sync"],
+  ["stock", "Update stock"],
+  ["labels", "Get labels"],
+  ["full", "Sync everything"],
 ] as const;
+
+function channelTitle(code: string) {
+  return CHANNEL_COPY[code]?.title || code;
+}
 
 export function PlatformOmsPanel() {
   const qc = useQueryClient();
@@ -46,7 +50,7 @@ export function PlatformOmsPanel() {
     mutationFn: async ({ channel, kind }: { channel: string; kind: string }) =>
       (await api.post(`/admin/oms/${channel}/sync/${kind}`)).data.data as SyncResult,
     onSuccess: async (result) => {
-      setMessage(`${result.syncType}: ${result.status} — ${result.message || ""}`);
+      setMessage(`${channelTitle(activeChannel)}: ${result.message || result.status}`);
       await qc.invalidateQueries({ queryKey: ["admin-oms"] });
     },
   });
@@ -54,33 +58,40 @@ export function PlatformOmsPanel() {
   return (
     <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
       <div>
-        <h2 className="text-lg font-semibold">Platform OMS (Base.com-style)</h2>
+        <h2 className="text-lg font-semibold">Order sync</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Credentials live in the server <strong>property / .env file</strong> (not pasted here). Super admin runs
-          orders / stock / labels sync for Flipkart, Amazon, and Meesho.
+          Keep Flipkart, Amazon, and Meesho orders, stock, and shipping labels in one place.
         </p>
-        {status.data?.guidance && <p className="mt-2 text-xs text-slate-500">{status.data.guidance}</p>}
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        {(status.data?.channels || []).map((c) => (
-          <button
-            key={c.channel}
-            type="button"
-            onClick={() => setActiveChannel(c.channel)}
-            className={`rounded-xl border p-3 text-left text-sm ${
-              activeChannel === c.channel ? "border-teal-700 bg-teal-50" : "border-slate-200 bg-slate-50"
-            }`}
-          >
-            <div className="font-semibold">{c.channel}</div>
-            <div className="mt-1 text-xs text-slate-600">
-              {c.enabled ? "Enabled" : "Disabled"} · {c.configured ? "Configured" : "Missing secrets"}
-              {c.sandbox ? " · Sandbox" : ""}
-            </div>
-            {c.detailMasked && <div className="mt-1 text-xs text-slate-500">{c.detailMasked}</div>}
-            {c.note && <div className="mt-1 text-xs text-slate-500">{c.note}</div>}
-          </button>
-        ))}
+        {(status.data?.channels || []).map((channel) => {
+          const connected = channel.enabled && channel.configured;
+          const copy = CHANNEL_COPY[channel.channel];
+          const selected = activeChannel === channel.channel;
+          return (
+            <button
+              key={channel.channel}
+              type="button"
+              onClick={() => setActiveChannel(channel.channel)}
+              className={`rounded-xl border p-4 text-left ${
+                selected ? "border-teal-700 bg-teal-50" : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">{copy?.title || channel.channel}</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    connected ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {connected ? (channel.sandbox ? "Sandbox" : "Connected") : "Not connected"}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">{copy?.detail || "Orders, stock, and labels"}</p>
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -95,25 +106,14 @@ export function PlatformOmsPanel() {
             }}
             className="rounded-xl border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-60"
           >
-            {sync.isPending ? "Syncing…" : `${label} (${activeChannel})`}
+            {sync.isPending ? "Syncing…" : `${label}`}
           </button>
         ))}
       </div>
+      <p className="text-xs text-slate-500">Actions run for {channelTitle(activeChannel)}.</p>
 
       {message && <p className="text-sm text-teal-800">{message}</p>}
       {sync.isError && <p className="text-sm text-red-600">{apiErrorMessage(sync.error)}</p>}
-
-      <ol className="list-decimal space-y-1 pl-5 text-xs text-slate-500">
-        <li>
-          Put secrets in <code>.env</code> (local) or <code>.env.gcp</code> (prod): <code>FLIPKART_APP_*</code>,{" "}
-          <code>AMAZON_LWA_*</code>, <code>MEESHO_PANEL_*</code>.
-        </li>
-        <li>
-          Set <code>*_OMS_ENABLED=true</code> for each channel you use.
-        </li>
-        <li>Restart backend / redeploy Docker so properties load.</li>
-        <li>Return here and run Sync orders / Push stock / Fetch labels.</li>
-      </ol>
     </section>
   );
 }

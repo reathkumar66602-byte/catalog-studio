@@ -23,6 +23,7 @@ import { ExtensionPage } from "./features/extension/ExtensionPage";
 import { ExtensionBridge } from "./features/extension/ExtensionBridge";
 import { SubscriptionPage } from "./features/subscription/SubscriptionPage";
 import { SubscriptionPaymentPage } from "./features/subscription/SubscriptionPaymentPage";
+import { SubscriptionPaymentResultPage } from "./features/subscription/SubscriptionPaymentResultPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { BillingAddressPage } from "./features/settings/BillingAddressPage";
 import { EmailTemplatesPage } from "./features/settings/EmailTemplatesPage";
@@ -34,14 +35,18 @@ import { MeeshoCalculatorPage } from "./features/calculator/MeeshoCalculatorPage
 import { ShootPage } from "./features/shoot/ShootPage";
 import { TrendingPage } from "./features/trending/TrendingPage";
 import { TipsPage } from "./features/tips/TipsPage";
+import { AppGuidePage } from "./features/tips/AppGuidePage";
+import { TutorialsPage } from "./features/tips/TutorialsPage";
 import { TipsAdminPage } from "./features/admin/TipsAdminPage";
 import { InventoryPage } from "./features/inventory/InventoryPage";
 import { LiveStockPage } from "./features/wholesale/LiveStockPage";
 import { WholesaleProductDetailPage } from "./features/wholesale/WholesaleProductDetailPage";
 import { BuyerOrdersPage } from "./features/wholesale/BuyerOrdersPage";
+import { BuyerBillHistoryPage, SupplierBillHistoryPage } from "./features/wholesale/BillHistoryPage";
 import { SupplierStorePage } from "./features/wholesale/SupplierStorePage";
 import { SupplierInventoryPage } from "./features/wholesale/SupplierInventoryPage";
 import { SupplierOrdersPage } from "./features/wholesale/SupplierOrdersPage";
+import { SupplierCouponsPage } from "./features/wholesale/SupplierCouponsPage";
 import { useTheme } from "./hooks/useTheme";
 import { SiteProvider } from "./features/site/useSite";
 import { MarketingLayout } from "./features/site/MarketingLayout";
@@ -49,6 +54,8 @@ import { LandingPage } from "./features/site/LandingPage";
 import { ContactPage, ExtensionMarketingPage, PrivacyPolicyPage } from "./features/site/ExtensionMarketingPage";
 import { SiteAdminPage } from "./features/admin/SiteAdminPage";
 import { BillingAdminPage } from "./features/admin/BillingAdminPage";
+import { AdminPaymentsPage } from "./features/admin/AdminPaymentsPage";
+import { CloudCostAdminPage } from "./features/admin/CloudCostAdminPage";
 import { UsersAdminPage } from "./features/admin/UsersAdminPage";
 import { AccessAdminPage } from "./features/admin/AccessAdminPage";
 import { StaffAdminPage } from "./features/admin/StaffAdminPage";
@@ -118,25 +125,31 @@ export default function App() {
                   <Route element={<FeatureRoute feature="extension" />}>
                     <Route path="/extension" element={<ExtensionPage />} />
                   </Route>
-                  <Route element={<FeatureRoute feature="ecommerce_tips" />}>
-                    <Route path="/tips" element={<TipsPage />} />
+                  <Route path="/app-guide" element={<AppGuidePage />} />
+                  <Route element={<FeatureRoute feature="ecommerce_tutorials" />}>
+                    <Route path="/tutorials" element={<TutorialsPage />} />
                   </Route>
+                  <Route path="/tips" element={<TipsPage />} />
                   <Route element={<FeatureRoute feature="inventory" />}>
                     <Route path="/inventory" element={<InventoryPage />} />
                   </Route>
                   <Route element={<FeatureRoute feature="live_stock" />}>
                     <Route path="/live-stock" element={<LiveStockPage />} />
                     <Route path="/live-stock/orders" element={<BuyerOrdersPage />} />
+                    <Route path="/live-stock/bills" element={<BuyerBillHistoryPage />} />
                     <Route path="/live-stock/:idOrSlug" element={<WholesaleProductDetailPage />} />
                   </Route>
                   <Route element={<FeatureRoute feature="wholesale_supplier" />}>
                     <Route path="/supplier/store" element={<SupplierStorePage />} />
                     <Route path="/supplier/inventory" element={<SupplierInventoryPage />} />
+                    <Route path="/supplier/coupons" element={<SupplierCouponsPage />} />
                     <Route path="/supplier/orders" element={<SupplierOrdersPage />} />
+                    <Route path="/supplier/bills" element={<SupplierBillHistoryPage />} />
                   </Route>
                   <Route element={<FeatureRoute feature="subscription" />}>
                     <Route path="/subscription" element={<SubscriptionPage />} />
                     <Route path="/subscription/pay" element={<SubscriptionPaymentPage />} />
+                    <Route path="/subscription/payment-result" element={<SubscriptionPaymentResultPage />} />
                   </Route>
                   <Route element={<FeatureRoute feature="transactions" />}>
                     <Route path="/transactions" element={<TransactionHistoryPage />} />
@@ -149,12 +162,14 @@ export default function App() {
                     <Route path="/admin/access" element={<AccessAdminPage />} />
                     <Route path="/admin/site" element={<SiteAdminPage />} />
                     <Route path="/admin/billing" element={<BillingAdminPage />} />
+                    <Route path="/admin/payments" element={<AdminPaymentsPage />} />
                     <Route path="/admin/tips" element={<TipsAdminPage />} />
                     <Route path="/settings/email-templates" element={<EmailTemplatesPage />} />
                   </Route>
                   <Route element={<SuperAdminRoute />}>
                     <Route path="/orders" element={<OrderManagerPage />} />
                     <Route path="/admin/staff" element={<StaffAdminPage />} />
+                    <Route path="/admin/cloud-cost" element={<CloudCostAdminPage />} />
                   </Route>
                   </Route>
                 </Route>

@@ -2,21 +2,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { api, apiErrorMessage } from "../../api/client";
 import type { AdminSiteBundle, SiteClient, SitePromo } from "../site/types";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 export function SiteAdminPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-site"],
     queryFn: async () => (await api.get("/admin/site")).data.data as AdminSiteBundle,
   });
 
-  if (isLoading) return <p>Loading website settings...</p>;
-  if (error || !data) return <p className="text-red-600">{apiErrorMessage(error, "Could not load website settings")}</p>;
+  if (isLoading) return <p>{t("admin.site.loading")}</p>;
+  if (error || !data) return <p className="text-red-600">{apiErrorMessage(error, t("admin.site.loadFail"))}</p>;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold">Website settings</h1>
+        <h1 className="text-2xl font-semibold">{t("admin.site.title")}</h1>
         <p className="text-slate-500">
           Branding, {data.clients.find((c) => c.featured)?.storeName || "client"} details, promo codes, support email, and the
           enquiry form all come from the database.

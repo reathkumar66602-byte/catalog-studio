@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { api, apiErrorMessage } from "../../api/client";
 import type { TransactionRow } from "../../types";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type TransactionPage = {
   content: TransactionRow[];
@@ -13,6 +14,7 @@ type TransactionPage = {
 };
 
 export function TransactionHistoryPage() {
+  const { t } = useI18n();
   const [page, setPage] = useState(0);
   const [downloading, setDownloading] = useState<string | null>(null);
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -37,7 +39,7 @@ export function TransactionHistoryPage() {
       }
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      window.alert(apiErrorMessage(err, "Could not download bill"));
+      window.alert(apiErrorMessage(err, t("transactions.billFail")));
     } finally {
       setDownloading(null);
     }
@@ -46,10 +48,10 @@ export function TransactionHistoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Transaction history</h1>
+        <h1 className="text-2xl font-semibold">{t("transactions.title")}</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Plan charges, checkout attempts, and tax invoices for this account
-          {data ? ` · ${data.totalElements} total` : ""}.
+          {t("transactions.subtitle")}
+          {data ? ` · ${t("transactions.total", { total: data.totalElements })}` : ""}
         </p>
       </div>
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
@@ -64,23 +66,23 @@ export function TransactionHistoryPage() {
               <th>Promo</th>
               <th>Provider</th>
               <th>Reference</th>
-              <th>Bill</th>
+              <th>{t("transactions.bill")}</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
                 <td className="p-6 text-slate-500" colSpan={9}>
-                  Loading transactions...
+                  {t("transactions.loading")}
                 </td>
               </tr>
             )}
             {isError && (
               <tr>
                 <td className="p-6" colSpan={9}>
-                  <p className="text-rose-700">{apiErrorMessage(error, "Could not load transactions")}</p>
+                  <p className="text-rose-700">{apiErrorMessage(error, t("transactions.loadFail"))}</p>
                   <button type="button" className="mt-2 text-sm text-teal-700" onClick={() => refetch()}>
-                    Retry
+                    {t("common.retry")}
                   </button>
                 </td>
               </tr>
@@ -88,7 +90,7 @@ export function TransactionHistoryPage() {
             {!isLoading && !isError && rows.length === 0 && (
               <tr>
                 <td className="p-6 text-slate-500" colSpan={9}>
-                  No transactions yet. Recharge from Subscription to create a payment record.
+                  {t("transactions.empty")}
                 </td>
               </tr>
             )}
@@ -128,7 +130,7 @@ export function TransactionHistoryPage() {
                       className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium text-teal-800 hover:bg-teal-50 disabled:opacity-60"
                     >
                       <Download size={14} />
-                      {downloading === row.id ? "Opening…" : "Bill"}
+                      {downloading === row.id ? t("transactions.opening") : t("transactions.bill")}
                     </button>
                   ) : (
                     <span className="text-slate-400">—</span>
@@ -147,18 +149,16 @@ export function TransactionHistoryPage() {
             onClick={() => setPage((current) => Math.max(0, current - 1))}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-50"
           >
-            Previous
+            {t("common.previous")}
           </button>
-          <span>
-            Page {page + 1} of {totalPages}
-          </span>
+          <span>{t("common.pageOf", { page: page + 1, total: totalPages })}</span>
           <button
             type="button"
             disabled={page + 1 >= totalPages}
             onClick={() => setPage((current) => current + 1)}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-50"
           >
-            Next
+            {t("common.next")}
           </button>
         </div>
       )}

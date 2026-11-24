@@ -22,12 +22,14 @@ import com.catalogstudio.subscription.repository.SubscriptionRepository;
 import com.catalogstudio.subscription.service.PaymentTransactionService;
 import com.catalogstudio.subscription.service.PricingService;
 import com.catalogstudio.subscription.service.SubscriptionAccessService;
+import com.catalogstudio.subscription.service.SubscriptionActivationService;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
 import com.catalogstudio.user.repository.UserSpecifications;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,7 +52,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AdminWorkspaceService {
 
-    private static final Set<String> SORTABLE = Set.of("name", "email", "role", "status", "createdAt");
+    private static final Set<String> SORTABLE = Set.of("name", "email", "role", "status", "createdAt", "plan", "access");
     private static final List<User.Role> WORKSPACE_ROLES = List.of(User.Role.USER, User.Role.SELLER, User.Role.TEAM_MEMBER);
     private static final List<User.Role> ADMIN_ROLES = List.of(User.Role.ADMIN, User.Role.SUPERADMIN);
     private static final String OWNER_EMAIL = "vishalmishra66602@gmail.com";
@@ -60,6 +62,7 @@ public class AdminWorkspaceService {
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionPlanRepository planRepository;
     private final SubscriptionAccessService subscriptionAccessService;
+    private final SubscriptionActivationService subscriptionActivationService;
     private final PaymentTransactionService paymentTransactionService;
     private final PricingService pricingService;
     private final FeatureAccessService featureAccessService;
@@ -151,13 +154,17 @@ public class AdminWorkspaceService {
             case "PAID", "TRIAL", "EXPIRED" -> true;
             default -> false;
         };
-        if (!needsAccessFilter) {
+        SortRequest sortRequest = parseSort(sort);
+        if (!needsAccessFilter && !sortRequest.virtual()) {
             Page<User> users = userRepository.findAll(
                     UserSpecifications.listing(query, roles, filter),
-                    pageable(page, size, sort));
+                    PageRequest.of(
+                            Math.max(page, 0),
+                            Math.min(Math.max(size, 1), 50),
+                            Sort.by(sortRequest.direction(), sortRequest.field())));
             return mapUsers(users);
         }
-        // Access-state filters need subscription snapshot; load a bounded working set then page in memory.
+        // Access-state filters and plan/access sort need subscription snapshot; page in memory.
         List<User> all = userRepository.findAll(
                 UserSpecifications.listing(query, roles, filter),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -170,6 +177,7 @@ public class AdminWorkspaceService {
         }
         List<User> matched = all.stream()
                 .filter(user -> matchesAccessFilter(filter, user, subscriptions.get(user.getId())))
+                .sorted(userComparator(sortRequest, subscriptions))
                 .toList();
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 50);
@@ -218,58 +226,18 @@ public class AdminWorkspaceService {
 
     private AdminUserRow activate(User actor, User target, AdminSubscriptionActionRequest request) {
         SubscriptionPlan plan = requirePlan(request.planName());
-        Subscription subscription = ensureSubscription(target, plan);
-        PriceBreakdown pricing = subscriptionAccessService.pendingBreakdown(subscription);
-        if (pricing == null) {
-            try {
-                pricing = pricingService.quote(plan, subscription.getPendingPromoCode());
-            } catch (Exception ex) {
-                pricing = new PriceBreakdown(
-                        plan.getPrice() == null ? BigDecimal.ZERO : plan.getPrice(),
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        plan.getPrice() == null ? BigDecimal.ZERO : plan.getPrice(),
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        subscription.getPendingPromoCode(),
-                        null,
-                        null,
-                        null,
-                        null
-                );
-            }
-        }
-        LocalDate start = LocalDate.now();
-        subscription.setPlan(plan);
-        subscription.setPendingPlan(null);
-        subscription.setStatus(SubscriptionStatus.ACTIVE);
-        subscription.setStartDate(start);
-        subscription.setEndDate(endDateFor(plan, start));
-        String promoNote = StringUtils.hasText(pricing.promoCode())
-                ? " · promo " + pricing.promoCode() + " applied (−₹" + pricing.discountAmount() + ")"
-                : " · no promo code";
-        String notes = StringUtils.hasText(request.notes())
-                ? request.notes().trim()
-                : "Activated after WhatsApp payment confirmation" + promoNote;
-        String reference = StringUtils.hasText(request.reference())
-                ? request.reference().trim()
-                : "whatsapp:" + target.getEmail();
-        paymentTransactionService.record(
-                target, plan, TransactionType.ACTIVATION, TransactionStatus.SUCCESS,
-                "MANUAL", reference, notes, pricing);
-        if (StringUtils.hasText(pricing.promoCode())) {
-            pricingService.consumePromo(pricing.promoCode());
-        }
-        subscriptionAccessService.clearPendingAfterActivation(subscription);
-        Map<String, Object> audit = new LinkedHashMap<>();
-        audit.put("plan", plan.getName());
-        audit.put("reference", reference);
-        audit.put("promoCode", pricing.promoCode() == null ? "" : pricing.promoCode());
-        audit.put("promoApplied", StringUtils.hasText(pricing.promoCode()));
-        audit.put("totalAmount", pricing.totalAmount() == null ? "" : pricing.totalAmount().toPlainString());
-        auditService.log(actor, "SUBSCRIPTION_ACTIVATED", "USER", target.getUuid().toString(), null, audit);
-        sendActivationEmail(target, plan, subscription.getStartDate(), subscription.getEndDate(), reference);
+        ensureSubscription(target, plan);
+        Subscription subscription = subscriptionActivationService.activatePaid(
+                target,
+                plan,
+                "MANUAL",
+                StringUtils.hasText(request.reference()) ? request.reference().trim() : "admin:" + actor.getEmail(),
+                StringUtils.hasText(request.notes())
+                        ? request.notes().trim()
+                        : "Activated by admin after payment confirmation",
+                null,
+                actor
+        );
         return toRow(target, subscription, featureAccessService.mapFor(target));
     }
 
@@ -318,7 +286,14 @@ public class AdminWorkspaceService {
         }
         subscription.setPlan(plan);
         subscription.setPendingPlan(null);
-        if (subscription.getStatus() != SubscriptionStatus.TRIAL) {
+        // Leaving trial for a paid plan (e.g. tutorials) so entitlements apply immediately.
+        boolean paid = plan.getPrice() != null && plan.getPrice().compareTo(BigDecimal.ZERO) > 0;
+        if (paid && subscription.getStatus() == SubscriptionStatus.TRIAL) {
+            LocalDate start = LocalDate.now();
+            subscription.setStatus(SubscriptionStatus.ACTIVE);
+            subscription.setStartDate(start);
+            subscription.setEndDate(endDateFor(plan, start));
+        } else if (subscription.getStatus() != SubscriptionStatus.TRIAL) {
             subscription.setStatus(SubscriptionStatus.ACTIVE);
         }
         String notes = StringUtils.hasText(request.notes())
@@ -347,7 +322,7 @@ public class AdminWorkspaceService {
             vars.put("username", StringUtils.hasText(target.getUsername()) ? target.getUsername().trim() : target.getName());
             vars.put("email", target.getEmail().trim());
             vars.put("appName", "Catalog Studio");
-            vars.put("plan", plan.getName());
+            vars.put("plan", planLabel(plan));
             vars.put("price", formatPrice(plan.getPrice()));
             vars.put("billingCycle", cycleLabel(plan.getBillingCycle()));
             vars.put("planDetail", planDetail(plan));
@@ -382,25 +357,46 @@ public class AdminWorkspaceService {
         String cycle = billingCycle == null ? "MONTHLY" : billingCycle.toUpperCase(Locale.ROOT);
         return switch (cycle) {
             case "YEARLY", "ANNUAL" -> "year";
+            case "HALF_YEARLY", "HALFYEARLY", "SEMIANNUAL" -> "6 months";
             case "QUARTERLY" -> "quarter";
             default -> "month";
         };
     }
 
+    private static String planLabel(SubscriptionPlan plan) {
+        Map<String, Object> features = plan.getFeaturesJson() == null ? Map.of() : plan.getFeaturesJson();
+        Object display = features.get("displayName");
+        if (display != null && StringUtils.hasText(display.toString())) {
+            return display.toString().trim();
+        }
+        return plan.getName();
+    }
+
     private static String planDetail(SubscriptionPlan plan) {
         StringBuilder detail = new StringBuilder();
-        detail.append(plan.getName()).append(" · ").append(formatPrice(plan.getPrice()));
+        detail.append(planLabel(plan)).append(" · ").append(formatPrice(plan.getPrice()));
         String cycle = cycleLabel(plan.getBillingCycle());
         if (StringUtils.hasText(cycle)) {
             detail.append(" per ").append(cycle);
         }
         Map<String, Object> features = plan.getFeaturesJson() == null ? Map.of() : plan.getFeaturesJson();
-        List<String> includes = new java.util.ArrayList<>();
-        addCount(includes, features, "monthlyAiAnalyses", "autofill uses");
-        addCount(includes, features, "monthlyShootPhotos", "shoot photos");
-        addCount(includes, features, "monthlyTrendingProducts", "trending products");
-        if (!includes.isEmpty()) {
-            detail.append(". Includes ").append(String.join(", ", includes));
+        Object unlimited = features.get("unlimitedAccess");
+        boolean allAccess = Boolean.TRUE.equals(unlimited)
+                || (unlimited instanceof String text && Boolean.parseBoolean(text));
+        if (allAccess) {
+            detail.append(". Unlimited autofill, shoot photos, and trending products");
+        } else {
+            List<String> includes = new java.util.ArrayList<>();
+            addCount(includes, features, "monthlyAiAnalyses", "autofill uses");
+            addCount(includes, features, "monthlyShootPhotos", "shoot photos");
+            addCount(includes, features, "monthlyTrendingProducts", "trending products");
+            if (!includes.isEmpty()) {
+                detail.append(". Includes ").append(String.join(", ", includes));
+            }
+        }
+        Object store = features.get("wholesaleSupplier");
+        if (Boolean.TRUE.equals(store) || (store instanceof String text && Boolean.parseBoolean(text))) {
+            detail.append(". GST wholesale store included");
         }
         Object crop = features.get("labelCrop");
         if (crop != null && StringUtils.hasText(crop.toString())) {
@@ -495,24 +491,52 @@ public class AdminWorkspaceService {
     }
 
     private Pageable pageable(int page, int size, String sort) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 50);
+        SortRequest sortRequest = parseSort(sort);
+        String field = sortRequest.virtual() ? "createdAt" : sortRequest.field();
+        return PageRequest.of(
+                Math.max(page, 0),
+                Math.min(Math.max(size, 1), 50),
+                Sort.by(sortRequest.direction(), field));
+    }
+
+    private SortRequest parseSort(String sort) {
         String raw = StringUtils.hasText(sort) ? sort.trim() : "createdAt,desc";
         String[] parts = raw.split(",", 2);
         String field = SORTABLE.contains(parts[0]) ? parts[0] : "createdAt";
         Sort.Direction direction = parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim())
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
-        return PageRequest.of(safePage, safeSize, Sort.by(direction, field));
+        boolean virtual = "plan".equals(field) || "access".equals(field);
+        return new SortRequest(field, direction, virtual);
     }
 
-    private LocalDate endDateFor(SubscriptionPlan plan, LocalDate start) {
-        String cycle = plan.getBillingCycle() == null ? "MONTHLY" : plan.getBillingCycle().toUpperCase(Locale.ROOT);
-        return switch (cycle) {
-            case "YEARLY", "ANNUAL" -> start.plusYears(1);
-            case "QUARTERLY" -> start.plusMonths(3);
-            default -> start.plusMonths(1);
+    private Comparator<User> userComparator(SortRequest sortRequest, Map<Long, Subscription> subscriptions) {
+        Comparator<User> comparator = switch (sortRequest.field()) {
+            case "name" -> Comparator.comparing(u -> nullToEmpty(u.getName()), String.CASE_INSENSITIVE_ORDER);
+            case "email" -> Comparator.comparing(u -> nullToEmpty(u.getEmail()), String.CASE_INSENSITIVE_ORDER);
+            case "status" -> Comparator.comparing(u -> u.getStatus() == null ? "" : u.getStatus().name());
+            case "role" -> Comparator.comparing(u -> u.getRole() == null ? "" : u.getRole().name());
+            case "plan" -> Comparator.comparing(u -> {
+                Subscription sub = subscriptions.get(u.getId());
+                return sub == null || sub.getPlan() == null ? "" : nullToEmpty(sub.getPlan().getName());
+            }, String.CASE_INSENSITIVE_ORDER);
+            case "access" -> Comparator.comparing(u -> {
+                Subscription sub = subscriptions.get(u.getId());
+                return sub == null || sub.getStatus() == null ? "" : sub.getStatus().name();
+            });
+            default -> Comparator.comparing(User::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
         };
+        return sortRequest.direction() == Sort.Direction.DESC ? comparator.reversed() : comparator;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    private record SortRequest(String field, Sort.Direction direction, boolean virtual) {}
+
+    private LocalDate endDateFor(SubscriptionPlan plan, LocalDate start) {
+        return subscriptionActivationService.endDateFor(plan, start);
     }
 
     private boolean isOwnerEmail(String email) {

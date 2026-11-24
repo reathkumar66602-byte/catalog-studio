@@ -1,0 +1,213 @@
+package com.catalogstudio.storage;
+
+import com.catalogstudio.common.exception.ApiException;
+import com.catalogstudio.supplier.config.SupplierProperties;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+@Service
+@ConditionalOnProperty(name = "catalogstudio.storage.provider", havingValue = "local", matchIfMissing = true)
+public class LocalStorageService implements StorageService {
+
+    private static final Logger log = LoggerFactory.getLogger(LocalStorageService.class);
+    private static final Set<String> ALLOWED = Set.of(
+            "image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp");
+    private static final Set<String> VIDEO_ALLOWED = Set.of(
+            "video/mp4", "video/webm", "video/quicktime");
+    private static final long MAX_VIDEO_BYTES = 200L * 1024 * 1024;
+
+    private final SupplierProperties properties;
+
+    public LocalStorageService(SupplierProperties properties) {
+        this.properties = properties;
+    }
+
+    @Override
+    public StoredFile store(MultipartFile file) {
+        validate(file);
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            log.warn("Could not read uploaded image: {}", e.toString());
+            throw ApiException.badRequest("Could not store uploaded image");
+        }
+        String contentType = resolvedContentType(file, bytes);
+        String ext = extension(contentType);
+        String key = UUID.randomUUID() + ext;
+        Path dir = storageDir();
+        try {
+            Files.createDirectories(dir);
+            Files.write(dir.resolve(key), bytes);
+        } catch (IOException e) {
+            log.warn("Could not write uploaded image to {}: {}", dir, e.toString());
+            throw ApiException.badRequest("Could not store uploaded image");
+        }
+        String url = properties.storage().publicBaseUrl().replaceAll("/$", "") + "/" + key;
+        return new StoredFile(key, url, contentType, bytes.length, bytes);
+    }
+
+    @Override
+    public StoredFile storeVideo(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw ApiException.badRequest("Video file is required");
+        }
+        if (file.getSize() > MAX_VIDEO_BYTES) {
+            throw ApiException.badRequest("Each tip video must be 200MB or smaller");
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        if (contentType.contains(";")) {
+            contentType = contentType.substring(0, contentType.indexOf(';')).trim();
+        }
+        if ("video/mov".equals(contentType)) {
+            contentType = "video/quicktime";
+        }
+        String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        if (!VIDEO_ALLOWED.contains(contentType)) {
+            if (original.endsWith(".mp4")) {
+                contentType = "video/mp4";
+            } else if (original.endsWith(".webm")) {
+                contentType = "video/webm";
+            } else if (original.endsWith(".mov")) {
+                contentType = "video/quicktime";
+            } else {
+                throw ApiException.badRequest("Only MP4, WebM, and MOV tip videos are allowed");
+            }
+        }
+        String ext = extension(contentType);
+        String key = UUID.randomUUID() + ext;
+        Path dir = storageDir();
+        try {
+            Files.createDirectories(dir);
+            file.transferTo(dir.resolve(key));
+        } catch (IOException e) {
+            log.warn("Could not write tip video to {}: {}", dir, e.toString());
+            throw ApiException.badRequest("Could not store tip video");
+        }
+        String url = properties.storage().publicBaseUrl().replaceAll("/$", "") + "/" + key;
+        return new StoredFile(key, url, contentType, file.getSize(), new byte[0]);
+    }
+
+    @Override
+    public StoredFile storeBytes(byte[] bytes, String contentType) {
+        if (bytes == null || bytes.length == 0) {
+            throw ApiException.badRequest("Generated image was empty");
+        }
+        if (bytes.length > properties.upload().maxFileBytes()) {
+            throw ApiException.badRequest("Generated image is too large to store");
+        }
+        String type = contentType == null || contentType.isBlank() ? "image/png" : contentType;
+        String key = UUID.randomUUID() + extension(type);
+        Path dir = storageDir();
+        try {
+            Files.createDirectories(dir);
+            Files.write(dir.resolve(key), bytes);
+        } catch (IOException e) {
+            log.warn("Could not write generated image to {}: {}", dir, e.toString());
+            throw ApiException.badRequest("Could not store generated image");
+        }
+        String url = properties.storage().publicBaseUrl().replaceAll("/$", "") + "/" + key;
+        return new StoredFile(key, url, type, bytes.length, bytes);
+    }
+
+    @Override
+    public byte[] read(String storageKey) {
+        if (storageKey == null || !storageKey.matches("[a-fA-F0-9\\-]{36}\\.(jpg|png|webp|mp4|webm|mov|pdf)")) {
+            throw ApiException.notFound("File not found");
+        }
+        Path path = storageDir().resolve(storageKey).normalize();
+        if (!path.startsWith(storageDir())) {
+            throw ApiException.notFound("Image not found");
+        }
+        try {
+            return Files.readAllBytes(path);
+        } catch (IOException e) {
+            throw ApiException.notFound("Image not found");
+        }
+    }
+
+    @Override
+    public void delete(String storageKey) {
+        try {
+            Files.deleteIfExists(storageDir().resolve(storageKey));
+        } catch (IOException ignored) {
+            // best-effort cleanup
+        }
+    }
+
+    public Path storageDir() {
+        return Path.of(properties.storage().localPath()).toAbsolutePath().normalize();
+    }
+
+    private void validate(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw ApiException.badRequest("Image file is required");
+        }
+        if (file.getSize() > properties.upload().maxFileBytes()) {
+            throw ApiException.badRequest("Each image must be 10MB or smaller");
+        }
+    }
+
+    private String resolvedContentType(MultipartFile file, byte[] bytes) {
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        if (contentType.contains(";")) {
+            contentType = contentType.substring(0, contentType.indexOf(';')).trim();
+        }
+        if ("image/jpg".equals(contentType) || "image/pjpeg".equals(contentType)) {
+            contentType = "image/jpeg";
+        }
+        if (!ALLOWED.contains(contentType)) {
+            contentType = sniff(bytes);
+        }
+        if (!ALLOWED.contains(contentType) && !properties.upload().allowedContentTypes().contains(contentType)) {
+            throw ApiException.badRequest("Only JPG, JPEG, PNG and WEBP images are allowed");
+        }
+        return "image/jpg".equals(contentType) ? "image/jpeg" : contentType;
+    }
+
+    private String sniff(byte[] bytes) {
+        if (bytes.length >= 3 && (bytes[0] & 0xFF) == 0xFF && (bytes[1] & 0xFF) == 0xD8 && (bytes[2] & 0xFF) == 0xFF) {
+            return "image/jpeg";
+        }
+        if (bytes.length >= 8
+                && bytes[0] == (byte) 0x89
+                && bytes[1] == 0x50
+                && bytes[2] == 0x4E
+                && bytes[3] == 0x47) {
+            return "image/png";
+        }
+        if (bytes.length >= 12
+                && bytes[0] == 'R'
+                && bytes[1] == 'I'
+                && bytes[2] == 'F'
+                && bytes[3] == 'F'
+                && bytes[8] == 'W'
+                && bytes[9] == 'E'
+                && bytes[10] == 'B'
+                && bytes[11] == 'P') {
+            return "image/webp";
+        }
+        return "";
+    }
+
+    private String extension(String contentType) {
+        return switch (contentType) {
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            case "video/mp4" -> ".mp4";
+            case "video/webm" -> ".webm";
+            case "video/quicktime" -> ".mov";
+            case "application/pdf" -> ".pdf";
+            default -> ".jpg";
+        };
+    }
+}

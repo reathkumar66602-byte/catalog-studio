@@ -23,5 +23,7 @@ public record ProductUpdateRequest(
         String description,
         String status,
         UUID selectedTitleId,
-        List<String> titles
+        List<String> titles,
+        List<String> keywords,
+        List<String> suggestedDescriptions
 ) {}

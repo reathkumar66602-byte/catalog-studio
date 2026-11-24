@@ -1,11 +1,9 @@
-import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "../store/auth";
-import { hasFeature } from "./roles";
+import { Outlet } from "react-router-dom";
 
-export function FeatureRoute({ feature }: { feature: string }) {
-  const { user } = useAuth();
-  if (!hasFeature(user, feature)) {
-    return <Navigate to="/dashboard" replace />;
-  }
+/**
+ * Feature flags no longer hide routes — sellers see every tool in the menu.
+ * EntitlementGate + API quotas still enforce recharge / plan limits.
+ */
+export function FeatureRoute({ feature: _feature }: { feature: string }) {
   return <Outlet />;
 }

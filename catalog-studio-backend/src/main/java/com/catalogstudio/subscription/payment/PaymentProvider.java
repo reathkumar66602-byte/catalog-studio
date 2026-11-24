@@ -8,7 +8,11 @@ public interface PaymentProvider {
         return true;
     }
 
-    CheckoutSession createCheckout(Long userId, String planName);
+    CheckoutSession createCheckout(PaymentCheckoutCommand command);
 
-    record CheckoutSession(String provider, String checkoutUrl, String sessionId) {}
+    record CheckoutSession(String provider, String checkoutUrl, String sessionId, String gatewayReference) {
+        public CheckoutSession(String provider, String checkoutUrl, String sessionId) {
+            this(provider, checkoutUrl, sessionId, sessionId);
+        }
+    }
 }

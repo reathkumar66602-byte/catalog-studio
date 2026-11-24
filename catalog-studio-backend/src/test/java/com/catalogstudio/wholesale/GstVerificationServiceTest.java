@@ -35,11 +35,21 @@ class GstVerificationServiceTest {
                 new CatalogStudioProperties.MeeshoPanel("https://supplier.meesho.com", false),
                 new CatalogStudioProperties.Oms(
                         new CatalogStudioProperties.Oms.Flipkart(false, "", "", ""),
-                        new CatalogStudioProperties.Oms.Amazon(false, "", "", "", "A21TJRUUN4KGV", true),
+                        new CatalogStudioProperties.Oms.Amazon(false, "", "", "", "A21TJRUUN4KGV", "", true),
                         new CatalogStudioProperties.Oms.Meesho(false, "", "", "https://supplier.meesho.com", false)),
                 new CatalogStudioProperties.Wholesale(
                         new CatalogStudioProperties.Wholesale.Gst(
-                                provider, "", "", 0.72, "https://www.gstinapi.in", "")));
+                                provider, "", "", 0.72, "https://www.gstinapi.in", "")),
+                new CatalogStudioProperties.CloudCost(
+                        true,
+                        "012AA3-8490F8-BDB5E6",
+                        "INR",
+                        30000,
+                        "catalog-studio-prod",
+                        new CatalogStudioProperties.CloudCost.BigQueryExport(
+                                true, "catalog-studio-prod", "gcp_billing_export", ""),
+                        List.of()),
+                new CatalogStudioProperties.Modules(true, "catalog-studio-internal"));
         return new GstVerificationService(properties, new ObjectMapper());
     }
 
@@ -110,6 +120,27 @@ class GstVerificationServiceTest {
     }
 
     @Test
+    void gstinapiResponseParsesNestedDataPayload() throws Exception {
+        var mapper = new ObjectMapper();
+        var root = mapper.readTree("""
+                {
+                  "success": true,
+                  "gstin": "19CMZPM0096H1ZA",
+                  "data": {
+                    "gstin": "19CMZPM0096H1ZA",
+                    "legal_name": "BHAGAWATI DEVI MISHRA",
+                    "trade_name": "SHRITAJI",
+                    "status": "Active"
+                  },
+                  "credits_remaining": 262
+                }
+                """);
+        var registered = GstVerificationService.parseGstinApiResponse(root);
+        assertThat(registered.legalName()).isEqualTo("BHAGAWATI DEVI MISHRA");
+        assertThat(registered.tradeName()).isEqualTo("SHRITAJI");
+    }
+
+    @Test
     void gstinapiResponseRejectsInactiveAndFailed() throws Exception {
         var mapper = new ObjectMapper();
         assertThatThrownBy(() -> GstVerificationService.parseGstinApiResponse(mapper.readTree("""
@@ -117,6 +148,9 @@ class GstVerificationServiceTest {
                 """))).isInstanceOf(ApiException.class).hasMessageContaining("not found");
         assertThatThrownBy(() -> GstVerificationService.parseGstinApiResponse(mapper.readTree("""
                 {"success":true,"legal_name":"ACME","trade_name":"ACME","status":"Cancelled"}
+                """))).isInstanceOf(ApiException.class).hasMessageContaining("not active");
+        assertThatThrownBy(() -> GstVerificationService.parseGstinApiResponse(mapper.readTree("""
+                {"success":true,"data":{"legal_name":"ACME","trade_name":"ACME","status":"Cancelled"}}
                 """))).isInstanceOf(ApiException.class).hasMessageContaining("not active");
     }
 

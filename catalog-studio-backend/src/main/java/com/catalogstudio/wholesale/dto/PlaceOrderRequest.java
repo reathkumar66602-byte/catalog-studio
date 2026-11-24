@@ -11,7 +11,10 @@ import java.util.UUID;
 
 public record PlaceOrderRequest(
         @NotEmpty @Size(max = 100) @Valid List<Item> items,
-        @Size(max = 1000) String note
+        @Size(max = 1000) String note,
+        /** Required when the buyer's profile has no mobile yet. */
+        @Size(max = 20) String mobile,
+        @Size(max = 40) String couponCode
 ) {
     public record Item(@NotNull UUID variantId, @Min(1) @Max(100000) int quantity) {}
 }

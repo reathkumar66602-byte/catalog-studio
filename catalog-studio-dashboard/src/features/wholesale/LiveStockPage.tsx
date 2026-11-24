@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Store } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -13,10 +13,12 @@ import {
   type WholesaleCategory,
 } from "./wholesale";
 import { useAuth } from "../../store/auth";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 const PAGE_SIZE = 24;
 
 export function LiveStockPage() {
+  const { t } = useI18n();
   const { user } = useAuth();
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -52,7 +54,7 @@ export function LiveStockPage() {
           params: { category: category === "all" ? undefined : category, q: query || undefined, sort, page, size: PAGE_SIZE },
         })
       ).data.data as PageResult<ProductCard>,
-    placeholderData: keepPreviousData,
+    // Do not keep previous category results — Men's Wear must not show Ladies Wear cards.
   });
 
   const totalCount = (categories.data || []).reduce((sum, item) => sum + item.productCount, 0);
@@ -71,9 +73,9 @@ export function LiveStockPage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
               </span>
-              LIVE Stock
+              {t("live.title")}
             </h1>
-            <p className="text-sm text-slate-500">Wholesale stock from verified suppliers, updated in real time.</p>
+            <p className="text-sm text-slate-500">{t("live.subtitle")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-sm">
@@ -81,15 +83,15 @@ export function LiveStockPage() {
             to="/live-stock/orders"
             className="rounded-xl border border-teal-200 px-3 py-2 font-medium text-teal-800 hover:bg-teal-50"
           >
-            My orders
+            {t("live.myOrders")}
           </Link>
           {canOpenSupplierStore(access.data, user?.role) ? (
             <Link to="/supplier/store" className="rounded-xl bg-teal-700 px-3 py-2 font-semibold text-white">
-              Create / manage store
+              {t("live.manageStore")}
             </Link>
           ) : (
             <Link to="/subscription" className="rounded-xl border border-slate-200 px-3 py-2 text-slate-600 hover:bg-slate-50">
-              Become a supplier
+              {t("live.becomeSupplier")}
             </Link>
           )}
         </div>
@@ -101,7 +103,7 @@ export function LiveStockPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by product name or code"
+            placeholder={t("live.searchPh")}
             className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 dark:border-slate-700 dark:bg-slate-900"
           />
         </label>
@@ -112,19 +114,19 @@ export function LiveStockPage() {
             setPage(0);
           }}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
-          aria-label="Sort products"
+          aria-label={t("live.sortAria")}
         >
-          <option value="newest">Newest first</option>
-          <option value="popular">Most booked</option>
-          <option value="price_asc">Price: low to high</option>
-          <option value="price_desc">Price: high to low</option>
+          <option value="newest">{t("live.sortNewest")}</option>
+          <option value="popular">{t("live.sortPopular")}</option>
+          <option value="price_asc">{t("live.sortPriceAsc")}</option>
+          <option value="price_desc">{t("live.sortPriceDesc")}</option>
         </select>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         <CategoryPill
           active={category === "all"}
-          label="All"
+          label={t("common.all")}
           count={totalCount}
           onClick={() => {
             setCategory("all");
@@ -146,11 +148,11 @@ export function LiveStockPage() {
       </div>
 
       {products.isError && <p className="text-sm text-red-600">{apiErrorMessage(products.error)}</p>}
-      {products.isLoading && <p className="text-sm text-slate-500">Loading live stock...</p>}
+      {products.isLoading && <p className="text-sm text-slate-500">{t("live.loading")}</p>}
 
       {!products.isLoading && items.length === 0 && (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900">
-          No products found{query ? ` for "${query}"` : ""}. Try another category or search.
+          {query ? t("live.emptyQuery", { query }) : t("live.empty")}
         </div>
       )}
 
@@ -168,10 +170,10 @@ export function LiveStockPage() {
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-40"
           >
-            Previous
+            {t("common.previous")}
           </button>
           <span className="text-slate-500">
-            Page {products.data.page + 1} of {products.data.totalPages}
+            {t("common.pageOf", { page: products.data.page + 1, total: products.data.totalPages })}
           </span>
           <button
             type="button"
@@ -179,7 +181,7 @@ export function LiveStockPage() {
             onClick={() => setPage((p) => p + 1)}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-40"
           >
-            Next
+            {t("common.next")}
           </button>
         </div>
       )}
@@ -217,6 +219,7 @@ function CategoryPill({
 }
 
 function ProductCardView({ product }: { product: ProductCard }) {
+  const { t } = useI18n();
   const soldOut = product.totalStock <= 0;
   const showMrp = product.mrp && product.minPrice && product.mrp > product.minPrice;
   return (
@@ -233,22 +236,22 @@ function ProductCardView({ product }: { product: ProductCard }) {
             className={`h-full w-full object-cover transition group-hover:scale-[1.02] ${soldOut ? "opacity-50" : ""}`}
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-slate-400">No photo</div>
+          <div className="flex h-full items-center justify-center text-xs text-slate-400">{t("common.noPhoto")}</div>
         )}
         {product.bookedCount > 0 && (
           <span className="absolute left-2 top-2 rounded-full bg-teal-700 px-2 py-0.5 text-[11px] font-semibold text-white">
-            {product.bookedCount} booked
+            {t("common.booked", { count: product.bookedCount })}
           </span>
         )}
         {soldOut && (
           <span className="absolute right-2 top-2 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-            Sold out
+            {t("common.soldOut")}
           </span>
         )}
       </div>
       <div className="space-y-1.5 p-3">
         <p className="line-clamp-2 text-sm font-semibold leading-snug">{product.title}</p>
-        <p className="text-xs text-slate-500">Code: {product.code}</p>
+        <p className="text-xs text-slate-500">{t("common.code", { code: product.code })}</p>
         <p className="flex items-baseline gap-2">
           <span className="text-base font-bold text-teal-800 dark:text-teal-300">
             {priceRange(product.minPrice, product.maxPrice)}
@@ -270,7 +273,7 @@ function ProductCardView({ product }: { product: ProductCard }) {
             {product.colors.length > 5 && <span className="text-[11px] text-slate-500">+{product.colors.length - 5}</span>}
           </div>
           <span className={`text-xs font-medium ${soldOut ? "text-red-600" : "text-emerald-700"}`}>
-            {soldOut ? "0 pcs" : `${product.totalStock} pcs`}
+            {soldOut ? t("common.pcs", { count: 0 }) : t("common.pcs", { count: product.totalStock })}
           </span>
         </div>
         {product.storeName && <p className="truncate text-[11px] text-slate-400">{product.storeName}</p>}

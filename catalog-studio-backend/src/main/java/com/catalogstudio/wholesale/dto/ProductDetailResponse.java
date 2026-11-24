@@ -27,5 +27,5 @@ public record ProductDetailResponse(
         Map<String, Map<String, Integer>> stockMatrix,
         List<VariantCell> variants
 ) {
-    public record StoreSummary(UUID id, String name, String slug, String city, String state) {}
+    public record StoreSummary(UUID id, String name, String slug, String city, String state, String phone, String email) {}
 }

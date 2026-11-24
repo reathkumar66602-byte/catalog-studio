@@ -61,10 +61,20 @@ class MeeshoPanelConnectionServiceTest {
                 new CatalogStudioProperties.MeeshoPanel("https://supplier.meesho.com", false),
                 new CatalogStudioProperties.Oms(
                         new CatalogStudioProperties.Oms.Flipkart(false, "", "", ""),
-                        new CatalogStudioProperties.Oms.Amazon(false, "", "", "", "A21TJRUUN4KGV", true),
+                        new CatalogStudioProperties.Oms.Amazon(false, "", "", "", "A21TJRUUN4KGV", "", true),
                         new CatalogStudioProperties.Oms.Meesho(false, "", "", "https://supplier.meesho.com", false)),
                 new CatalogStudioProperties.Wholesale(new CatalogStudioProperties.Wholesale.Gst(
-                        "mock", "", "", 0.72, "https://www.gstinapi.in", ""))));
+                        "mock", "", "", 0.72, "https://www.gstinapi.in", "")),
+                new CatalogStudioProperties.CloudCost(
+                        true,
+                        "012AA3-8490F8-BDB5E6",
+                        "INR",
+                        30000,
+                        "catalog-studio-prod",
+                        new CatalogStudioProperties.CloudCost.BigQueryExport(
+                                true, "catalog-studio-prod", "gcp_billing_export", ""),
+                        java.util.List.of()),
+                new CatalogStudioProperties.Modules(true, "catalog-studio-internal")));
         service = new MeeshoPanelConnectionService(
                 connectionRepository, orderRepository, userRepository, meeshoPanelClient, crypto);
     }

@@ -31,7 +31,9 @@ public class SubscriptionAccessFilter extends OncePerRequestFilter {
             "/api/v1/referrals",
             "/api/v1/places",
             "/api/v1/admin",
+            "/api/v1/payments",
             "/api/v1/extension",
+            "/api/v1/app-guide",
             "/swagger-ui",
             "/v3/api-docs",
             "/actuator"

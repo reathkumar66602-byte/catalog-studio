@@ -52,6 +52,9 @@ public class WholesaleOrderItem {
     @Column(length = 120)
     private String sku;
 
+    @Column(name = "hsn_sac", length = 16)
+    private String hsnSac;
+
     @Column(name = "unit_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal unitPrice;
 

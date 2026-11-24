@@ -1,0 +1,50 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "http://localhost:*"
+              - "http://127.0.0.1:*"
+              - "https://catalogstudio.in"
+              - "https://www.catalogstudio.in"
+              - "chrome-extension://*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+      routes:
+        - id: supplier-service
+          uri: ${SUPPLIER_SERVICE_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/wholesale/**
+        - id: supplier-files
+          uri: ${SUPPLIER_SERVICE_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/supplier-files/**
+          filters:
+            - RewritePath=/api/v1/supplier-files/(?<segment>.*), /api/v1/files/${segment}
+        - id: platform-api
+          uri: ${PLATFORM_SERVICE_URI:http://localhost:8082}
+          predicates:
+            - Path=/api/**,/swagger-ui/**,/swagger-ui.html,/v3/api-docs/**,/actuator/**,/internal/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway

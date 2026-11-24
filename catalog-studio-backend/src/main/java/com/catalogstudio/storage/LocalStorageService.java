@@ -121,7 +121,7 @@ public class LocalStorageService implements StorageService {
 
     @Override
     public byte[] read(String storageKey) {
-        if (storageKey == null || !storageKey.matches("[a-fA-F0-9\\-]{36}\\.(jpg|png|webp|mp4|webm|mov)")) {
+        if (storageKey == null || !storageKey.matches("[a-fA-F0-9\\-]{36}\\.(jpg|png|webp|mp4|webm|mov|pdf)")) {
             throw ApiException.notFound("File not found");
         }
         Path path = storageDir().resolve(storageKey).normalize();
@@ -206,6 +206,7 @@ public class LocalStorageService implements StorageService {
             case "video/mp4" -> ".mp4";
             case "video/webm" -> ".webm";
             case "video/quicktime" -> ".mov";
+            case "application/pdf" -> ".pdf";
             default -> ".jpg";
         };
     }

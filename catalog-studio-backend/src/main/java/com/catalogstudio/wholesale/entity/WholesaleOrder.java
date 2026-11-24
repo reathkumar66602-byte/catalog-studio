@@ -38,7 +38,7 @@ public class WholesaleOrder {
     @Column(name = "order_number", nullable = false, unique = true, length = 40)
     private String orderNumber;
 
-    @Column(name = "buyer_user_id", nullable = false, updatable = false)
+    @Column(name = "buyer_user_id", updatable = false)
     private Long buyerUserId;
 
     @Column(name = "store_id", nullable = false, updatable = false)
@@ -48,6 +48,11 @@ public class WholesaleOrder {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private Status status = Status.PLACED;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private Source source = Source.ONLINE;
 
     @Column(name = "buyer_note", columnDefinition = "text")
     private String buyerNote;
@@ -60,6 +65,60 @@ public class WholesaleOrder {
 
     @Column(name = "accepted_total", precision = 14, scale = 2)
     private BigDecimal acceptedTotal;
+
+    @Column(name = "buyer_name", length = 160)
+    private String buyerName;
+
+    @Column(name = "buyer_email")
+    private String buyerEmail;
+
+    @Column(name = "buyer_mobile", length = 20)
+    private String buyerMobile;
+
+    @Column(name = "buyer_gstin", length = 20)
+    private String buyerGstin;
+
+    @Column(name = "buyer_address", length = 500)
+    private String buyerAddress;
+
+    @Column(name = "buyer_mobile_updated_at")
+    private Instant buyerMobileUpdatedAt;
+
+    @Column(name = "bill_pdf_url", length = 500)
+    private String billPdfUrl;
+
+    @Column(name = "bill_pdf_storage_key", length = 255)
+    private String billPdfStorageKey;
+
+    @Column(name = "bill_emailed_at")
+    private Instant billEmailedAt;
+
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
+    @Builder.Default
+    @Column(name = "discount_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(name = "taxable_amount", precision = 14, scale = 2)
+    private BigDecimal taxableAmount;
+
+    @Builder.Default
+    @Column(name = "cgst_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal cgstAmount = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "sgst_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal sgstAmount = BigDecimal.ZERO;
+
+    @Column(name = "gst_percent", precision = 5, scale = 2)
+    private BigDecimal gstPercent;
+
+    @Column(name = "grand_total", precision = 14, scale = 2)
+    private BigDecimal grandTotal;
+
+    @Column(name = "coupon_code", length = 40)
+    private String couponCode;
 
     @Builder.Default
     @Column(nullable = false, length = 3)
@@ -100,5 +159,9 @@ public class WholesaleOrder {
 
     public enum Status {
         PLACED, ACCEPTED, REJECTED, CANCELLED, FULFILLED
+    }
+
+    public enum Source {
+        ONLINE, MANUAL
     }
 }

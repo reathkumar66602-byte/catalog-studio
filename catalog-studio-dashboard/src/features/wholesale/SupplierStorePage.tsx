@@ -4,6 +4,7 @@ import { BadgeCheck, ShieldAlert } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
+import { useI18n } from "../../i18n/LanguageProvider";
 import { formatDateTime, type WholesaleCategory, type WholesaleStore } from "./wholesale";
 
 type StoreForm = {
@@ -12,8 +13,17 @@ type StoreForm = {
   description: string;
   city: string;
   state: string;
+  addressLine: string;
+  pincode: string;
+  pan: string;
   phone: string;
   email: string;
+  gstPercent: string;
+  bankAccountName: string;
+  bankAccountNumber: string;
+  bankName: string;
+  bankIfsc: string;
+  bankBranch: string;
   categoryIds: string[];
 };
 
@@ -31,8 +41,17 @@ const EMPTY_FORM: StoreForm = {
   description: "",
   city: "",
   state: "",
+  addressLine: "",
+  pincode: "",
+  pan: "",
   phone: "",
   email: "",
+  gstPercent: "18",
+  bankAccountName: "",
+  bankAccountNumber: "",
+  bankName: "",
+  bankIfsc: "",
+  bankBranch: "",
   categoryIds: [],
 };
 
@@ -40,6 +59,7 @@ const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 dark:border-slate-700 dark:bg-slate-900";
 
 export function SupplierStorePage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [form, setForm] = useState<StoreForm>(EMPTY_FORM);
   const [saved, setSaved] = useState("");
@@ -68,8 +88,17 @@ export function SupplierStorePage() {
       description: current.description || "",
       city: current.city || "",
       state: current.state || "",
+      addressLine: current.addressLine || "",
+      pincode: current.pincode || "",
+      pan: current.pan || "",
       phone: current.phone || "",
       email: current.email || "",
+      gstPercent: String(current.gstPercent ?? 18),
+      bankAccountName: current.bankAccountName || "",
+      bankAccountNumber: current.bankAccountNumber || "",
+      bankName: current.bankName || "",
+      bankIfsc: current.bankIfsc || "",
+      bankBranch: current.bankBranch || "",
       categoryIds: current.categories.map((c) => c.id),
     });
     setGstLookup(null);
@@ -101,8 +130,17 @@ export function SupplierStorePage() {
             description: form.description,
             city: form.city,
             state: form.state,
+            addressLine: form.addressLine,
+            pincode: form.pincode,
+            pan: form.pan,
             phone: form.phone,
             email: form.email,
+            gstPercent: Number(form.gstPercent) || 18,
+            bankAccountName: form.bankAccountName,
+            bankAccountNumber: form.bankAccountNumber,
+            bankName: form.bankName,
+            bankIfsc: form.bankIfsc,
+            bankBranch: form.bankBranch,
             categoryIds: form.categoryIds,
           })
         ).data;
@@ -116,12 +154,13 @@ export function SupplierStorePage() {
           state: form.state,
           phone: form.phone,
           email: form.email,
+          gstPercent: Number(form.gstPercent) || 18,
           categoryIds: form.categoryIds,
         })
       ).data;
     },
     onSuccess: async (result) => {
-      setSaved(result?.message || "Saved");
+      setSaved(result?.message || t("store.saved"));
       await qc.invalidateQueries({ queryKey: ["ws-my-store"] });
     },
     onError: () => setSaved(""),
@@ -160,19 +199,17 @@ export function SupplierStorePage() {
     save.mutate();
   }
 
-  if (store.isLoading) return <p className="text-sm text-slate-500">Loading store...</p>;
+  if (store.isLoading) return <p className="text-sm text-slate-500">{t("store.loading")}</p>;
 
   if (notSupplier) {
     return (
       <div className="mx-auto max-w-2xl space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-950">
         <p className="flex items-center gap-2 text-base font-semibold">
-          <ShieldAlert size={18} /> Supplier plan required
+          <ShieldAlert size={18} /> {t("store.planRequiredTitle")}
         </p>
-        <p>
-          Opening a wholesale store needs the <strong>SUPPLIER</strong> plan (or a plan with wholesale supplier access).
-        </p>
+        <p>{t("store.planRequiredBody")}</p>
         <Link to="/subscription" className="inline-block rounded-xl bg-teal-700 px-4 py-2 font-semibold text-white">
-          View plans
+          {t("common.viewPlans")}
         </Link>
       </div>
     );
@@ -187,12 +224,8 @@ export function SupplierStorePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold">{current ? "My supplier store" : "Open your wholesale store"}</h1>
-        <p className="text-sm text-slate-500">
-          {current
-            ? "Buyers see your store name, city and categories. Phone and email are shared only after you accept an order."
-            : "Enter your GSTIN first. We fill the store name from the GST trade name (or legal name) and lock it."}
-        </p>
+        <h1 className="text-2xl font-semibold">{current ? t("store.titleMine") : t("store.titleCreate")}</h1>
+        <p className="text-sm text-slate-500">{current ? t("store.subMine") : t("store.subCreate")}</p>
       </div>
 
       {current && (
@@ -202,26 +235,29 @@ export function SupplierStorePage() {
               verified ? "bg-teal-100 text-teal-800" : "bg-amber-100 text-amber-800"
             }`}
           >
-            <BadgeCheck size={14} /> GST {current.gstVerificationStatus}
+            <BadgeCheck size={14} /> {t("store.gstLabel", { status: current.gstVerificationStatus || "PENDING" })}
           </span>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{current.status}</span>
-          {current.gstLegalName && <span className="text-slate-600">Registered name: {current.gstLegalName}</span>}
-          {current.gstVerifiedAt && <span className="text-xs text-slate-400">Verified {formatDateTime(current.gstVerifiedAt)}</span>}
-          <span className="ml-auto text-slate-500">{current.productCount} live products</span>
+          {current.gstLegalName && (
+            <span className="text-slate-600">{t("store.registeredName", { name: current.gstLegalName })}</span>
+          )}
+          {current.gstVerifiedAt && (
+            <span className="text-xs text-slate-400">{t("store.verifiedAt", { when: formatDateTime(current.gstVerifiedAt) })}</span>
+          )}
+          <span className="ml-auto text-slate-500">{t("store.liveProducts", { count: current.productCount })}</span>
         </div>
       )}
 
       {!current && (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
-          1) Enter GSTIN → 2) Verify → store name auto-fills from <strong>trade name</strong> (else legal name) and becomes
-          read-only → 3) Complete details and create store.
+          {t("store.steps")}
         </div>
       )}
 
       <form onSubmit={submit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm sm:col-span-2">
-            <span className="font-medium">GSTIN</span>
+            <span className="font-medium">{t("store.gstin")}</span>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 required
@@ -243,10 +279,16 @@ export function SupplierStorePage() {
                   disabled={lookupGst.isPending || form.gstin.trim().length !== 15}
                   className="shrink-0 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
                 >
-                  {lookupGst.isPending ? "Verifying..." : "Verify GST"}
+                  {lookupGst.isPending ? t("store.verifying") : t("store.verifyGst")}
                 </button>
               )}
             </div>
+            {!current && form.gstin.trim().length > 0 && form.gstin.trim().length !== 15 && (
+              <div className="space-y-0.5 text-xs text-slate-500">
+                <p>{t("store.gstinHintShort")}</p>
+                <p>{t("store.gstinHintCount", { count: form.gstin.trim().length })}</p>
+              </div>
+            )}
             {lookupGst.isError && (
               <p className="text-xs text-red-600" role="alert">
                 {apiErrorMessage(lookupGst.error)}
@@ -254,46 +296,94 @@ export function SupplierStorePage() {
             )}
             {gstLookup && (
               <p className="text-xs text-teal-800">
-                GST {gstLookup.status || "Active"}
+                {t("store.gstLabel", { status: gstLookup.status || "Active" })}
                 {gstLookup.tradeName
-                  ? ` · Trade name: ${gstLookup.tradeName}`
+                  ? t("store.tradeName", { name: gstLookup.tradeName })
                   : gstLookup.legalName
-                    ? ` · Legal name: ${gstLookup.legalName}`
+                    ? t("store.legalName", { name: gstLookup.legalName })
                     : ""}
               </p>
             )}
           </label>
 
           <label className="space-y-1 text-sm sm:col-span-2">
-            <span className="font-medium">Store name</span>
+            <span className="font-medium">{t("store.storeName")}</span>
             <input
               required
               maxLength={160}
               value={form.storeName}
               disabled
               readOnly
-              placeholder={current ? undefined : "Verify GSTIN to auto-fill from trade name"}
+              placeholder={current ? undefined : t("store.storeNamePlaceholder")}
               className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-600`}
             />
             {!current && (
               <p className="text-xs text-slate-500">
-                {storeNameLocked
-                  ? "Locked to GST trade name (or legal name if trade name is empty). Not editable."
-                  : "Will be filled automatically after GST verification."}
+                {storeNameLocked ? t("store.storeNameLocked") : t("store.storeNamePending")}
               </p>
             )}
           </label>
 
           <label className="space-y-1 text-sm">
-            <span className="font-medium">City</span>
+            <span className="font-medium">{t("common.city")}</span>
             <input required value={form.city} onChange={(e) => update("city", e.target.value)} className={inputClass} />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="font-medium">State</span>
+            <span className="font-medium">{t("common.state")}</span>
             <input required value={form.state} onChange={(e) => update("state", e.target.value)} className={inputClass} />
           </label>
+          {current && (
+            <>
+              <label className="space-y-1 text-sm sm:col-span-2">
+                <span className="font-medium">Invoice address</span>
+                <input
+                  value={form.addressLine}
+                  onChange={(e) => update("addressLine", e.target.value)}
+                  placeholder="Street / locality for tax invoice"
+                  className={inputClass}
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">PIN code</span>
+                <input value={form.pincode} onChange={(e) => update("pincode", e.target.value)} className={inputClass} />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">PAN</span>
+                <input
+                  value={form.pan}
+                  onChange={(e) => update("pan", e.target.value.toUpperCase())}
+                  className={`${inputClass} font-mono uppercase`}
+                />
+              </label>
+              <p className="sm:col-span-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Bank details on invoice</p>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Account name</span>
+                <input value={form.bankAccountName} onChange={(e) => update("bankAccountName", e.target.value)} className={inputClass} />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Account number</span>
+                <input value={form.bankAccountNumber} onChange={(e) => update("bankAccountNumber", e.target.value)} className={inputClass} />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Bank</span>
+                <input value={form.bankName} onChange={(e) => update("bankName", e.target.value)} className={inputClass} />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">IFSC</span>
+                <input
+                  value={form.bankIfsc}
+                  onChange={(e) => update("bankIfsc", e.target.value.toUpperCase())}
+                  className={`${inputClass} font-mono uppercase`}
+                />
+              </label>
+              <label className="space-y-1 text-sm sm:col-span-2">
+                <span className="font-medium">Branch</span>
+                <input value={form.bankBranch} onChange={(e) => update("bankBranch", e.target.value)} className={inputClass} />
+              </label>
+            </>
+          )}
           <label className="space-y-1 text-sm">
-            <span className="font-medium">Phone</span>
+            <span className="font-medium">{t("common.phone")}</span>
             <input
               required
               type="tel"
@@ -304,13 +394,26 @@ export function SupplierStorePage() {
             />
           </label>
           <label className="space-y-1 text-sm">
-            <span className="font-medium">Email</span>
+            <span className="font-medium">{t("common.email")}</span>
             <input required type="email" value={form.email} onChange={(e) => update("email", e.target.value)} className={inputClass} />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">GST % on bills</span>
+            <input
+              required
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={form.gstPercent}
+              onChange={(e) => update("gstPercent", e.target.value)}
+              className={inputClass}
+            />
           </label>
         </div>
 
         <label className="block space-y-1 text-sm">
-          <span className="font-medium">About your store</span>
+          <span className="font-medium">{t("store.about")}</span>
           <textarea
             rows={3}
             maxLength={4000}
@@ -321,7 +424,7 @@ export function SupplierStorePage() {
         </label>
 
         <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">Categories you supply</legend>
+          <legend className="text-sm font-medium">{t("store.categories")}</legend>
           <div className="flex flex-wrap gap-2">
             {(categories.data || []).map((category) => {
               const active = form.categoryIds.includes(category.id);
@@ -359,19 +462,17 @@ export function SupplierStorePage() {
           >
             {save.isPending
               ? current
-                ? "Saving..."
-                : "Creating store..."
+                ? t("common.saving")
+                : t("store.creating")
               : current
-                ? "Save changes"
-                : "Create store"}
+                ? t("store.saveChanges")
+                : t("store.create")}
           </button>
-          {!current && !canCreate && (
-            <span className="text-xs text-slate-500">Verify GSTIN first to unlock store creation.</span>
-          )}
-          {form.categoryIds.length === 0 && <span className="text-xs text-slate-500">Select at least one category.</span>}
+          {!current && !canCreate && <span className="text-xs text-slate-500">{t("store.verifyFirst")}</span>}
+          {form.categoryIds.length === 0 && <span className="text-xs text-slate-500">{t("store.selectCategory")}</span>}
           {current && (
             <Link to="/supplier/inventory" className="text-sm font-medium text-teal-700 hover:underline">
-              Manage inventory
+              {t("store.manageInventory")}
             </Link>
           )}
         </div>

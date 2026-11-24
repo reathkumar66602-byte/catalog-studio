@@ -17,6 +17,7 @@ import com.catalogstudio.product.repository.ProductRepository;
 import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.service.SubscriptionAccessService;
+import com.catalogstudio.tips.service.TutorialAccessService;
 import com.catalogstudio.user.SupportedLocales;
 import com.catalogstudio.user.dto.BillingAddressRequest;
 import com.catalogstudio.user.dto.BillingAddressResponse;
@@ -61,6 +62,7 @@ public class AccountController {
     private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final FeatureAccessService featureAccessService;
+    private final TutorialAccessService tutorialAccessService;
     private final AccountLifecycleService accountLifecycleService;
 
     @GetMapping("/me")
@@ -69,6 +71,13 @@ public class AccountController {
         User user = user();
         Business business = businessRepository.findByUserId(user.getId()).orElse(null);
         SubscriptionStatusResponse access = subscriptionAccessService.statusOf(user);
+        List<String> features = featureAccessService.enabledKeys(user);
+        if (!tutorialAccessService.hasTutorialAccess(user)) {
+            features = features.stream()
+                    .filter(key -> !TutorialAccessService.FEATURE_ECOMMERCE_TUTORIALS.equals(key)
+                            && !TutorialAccessService.FEATURE_ECOMMERCE_TIPS.equals(key))
+                    .toList();
+        }
         return ApiResponse.ok(new MeResponse(
                 user.getUuid(), user.getName(), user.getUsername(), user.getEmail(), user.getMobile(), user.getRole().name(),
                 user.isEmailVerified(), user.isMobileVerified(), user.getPreferredAiProvider(),
@@ -83,7 +92,7 @@ public class AccountController {
                 access.requiresRecharge(),
                 access.endDate(),
                 access.daysRemaining(),
-                featureAccessService.enabledKeys(user)
+                features
         ));
     }
 

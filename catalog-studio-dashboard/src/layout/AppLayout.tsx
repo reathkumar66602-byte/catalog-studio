@@ -7,6 +7,7 @@ import {
   CreditCard,
   Boxes,
   ClipboardList,
+  Cloud,
   Globe,
   History,
   KeyRound,
@@ -25,6 +26,7 @@ import {
   Settings,
   Shield,
   ShoppingBag,
+  Sparkles,
   Store,
   TicketPercent,
   Users,
@@ -41,7 +43,7 @@ import type { AccountProfile, SubscriptionStatus, UserSummary } from "../types";
 import type { LocaleCode } from "../i18n/catalog";
 import { useI18n } from "../i18n/LanguageProvider";
 import { LanguageSelect } from "../i18n/LanguageSelect";
-import { hasFeature, isStaff, isSuperAdmin, roleLabel } from "../routes/roles";
+import { isStaff, isSuperAdmin, roleLabel } from "../routes/roles";
 import { canSupply } from "../features/wholesale/wholesale";
 
 type MenuLink = {
@@ -118,13 +120,28 @@ export function AppLayout() {
   }, [me, user, updateUser]);
 
   const role = me?.role || user?.role;
-  const enabledFeatures = me?.enabledFeatures || user?.enabledFeatures;
+  const planCode = (access?.plan || me?.plan || user?.plan || "").toUpperCase();
+  const tutorialOnly = Boolean(
+    !isStaff(role) && access?.accessEntitled && planCode.startsWith("TUTORIAL_"),
+  );
 
   const menu = useMemo(() => {
     const staffUser = isStaff(role);
-    const allow = (link: MenuLink) =>
-      (!link.feature || hasFeature({ role, enabledFeatures }, link.feature)) &&
-      (!link.supplierOnly || staffUser || canSupply(access));
+    // Show every seller tool in the menu; recharge / API gates enforce access.
+    // Tutorial SKU is library-only — hide seller / stock / supplier tools.
+    const allow = (link: MenuLink) => {
+      if (link.supplierOnly && !(staffUser || canSupply(access))) return false;
+      if (!tutorialOnly) return true;
+      return (
+        link.to === "/dashboard" ||
+        link.to === "/tutorials" ||
+        link.to === "/app-guide" ||
+        link.to === "/subscription" ||
+        link.to === "/transactions" ||
+        link.to === "/settings" ||
+        link.to === "/billing-address"
+      );
+    };
 
     const overview: MenuLink[] = [
       { to: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard, feature: "dashboard" },
@@ -138,10 +155,11 @@ export function AppLayout() {
         links: [
           { to: "/trending", label: t("nav.trending"), icon: TrendingUp, feature: "trending" },
           { to: "/shoot", label: t("nav.shoot"), icon: Camera, feature: "shoot" },
+          { to: "/products/analyze", label: t("nav.productAnalysis"), icon: Sparkles, feature: "analysis" },
+          { to: "/analysis", label: t("nav.analysis"), icon: History, feature: "analysis" },
           { to: "/tools/labels", label: t("nav.labels"), icon: Scissors, feature: "labels" },
           { to: "/tools/meesho-calculator", label: t("nav.calculator"), icon: Calculator, feature: "meesho_calculator" },
           { to: "/extension", label: t("nav.extension"), icon: Chrome, feature: "extension" },
-          { to: "/analysis", label: t("nav.analysis"), icon: History, feature: "analysis" },
           { to: "/inventory", label: t("nav.inventory"), icon: Package, feature: "inventory" },
         ].filter(allow),
       },
@@ -198,6 +216,8 @@ export function AppLayout() {
       { to: "/admin/staff", label: t("nav.admin"), icon: Shield, superAdminOnly: true },
       { to: "/admin/site", label: t("nav.websiteSettings"), icon: Globe },
       { to: "/admin/billing", label: t("nav.trialPayment"), icon: Wallet },
+      { to: "/admin/payments", label: t("nav.paymentLedger"), icon: Receipt },
+      { to: "/admin/cloud-cost", label: t("nav.cloudCost"), icon: Cloud, superAdminOnly: true },
       { to: "/settings/email-templates", label: t("nav.emailTemplates"), icon: Mail },
     ];
     const staff = staffUser
@@ -205,7 +225,7 @@ export function AppLayout() {
       : [];
 
     return { overview, groups, staff };
-  }, [role, enabledFeatures, access, t]);
+  }, [role, access, t, tutorialOnly]);
 
   async function signOut() {
     try {

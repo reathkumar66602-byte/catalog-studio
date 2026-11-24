@@ -61,8 +61,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/referrals/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/site", "/api/v1/site/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/site/enquiries").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/cashfree/webhook").permitAll()
                         .requestMatchers("/api/v1/files/**", "/payment-qr.jpg").permitAll()
                         .requestMatchers("/api/v1/extension/**").permitAll()
+                        .requestMatchers("/internal/v1/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .headers(headers -> headers

@@ -42,3 +42,12 @@ catalog-studio-extension/dist-prod/
 coverage/
 .nyc_output/
 tmp/
+
+# GCP service account keys
+**/secrets/
+*.json.key
+
+
+.env
+**/.env
+

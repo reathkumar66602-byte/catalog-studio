@@ -18,6 +18,7 @@ import com.catalogstudio.wholesale.entity.WholesaleStore;
 import com.catalogstudio.wholesale.entity.WholesaleStoreCategory;
 import com.catalogstudio.wholesale.entity.WholesaleVariant;
 import com.catalogstudio.wholesale.repository.WholesaleCategoryRepository;
+import com.catalogstudio.wholesale.repository.WholesaleOrderItemRepository;
 import com.catalogstudio.wholesale.repository.WholesaleProductImageRepository;
 import com.catalogstudio.wholesale.repository.WholesaleProductRepository;
 import com.catalogstudio.wholesale.repository.WholesaleStoreCategoryRepository;
@@ -59,6 +60,7 @@ public class WholesaleProductService {
     private final WholesaleProductRepository productRepository;
     private final WholesaleProductImageRepository imageRepository;
     private final WholesaleVariantRepository variantRepository;
+    private final WholesaleOrderItemRepository orderItemRepository;
     private final WholesaleMapper mapper;
     private final StorageService storageService;
 
@@ -193,6 +195,52 @@ public class WholesaleProductService {
             storeRepository.adjustProductCount(product.getStoreId(), -1);
         }
         return mapper.productDetail(reload(product.getId()), true);
+    }
+
+    /**
+     * Hard-deletes a product and frees photo storage. Blocked when the product
+     * appears on any bill/order (history must stay intact) or still has reserved stock.
+     */
+    @Transactional
+    public void deletePermanently(Long userId, UUID productId) {
+        accessService.requireSupplier(userId);
+        WholesaleProduct product = ownedProduct(userId, productId);
+        List<WholesaleVariant> variants =
+                variantRepository.findByProductIdOrderByColorLabelAscSizeLabelAsc(product.getId());
+        boolean reserved = variants.stream().anyMatch(v -> v.getReserved() > 0);
+        if (reserved) {
+            throw ApiException.conflict(
+                    "This product still has reserved stock on open orders. Fulfil or cancel those orders first.");
+        }
+        if (orderItemRepository.existsByProductId(product.getId())) {
+            throw ApiException.badRequest(
+                    "Cannot permanently delete: this product is on past orders or bills. Archive it instead so invoice history stays intact.");
+        }
+        List<WholesaleProductImage> images =
+                imageRepository.findByProductIdOrderBySortOrderAscIdAsc(product.getId());
+        List<String> storageKeys = images.stream()
+                .map(WholesaleProductImage::getStorageKey)
+                .filter(StringUtils::hasText)
+                .toList();
+
+        boolean wasActive = product.getStatus() == WholesaleProduct.Status.ACTIVE;
+        Long categoryId = product.getCategoryId();
+        Long storeId = product.getStoreId();
+
+        // DB FKs cascade images + variants; order items were blocked above.
+        productRepository.delete(product);
+        productRepository.flush();
+        if (wasActive) {
+            categoryRepository.adjustProductCount(categoryId, -1);
+            storeRepository.adjustProductCount(storeId, -1);
+        }
+        for (String key : storageKeys) {
+            try {
+                storageService.delete(key);
+            } catch (RuntimeException ignored) {
+                // Orphaned file is rare; product row is already gone.
+            }
+        }
     }
 
     // --- images ---------------------------------------------------------------------------

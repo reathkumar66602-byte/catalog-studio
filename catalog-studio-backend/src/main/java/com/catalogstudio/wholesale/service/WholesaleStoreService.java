@@ -13,6 +13,8 @@ import com.catalogstudio.wholesale.repository.WholesaleCategoryRepository;
 import com.catalogstudio.wholesale.repository.WholesaleStoreCategoryRepository;
 import com.catalogstudio.wholesale.repository.WholesaleStoreRepository;
 import com.catalogstudio.wholesale.service.GstVerificationService.GstLookupNames;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -94,6 +96,7 @@ public class WholesaleStoreService {
                 .state(trimToNull(request.state()))
                 .phone(trimToNull(request.phone()))
                 .email(trimToNull(request.email()))
+                .gstPercent(resolveGstPercent(request.gstPercent()))
                 .status(WholesaleStore.Status.ACTIVE)
                 .build();
         try {
@@ -122,11 +125,41 @@ public class WholesaleStoreService {
         if (request.state() != null) {
             store.setState(trimToNull(request.state()));
         }
+        if (request.addressLine() != null) {
+            store.setAddressLine(trimToNull(request.addressLine()));
+        }
+        if (request.pincode() != null) {
+            store.setPincode(trimToNull(request.pincode()));
+        }
+        if (request.pan() != null) {
+            store.setPan(trimToNull(request.pan() == null ? null : request.pan().toUpperCase()));
+        }
         if (StringUtils.hasText(request.phone())) {
             store.setPhone(request.phone().trim());
         }
         if (StringUtils.hasText(request.email())) {
             store.setEmail(request.email().trim());
+        }
+        if (request.gstPercent() != null) {
+            store.setGstPercent(resolveGstPercent(request.gstPercent()));
+        }
+        if (request.bankAccountName() != null) {
+            store.setBankAccountName(trimToNull(request.bankAccountName()));
+        }
+        if (request.bankAccountNumber() != null) {
+            store.setBankAccountNumber(trimToNull(request.bankAccountNumber()));
+        }
+        if (request.bankName() != null) {
+            store.setBankName(trimToNull(request.bankName()));
+        }
+        if (request.bankIfsc() != null) {
+            store.setBankIfsc(trimToNull(request.bankIfsc() == null ? null : request.bankIfsc().toUpperCase()));
+        }
+        if (request.bankBranch() != null) {
+            store.setBankBranch(trimToNull(request.bankBranch()));
+        }
+        if (request.invoiceTerms() != null) {
+            store.setInvoiceTerms(trimToNull(request.invoiceTerms()));
         }
         store = storeRepository.save(store);
         if (request.categoryIds() != null) {
@@ -179,6 +212,16 @@ public class WholesaleStoreService {
             slug = base + "-" + (attempt < 3 ? String.valueOf(attempt + 1) : WholesaleSlugs.randomSuffix(5));
         }
         return slug;
+    }
+
+    private static BigDecimal resolveGstPercent(BigDecimal value) {
+        if (value == null) {
+            return new BigDecimal("18.00");
+        }
+        if (value.signum() < 0 || value.compareTo(new BigDecimal("100")) > 0) {
+            throw ApiException.badRequest("GST percent must be between 0 and 100");
+        }
+        return value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private static String trimToNull(String value) {

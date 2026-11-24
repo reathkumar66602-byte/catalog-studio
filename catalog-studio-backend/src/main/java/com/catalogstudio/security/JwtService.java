@@ -29,6 +29,7 @@ public class JwtService {
                 .id(UUID.randomUUID().toString())
                 .claims(Map.of(
                         "uid", user.uuid().toString(),
+                        "userId", user.id(),
                         "role", user.role()
                 ))
                 .issuedAt(Date.from(now))

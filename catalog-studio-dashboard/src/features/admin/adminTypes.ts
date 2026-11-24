@@ -46,4 +46,5 @@ export type PlanOption = {
   price: number;
   billingCycle: string;
   purchasable?: boolean;
+  features?: Record<string, unknown>;
 };

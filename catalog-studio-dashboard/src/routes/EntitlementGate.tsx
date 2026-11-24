@@ -6,7 +6,14 @@ import type { SubscriptionStatus } from "../types";
 import { useI18n } from "../i18n/LanguageProvider";
 import { isStaff } from "./roles";
 
-const ALLOWED_WHEN_LOCKED = ["/subscription", "/settings", "/billing-address", "/transactions"];
+const ALLOWED_WHEN_LOCKED = [
+  "/dashboard",
+  "/subscription",
+  "/settings",
+  "/billing-address",
+  "/transactions",
+  "/app-guide",
+];
 
 export function EntitlementGate() {
   const { user } = useAuth();

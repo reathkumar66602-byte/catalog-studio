@@ -10,4 +10,8 @@ public interface WholesaleOrderItemRepository extends JpaRepository<WholesaleOrd
     List<WholesaleOrderItem> findByOrderIdOrderByIdAsc(Long orderId);
 
     List<WholesaleOrderItem> findByOrderIdInOrderByIdAsc(Collection<Long> orderIds);
+
+    boolean existsByProductId(Long productId);
+
+    void deleteByOrderId(Long orderId);
 }

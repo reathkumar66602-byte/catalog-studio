@@ -3,10 +3,17 @@ package com.catalogstudio.wholesale.controller;
 import com.catalogstudio.common.api.ApiResponse;
 import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.wholesale.dto.AcceptOrderRequest;
+import com.catalogstudio.wholesale.dto.BillEditRequest;
+import com.catalogstudio.wholesale.dto.BillHistoryResponse;
+import com.catalogstudio.wholesale.dto.CouponCreateRequest;
+import com.catalogstudio.wholesale.dto.CouponResponse;
+import com.catalogstudio.wholesale.dto.CouponUpdateRequest;
 import com.catalogstudio.wholesale.dto.GstLookupRequest;
 import com.catalogstudio.wholesale.dto.GstLookupResponse;
+import com.catalogstudio.wholesale.dto.ManualBillRequest;
 import com.catalogstudio.wholesale.dto.OrderResponse;
 import com.catalogstudio.wholesale.dto.PageResponse;
+import com.catalogstudio.wholesale.dto.ProductAutofillResponse;
 import com.catalogstudio.wholesale.dto.ProductCardResponse;
 import com.catalogstudio.wholesale.dto.ProductCreateRequest;
 import com.catalogstudio.wholesale.dto.ProductDetailResponse;
@@ -19,14 +26,22 @@ import com.catalogstudio.wholesale.dto.StoreResponse;
 import com.catalogstudio.wholesale.dto.StoreUpdateRequest;
 import com.catalogstudio.wholesale.dto.VariantCell;
 import com.catalogstudio.wholesale.dto.VariantInput;
+import com.catalogstudio.wholesale.service.WholesaleBillHistoryService;
+import com.catalogstudio.wholesale.service.WholesaleCouponService;
 import com.catalogstudio.wholesale.service.WholesaleOrderService;
+import com.catalogstudio.wholesale.service.WholesaleProductAutofillService;
 import com.catalogstudio.wholesale.service.WholesaleProductService;
 import com.catalogstudio.wholesale.service.WholesaleStoreService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,16 +53,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.view.RedirectView;
 
 @RestController
 @RequestMapping("/api/v1/wholesale/supplier")
 @RequiredArgsConstructor
 @Tag(name = "Wholesale supplier")
+@ConditionalOnProperty(name = "catalogstudio.modules.wholesale-enabled", havingValue = "true", matchIfMissing = true)
 public class WholesaleSupplierController {
 
     private final WholesaleStoreService storeService;
     private final WholesaleProductService productService;
+    private final WholesaleProductAutofillService autofillService;
     private final WholesaleOrderService orderService;
+    private final WholesaleCouponService couponService;
+    private final WholesaleBillHistoryService billHistoryService;
 
     // --- store ----------------------------------------------------------------------------
 
@@ -101,6 +121,18 @@ public class WholesaleSupplierController {
         return ApiResponse.ok("Product created", productService.create(SecurityUtils.currentUserId(), request));
     }
 
+    /**
+     * AI vision autofill for the new-product form. Does not create a product —
+     * only returns suggested title, category, description, details and colour.
+     */
+    @PostMapping(value = "/products/autofill", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<ProductAutofillResponse> autofillProduct(
+            @RequestParam("images") List<MultipartFile> images) {
+        return ApiResponse.ok(
+                "Product details suggested from photos",
+                autofillService.autofill(SecurityUtils.currentUserId(), images));
+    }
+
     @PutMapping("/products/{id}")
     public ApiResponse<ProductDetailResponse> updateProduct(
             @PathVariable UUID id, @Valid @RequestBody ProductUpdateRequest request) {
@@ -110,6 +142,13 @@ public class WholesaleSupplierController {
     @DeleteMapping("/products/{id}")
     public ApiResponse<ProductDetailResponse> archiveProduct(@PathVariable UUID id) {
         return ApiResponse.ok("Product archived", productService.archive(SecurityUtils.currentUserId(), id));
+    }
+
+    /** Hard delete + free photo storage. Fails if the product is on any order/bill. */
+    @DeleteMapping("/products/{id}/permanent")
+    public ApiResponse<Void> deleteProductPermanently(@PathVariable UUID id) {
+        productService.deletePermanently(SecurityUtils.currentUserId(), id);
+        return ApiResponse.okMessage("Product deleted permanently");
     }
 
     @PostMapping(value = "/products/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -143,6 +182,30 @@ public class WholesaleSupplierController {
         return ApiResponse.ok("Stock updated", productService.adjustStock(SecurityUtils.currentUserId(), id, request));
     }
 
+    // --- coupons --------------------------------------------------------------------------
+
+    @GetMapping("/coupons")
+    public ApiResponse<List<CouponResponse>> coupons() {
+        return ApiResponse.ok(couponService.list(SecurityUtils.currentUserId()));
+    }
+
+    @PostMapping("/coupons")
+    public ApiResponse<CouponResponse> createCoupon(@Valid @RequestBody CouponCreateRequest request) {
+        return ApiResponse.ok("Coupon created", couponService.create(SecurityUtils.currentUserId(), request));
+    }
+
+    @PutMapping("/coupons/{id}")
+    public ApiResponse<CouponResponse> updateCoupon(
+            @PathVariable UUID id, @Valid @RequestBody CouponUpdateRequest request) {
+        return ApiResponse.ok("Coupon updated", couponService.update(SecurityUtils.currentUserId(), id, request));
+    }
+
+    @DeleteMapping("/coupons/{id}")
+    public ApiResponse<Void> deleteCoupon(@PathVariable UUID id) {
+        couponService.delete(SecurityUtils.currentUserId(), id);
+        return ApiResponse.okMessage("Coupon deactivated");
+    }
+
     // --- orders ---------------------------------------------------------------------------
 
     @GetMapping("/orders")
@@ -157,6 +220,19 @@ public class WholesaleSupplierController {
     @GetMapping("/orders/{id}")
     public ApiResponse<OrderResponse> order(@PathVariable UUID id) {
         return ApiResponse.ok(orderService.getSupplierOrder(SecurityUtils.currentUserId(), id));
+    }
+
+    @PostMapping("/orders/manual")
+    public ApiResponse<OrderResponse> placeManualBill(@Valid @RequestBody ManualBillRequest request) {
+        return ApiResponse.ok(
+                "Manual bill created",
+                orderService.placeManualBill(SecurityUtils.currentUserId(), request));
+    }
+
+    @GetMapping("/orders/{id}/bill.pdf")
+    public RedirectView billPdf(@PathVariable UUID id) {
+        String url = orderService.getBillPdfUrl(SecurityUtils.currentUserId(), id);
+        return new RedirectView(url);
     }
 
     @PostMapping("/orders/{id}/accept")
@@ -174,5 +250,36 @@ public class WholesaleSupplierController {
     @PostMapping("/orders/{id}/fulfill")
     public ApiResponse<OrderResponse> fulfill(@PathVariable UUID id) {
         return ApiResponse.ok("Order marked fulfilled", orderService.fulfillOrder(SecurityUtils.currentUserId(), id));
+    }
+
+    @PutMapping("/orders/{id}/bill")
+    public ApiResponse<OrderResponse> editBill(@PathVariable UUID id, @Valid @RequestBody BillEditRequest request) {
+        return ApiResponse.ok(
+                "Bill updated",
+                orderService.editBill(SecurityUtils.currentUserId(), id, request));
+    }
+
+    @GetMapping("/bills")
+    public ApiResponse<BillHistoryResponse> bills(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ApiResponse.ok(billHistoryService.supplierBills(SecurityUtils.currentUserId(), from, to, page, size));
+    }
+
+    @GetMapping("/bills/export.xlsx")
+    public ResponseEntity<byte[]> exportBills(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to
+    ) {
+        byte[] bytes = billHistoryService.supplierBillsExcel(SecurityUtils.currentUserId(), from, to);
+        String filename = "store-bills-" + LocalDate.now(WholesaleBillHistoryService.INDIA) + ".xlsx";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
     }
 }

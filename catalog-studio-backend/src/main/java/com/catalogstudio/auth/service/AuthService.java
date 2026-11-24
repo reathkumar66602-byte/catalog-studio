@@ -68,6 +68,7 @@ public class AuthService {
     private final OtpService otpService;
     private final TemplatedEmailService templatedEmailService;
     private final FeatureAccessService featureAccessService;
+    private final SessionCacheService sessionCacheService;
     private final PlatformTransactionManager transactionManager;
 
     public AuthFlowResponse register(RegisterRequest request, String ip, String userAgent) {
@@ -198,19 +199,29 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refresh(String refreshToken) {
-        UserSession session = sessionRepository.findByRefreshTokenHash(TokenHasher.sha256(refreshToken))
+        String oldHash = TokenHasher.sha256(refreshToken);
+        UserSession session = sessionRepository.findByRefreshTokenHash(oldHash)
                 .orElseThrow(() -> ApiException.unauthorized("Invalid refresh token"));
         if (!session.isActive()) {
+            sessionCacheService.evict(oldHash);
             throw ApiException.unauthorized("Refresh token expired or revoked");
         }
+        // Rotate refresh token (company-standard: one-time use of each refresh value).
+        String newRefresh = TokenHasher.randomToken(48);
+        String newHash = TokenHasher.sha256(newRefresh);
+        session.setRefreshTokenHash(newHash);
         session.setLastUsedAt(Instant.now());
-        return tokensFor(session.getUser(), refreshToken, session.getExpiresAt());
+        sessionCacheService.evict(oldHash);
+        sessionCacheService.put(newHash, session.getId(), session.getUser().getId(), session.getExpiresAt());
+        return tokensFor(session.getUser(), newRefresh, session.getExpiresAt());
     }
 
     @Transactional
     public void logout(String refreshToken) {
-        sessionRepository.findByRefreshTokenHash(TokenHasher.sha256(refreshToken)).ifPresent(session -> {
+        String hash = TokenHasher.sha256(refreshToken);
+        sessionRepository.findByRefreshTokenHash(hash).ifPresent(session -> {
             session.setRevoked(true);
+            sessionCacheService.evict(hash);
             auditService.log(session.getUser(), "LOGOUT", "SESSION", session.getUuid().toString(), session.getIpAddress(), Map.of());
         });
     }
@@ -347,10 +358,11 @@ public class AuthService {
 
     private AuthResponse issueTokens(User user, boolean remember, String deviceName, String ip, String userAgent) {
         String refresh = TokenHasher.randomToken(48);
+        String hash = TokenHasher.sha256(refresh);
         Instant expires = Instant.now().plus(properties.jwt().refreshTokenDays(), ChronoUnit.DAYS);
-        sessionRepository.save(UserSession.builder()
+        UserSession session = sessionRepository.save(UserSession.builder()
                 .user(user)
-                .refreshTokenHash(TokenHasher.sha256(refresh))
+                .refreshTokenHash(hash)
                 .deviceName(deviceName)
                 .ipAddress(ip)
                 .userAgent(userAgent)
@@ -359,6 +371,7 @@ public class AuthService {
                 .expiresAt(expires)
                 .lastUsedAt(Instant.now())
                 .build());
+        sessionCacheService.put(hash, session.getId(), user.getId(), expires);
         return tokensFor(user, refresh, expires);
     }
 

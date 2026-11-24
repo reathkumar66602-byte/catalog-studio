@@ -1,0 +1,75 @@
+package com.catalogstudio.security;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+/**
+ * Stateless security principal shared across services.
+ * Built from JWT claims — does not require a local users table.
+ */
+public record AuthUser(
+        Long id,
+        UUID uuid,
+        String email,
+        String passwordHash,
+        String role,
+        boolean enabled
+) implements UserDetails {
+
+    public static AuthUser fromClaims(Long id, UUID uuid, String email, String role) {
+        return new AuthUser(id, uuid, email, "", role == null ? Roles.USER : role, true);
+    }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+        if (Roles.SUPERADMIN.equals(role)) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        }
+        return List.copyOf(authorities);
+    }
+
+    public boolean isStaff() {
+        return Roles.isStaff(role);
+    }
+
+    public boolean isSuperAdmin() {
+        return Roles.isSuperAdmin(role);
+    }
+
+    @Override
+    public String getPassword() {
+        return passwordHash;
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return enabled;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+}

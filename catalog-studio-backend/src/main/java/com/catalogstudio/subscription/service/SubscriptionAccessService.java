@@ -1,24 +1,28 @@
 package com.catalogstudio.subscription.service;
 
 import com.catalogstudio.common.exception.ApiException;
+import com.catalogstudio.config.CatalogStudioProperties;
 import com.catalogstudio.subscription.dto.PaymentCheckoutResponse;
+import com.catalogstudio.subscription.dto.PaymentStatusResponse;
 import com.catalogstudio.subscription.dto.PriceBreakdown;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse.PaymentNotice;
 import com.catalogstudio.subscription.entity.BillingSettings;
+import com.catalogstudio.subscription.entity.PaymentTransaction;
 import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionStatus;
 import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionType;
 import com.catalogstudio.subscription.entity.Subscription;
 import com.catalogstudio.subscription.entity.Subscription.SubscriptionStatus;
 import com.catalogstudio.subscription.entity.SubscriptionPlan;
+import com.catalogstudio.subscription.payment.CashfreeProperties;
+import com.catalogstudio.subscription.payment.PaymentCheckoutCommand;
 import com.catalogstudio.subscription.payment.PaymentGatewayService;
 import com.catalogstudio.subscription.payment.PaymentProvider;
+import com.catalogstudio.subscription.repository.PaymentTransactionRepository;
 import com.catalogstudio.subscription.repository.SubscriptionPlanRepository;
 import com.catalogstudio.subscription.repository.SubscriptionRepository;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -40,6 +44,9 @@ public class SubscriptionAccessService {
     private final PaymentGatewayService paymentGatewayService;
     private final PricingService pricingService;
     private final PaymentTransactionService paymentTransactionService;
+    private final PaymentTransactionRepository paymentTransactionRepository;
+    private final CatalogStudioProperties properties;
+    private final CashfreeProperties cashfreeProperties;
 
     @Transactional
     public void ensureTrialOnLogin(User user) {
@@ -118,7 +125,9 @@ public class SubscriptionAccessService {
     }
 
     @Transactional
-    public PaymentCheckoutResponse checkout(Long userId, String planName, String promoCode) {
+    public PaymentCheckoutResponse checkout(
+            Long userId, String planName, String promoCode, String customerPhone, String returnOrigin
+    ) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.unauthorized("Unauthorized"));
         SubscriptionPlan plan = purchasablePlan(planName);
@@ -131,56 +140,7 @@ public class SubscriptionAccessService {
             if (!statusOf(user).accessEntitled()) {
                 subscription.setStatus(SubscriptionStatus.PAYMENT_PENDING);
             }
-        }
-        PaymentProvider.CheckoutSession session = paymentGatewayService.checkout(userId, plan.getName());
-        String amountText = pricing.totalAmount().stripTrailingZeros().toPlainString();
-        String message = renderMessage(billing.getWhatsappMessageTemplate(), user.getEmail(), plan, billing, amountText, pricing.promoCode());
-        String digits = billingSettingsService.resolvedWhatsappNumber(billing);
-        String whatsappUrl = "https://wa.me/" + digits + "?text=" + URLEncoder.encode(message, StandardCharsets.UTF_8);
-        String scannerUrl = billingSettingsService.scannerImageUrl(billing);
-        String notice = "Send the payment screenshot on WhatsApp and mention your registered email ID ("
-                + user.getEmail() + "). We activate the account only after this confirmation.";
-        paymentTransactionService.record(
-                user, plan, TransactionType.CHECKOUT, TransactionStatus.PENDING,
-                session.provider(), session.sessionId(),
-                pricing.promoCode() == null
-                        ? "Checkout started"
-                        : "Checkout started with promo " + pricing.promoCode(),
-                pricing);
-        return new PaymentCheckoutResponse(
-                session.provider(),
-                session.checkoutUrl(),
-                session.sessionId(),
-                plan.getName(),
-                pricing.totalAmount(),
-                plan.getBillingCycle(),
-                user.getEmail(),
-                billing.getUpiId(),
-                billing.getPayeeName(),
-                scannerUrl,
-                null,
-                digits,
-                whatsappUrl,
-                message,
-                notice,
-                billing.getPaymentInstructions(),
-                pricing
-        );
-    }
-
-    @Transactional
-    public SubscriptionStatusResponse markPaymentSent(Long userId, String planName) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> ApiException.unauthorized("Unauthorized"));
-        SubscriptionPlan plan = purchasablePlan(planName);
-        Subscription subscription = latest(userId);
-        PriceBreakdown pricing = null;
-        if (subscription != null && subscription.getPendingTotalAmount() != null) {
-            pricing = pendingAsBreakdown(subscription, billingSettingsService.current());
         } else {
-            pricing = pricingService.quote(plan, subscription == null ? null : subscription.getPendingPromoCode());
-        }
-        if (subscription == null) {
             subscription = subscriptionRepository.save(Subscription.builder()
                     .user(user)
                     .plan(plan)
@@ -190,22 +150,158 @@ public class SubscriptionAccessService {
                     .pendingPlan(plan)
                     .build());
             applyPendingPricing(subscription, pricing);
-        } else {
-            subscription.setPendingPlan(plan);
-            applyPendingPricing(subscription, pricing);
-            if (!statusOf(user).accessEntitled()) {
-                subscription.setStatus(SubscriptionStatus.PAYMENT_PENDING);
+        }
+
+        String phone = resolveCustomerPhone(user, customerPhone);
+        String orderId = "cs_" + user.getId() + "_" + plan.getName().toLowerCase() + "_"
+                + Long.toString(System.currentTimeMillis(), 36);
+        String origin = resolveReturnOrigin(returnOrigin);
+        String returnUrl = origin + "/subscription/payment-result?order_id={order_id}";
+        // Webhook must hit the public API host (www) regardless of which host the seller used.
+        String notifyUrl = properties.cors().publicAppOrigin() + "/api/v1/payments/cashfree/webhook";
+
+        PaymentTransaction pending = paymentTransactionService.record(
+                user, plan, TransactionType.CHECKOUT, TransactionStatus.PENDING,
+                cashfreeProperties.configured() ? "CASHFREE" : paymentGatewayService.active().name(),
+                orderId,
+                pricing.promoCode() == null
+                        ? "Checkout started"
+                        : "Checkout started with promo " + pricing.promoCode(),
+                pricing);
+        pending.setGatewayLinkId(orderId);
+        paymentTransactionRepository.save(pending);
+
+        Map<String, String> notes = new LinkedHashMap<>();
+        notes.put("uid", String.valueOf(user.getId()));
+        notes.put("plan", plan.getName());
+        if (pending.getUuid() != null) {
+            notes.put("txn", pending.getUuid().toString().replace("-", "").substring(0, 16));
+        }
+        if (pricing.promoCode() != null) {
+            notes.put("promo", pricing.promoCode());
+        }
+
+        PaymentProvider.CheckoutSession session = paymentGatewayService.checkout(new PaymentCheckoutCommand(
+                user.getId(),
+                plan.getName(),
+                pricing.totalAmount(),
+                "INR",
+                StringUtils.hasText(user.getName()) ? user.getName().trim() : "Catalog Studio seller",
+                user.getEmail(),
+                phone,
+                orderId,
+                returnUrl,
+                notifyUrl,
+                notes
+        ));
+
+        String paymentSessionId = null;
+        if (StringUtils.hasText(session.checkoutUrl()) && session.checkoutUrl().startsWith("cashfree-session:")) {
+            paymentSessionId = session.checkoutUrl().substring("cashfree-session:".length());
+        }
+
+        pending.setProvider(session.provider());
+        pending.setReference(session.sessionId());
+        pending.setGatewayLinkId(session.sessionId());
+        pending.setGatewayOrderId(session.sessionId());
+        if (StringUtils.hasText(session.gatewayReference())
+                && !session.gatewayReference().equals(session.sessionId())) {
+            pending.setGatewayCfLinkId(session.gatewayReference());
+        }
+        pending.setNotes(pricing.promoCode() == null
+                ? "Cashfree order checkout"
+                : "Cashfree order checkout · promo " + pricing.promoCode());
+        paymentTransactionRepository.save(pending);
+
+        String notice = "CASHFREE".equalsIgnoreCase(session.provider())
+                ? "You will be redirected to Cashfree to pay securely. Your plan activates automatically after payment."
+                : "Complete payment using the instructions below.";
+        return new PaymentCheckoutResponse(
+                session.provider(),
+                session.checkoutUrl(),
+                session.sessionId(),
+                paymentSessionId,
+                plan.getName(),
+                pricing.totalAmount(),
+                plan.getBillingCycle(),
+                user.getEmail(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                notice,
+                StringUtils.hasText(billing.getPaymentInstructions())
+                        ? billing.getPaymentInstructions()
+                        : "Pay online with UPI, card, or netbanking. Access unlocks automatically after success.",
+                pricing
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentStatusResponse paymentStatus(Long userId, String orderId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.unauthorized("Unauthorized"));
+        if (!StringUtils.hasText(orderId)) {
+            throw ApiException.badRequest("Missing payment order id");
+        }
+        PaymentTransaction txn = paymentTransactionRepository.findByGatewayLinkId(orderId.trim())
+                .orElseThrow(() -> ApiException.notFound("Payment not found"));
+        if (!txn.getUser().getId().equals(userId)) {
+            throw ApiException.notFound("Payment not found");
+        }
+        boolean entitled = statusOf(user).accessEntitled();
+        String status = txn.getStatus() == null ? "PENDING" : txn.getStatus().name();
+        if (entitled || paymentTransactionRepository.existsByReferenceAndTypeAndStatus(
+                orderId.trim(), TransactionType.ACTIVATION, TransactionStatus.SUCCESS)) {
+            status = "SUCCESS";
+        }
+        String message = switch (status) {
+            case "SUCCESS" -> "Payment received. Your plan is active.";
+            case "FAILED", "EXPIRED" -> "Payment was not completed. You can try again from Subscription.";
+            default -> "Waiting for Cashfree confirmation…";
+        };
+        return new PaymentStatusResponse(
+                orderId.trim(),
+                txn.getProvider(),
+                status,
+                txn.getPlanName(),
+                txn.getAmount(),
+                entitled || "SUCCESS".equals(status),
+                message
+        );
+    }
+
+    /** Legacy WhatsApp screenshot path — kept for admin/support only; UI no longer calls this. */
+    @Transactional
+    public SubscriptionStatusResponse markPaymentSent(Long userId, String planName) {
+        throw ApiException.badRequest(
+                "Manual QR / WhatsApp payment is disabled. Please pay online with Cashfree.");
+    }
+
+    private String resolveReturnOrigin(String requested) {
+        if (StringUtils.hasText(requested)) {
+            String cleaned = requested.trim().replaceAll("/+$", "");
+            if (properties.cors().isAllowedAppOrigin(cleaned)) {
+                return cleaned;
             }
         }
-        paymentTransactionService.record(
-                user, plan, TransactionType.PAYMENT_SENT, TransactionStatus.REPORTED,
-                "MANUAL",
-                "whatsapp:" + user.getEmail(),
-                pricing.promoCode() == null
-                        ? "Payment screenshot reported"
-                        : "Payment screenshot reported · promo " + pricing.promoCode(),
-                pricing);
-        return statusOf(user);
+        return properties.cors().publicAppOrigin();
+    }
+
+    private String resolveCustomerPhone(User user, String override) {
+        String raw = StringUtils.hasText(override) ? override : user.getMobile();
+        String digits = raw == null ? "" : raw.replaceAll("[^0-9]", "");
+        if (digits.startsWith("91") && digits.length() == 12) {
+            digits = digits.substring(2);
+        }
+        if (digits.length() != 10) {
+            throw ApiException.badRequest(
+                    "Add a valid 10-digit Indian mobile number before paying (Settings → profile, or enter it at checkout).");
+        }
+        return digits;
     }
 
     public boolean isEntitled(User user) {

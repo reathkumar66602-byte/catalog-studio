@@ -46,10 +46,16 @@ GARMENT LENGTH (Meesho Fabric Length and Length Size in meters):
 - lengthMeters is allowed. Estimate only the visible garment length, then snap it. Do not invent a tape measurement.
 - If multiple images are provided, use all of them together to improve accuracy.
 
-TITLES AND DESCRIPTIONS:
+TITLES, DESCRIPTIONS, AND KEYWORDS:
 - suggestedTitles MUST match gender + primaryColor + productType. If gender is Women, every title starts with Women's or clearly says women. Never output a stock "Men's Navy Blue Checked Casual Shirt" unless the photo is actually a men's navy checked shirt.
 - Return 3-4 titles, about 30-60 characters, marketplace style.
-- Return two marketplace-ready listing descriptions in suggestedDescriptions. Each must stay under 1400 characters, include key highlights, and must not invent brand names, fabric percentages, sizes, or certifications.
+- Return EXACTLY 4 marketplace-ready listing descriptions in suggestedDescriptions (never fewer). Each must stay under 1400 characters, include key highlights, and must not invent brand names, fabric percentages, sizes, or certifications.
+- Make the four descriptions distinct angles:
+  1) Feature-focused (fit, sleeve, neck/collar, pattern)
+  2) Occasion / styling (when and how to wear)
+  3) Material / care / comfort (only what is visible; stay honest)
+  4) Short marketplace bullet-style paragraph for search/SEO (natural sentences, not keyword stuffing)
+- Return 8 to 12 SEO keywords in keywords. Mix product type, color, gender, occasion, style, pattern, and related search phrases (e.g. "black blazer", "formal wear", "men's blazer", "office jacket"). No brand names.
 - Return valid JSON only. No markdown. No commentary.
 
 Optional hints from the seller (may be empty; IMAGE wins if they conflict):
@@ -79,8 +85,8 @@ Return JSON in this exact shape:
   "style": "string or null",
   "productDescription": "string or null",
   "suggestedTitles": ["string", "string", "string"],
-  "suggestedDescriptions": ["string", "string"],
-  "keywords": ["string"],
+  "suggestedDescriptions": ["string", "string", "string", "string"],
+  "keywords": ["string", "string", "string", "string", "string", "string", "string", "string"],
   "overallConfidence": 0.0,
   "uncertainFields": ["string"],
   "lengthMeters": 1.5

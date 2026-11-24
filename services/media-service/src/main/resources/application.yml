@@ -1,0 +1,10 @@
+server:
+  port: 8088
+spring:
+  application:
+    name: media-service
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

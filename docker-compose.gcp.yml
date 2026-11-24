@@ -6,10 +6,37 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-catalog_studio}
     ports: !override
       - "5432:5432"
-  backend:
+
+  redis:
+    ports: !override
+      - "127.0.0.1:6379:6379"
+
+  rabbitmq:
+    ports: !override
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-catalogstudio}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-catalogstudio}
+
+  platform-api:
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8082"
+      DATABASE_URL: jdbc:postgresql://postgres:5432/catalog_studio
+      DATABASE_USER: catalog_studio
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-catalog_studio}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-catalogstudio}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-catalogstudio}
+      MESSAGING_ENABLED: "true"
+      WHOLESALE_MODULE_ENABLED: "false"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-catalog-studio-internal}
+      JWT_REFRESH_DAYS: ${JWT_REFRESH_DAYS:-30}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       STORAGE_PUBLIC_BASE_URL: ${PUBLIC_ORIGIN}/api/v1/files
       JWT_SECRET: ${JWT_SECRET}
@@ -57,11 +84,52 @@ services:
       SHIPROCKET_EMAIL: ${SHIPROCKET_EMAIL:-}
       SHIPROCKET_PASSWORD: ${SHIPROCKET_PASSWORD:-}
       DELHIVERY_API_TOKEN: ${DELHIVERY_API_TOKEN:-}
+      CASHFREE_ENABLED: ${CASHFREE_ENABLED:-true}
+      CASHFREE_ENV: ${CASHFREE_ENV:-PROD}
+      CASHFREE_APP_ID: ${CASHFREE_APP_ID:-}
+      CASHFREE_SECRET_KEY: ${CASHFREE_SECRET_KEY:-}
+      CASHFREE_API_VERSION: ${CASHFREE_API_VERSION:-2023-08-01}
       LOG_DIR: /var/catalog-studio/logs
     volumes:
       - catalog_studio_logs:/var/catalog-studio/logs
+    ports: !override
+      - "127.0.0.1:8082:8082"
+
+  supplier-service:
+    environment:
+      SERVER_PORT: "8081"
+      SUPPLIER_DATABASE_URL: jdbc:postgresql://postgres:5432/catalog_studio_supplier
+      SUPPLIER_DATABASE_USER: catalog_studio
+      SUPPLIER_DATABASE_PASSWORD: ${DATABASE_PASSWORD:-catalog_studio}
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-catalogstudio}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-catalogstudio}
+      MESSAGING_ENABLED: "true"
+      PLATFORM_BASE_URL: http://platform-api:8082
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-catalog-studio-internal}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      STORAGE_LOCAL_PATH: /var/catalog-studio/uploads-supplier
+      STORAGE_PUBLIC_BASE_URL: ${PUBLIC_ORIGIN}/api/v1/supplier-files
+      WHOLESALE_GST_PROVIDER: ${WHOLESALE_GST_PROVIDER:-gstinapi}
+      WHOLESALE_GST_NAME_MATCH_THRESHOLD: ${WHOLESALE_GST_NAME_MATCH_THRESHOLD:-0.72}
+      GSTINAPI_BASE_URL: ${GSTINAPI_BASE_URL:-https://www.gstinapi.in}
+      GSTINAPI_API_KEY: ${GSTINAPI_API_KEY:-}
+    ports: !override
+      - "127.0.0.1:8081:8081"
+
+  api-gateway:
+    environment:
+      SERVER_PORT: "8080"
+      SUPPLIER_SERVICE_URI: http://supplier-service:8081
+      PLATFORM_SERVICE_URI: http://platform-api:8082
+    ports: !override
+      - "127.0.0.1:8080:8080"
+
   dashboard:
     ports:
       - "443:443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
+      - ./catalog-studio-dashboard/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro

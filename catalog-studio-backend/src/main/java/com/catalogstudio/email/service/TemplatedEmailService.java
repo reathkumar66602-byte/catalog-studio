@@ -117,9 +117,7 @@ public class TemplatedEmailService {
             html = EmailTemplateRenderer.render(template.getHtmlBody(), vars);
             text = EmailTemplateRenderer.render(template.getTextBody(), vars);
         }
-        if (StringUtils.hasText(replyTo)) {
-            return mailDispatchService.sendHtml(to, replyTo, subject, html, text, slug);
-        }
-        return mailDispatchService.sendHtml(to, subject, html, text);
+        // Always pass slug as clientReference so OTP / plan alerts can prefer ZeptoMail.
+        return mailDispatchService.sendHtml(to, replyTo, subject, html, text, slug);
     }
 }

@@ -1,30 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, MessageCircle, Smartphone } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 import { useAuth } from "../../store/auth";
 import type { BillingPromoOption, PaymentCheckout, PriceBreakdown, PlanCard, SubscriptionStatus } from "../../types";
-import { useI18n } from "../../i18n/LanguageProvider";
-import { formatWhatsapp, whatsappDigits } from "../site/whatsapp";
-
-const DEFAULT_SCANNER = "/payment-qr.jpg";
+import { openCashfreeCheckout } from "./cashfreeCheckout";
+import { billedPhrase, planTitle } from "./planDisplay";
 
 function inr(value?: number | null) {
   return `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function SubscriptionPaymentPage() {
-  const { t } = useI18n();
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const planName = (params.get("plan") || "").toUpperCase();
   const [promoCode, setPromoCode] = useState("");
-  const [showPay, setShowPay] = useState(false);
-  const [copied, setCopied] = useState("");
-  const [ack, setAck] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [launchError, setLaunchError] = useState("");
 
   const { data: current } = useQuery({
     queryKey: ["sub"],
@@ -60,22 +56,34 @@ export function SubscriptionPaymentPage() {
       (
         await api.post(`/subscriptions/plans/${planName}/checkout`, {
           promoCode: promoCode || null,
+          customerPhone: customerPhone || null,
+          returnOrigin: window.location.origin,
         })
       ).data.data as PaymentCheckout,
-    onSuccess: async () => {
-      setShowPay(true);
-      setAck("");
+    onSuccess: async (payment) => {
+      setLaunchError("");
       await qc.invalidateQueries({ queryKey: ["sub"] });
       await qc.invalidateQueries({ queryKey: ["transactions"] });
-    },
-  });
-
-  const paymentSent = useMutation({
-    mutationFn: async () => api.post(`/subscriptions/plans/${planName}/payment-sent`),
-    onSuccess: async () => {
-      setAck(t("sub.ack"));
-      await qc.invalidateQueries({ queryKey: ["sub"] });
-      await qc.invalidateQueries({ queryKey: ["transactions"] });
+      const sessionId =
+        payment.paymentSessionId ||
+        (payment.checkoutUrl?.startsWith("cashfree-session:")
+          ? payment.checkoutUrl.slice("cashfree-session:".length)
+          : "");
+      if (payment.provider === "CASHFREE" && sessionId) {
+        try {
+          await openCashfreeCheckout(sessionId, "production");
+          return;
+        } catch (err) {
+          setLaunchError(err instanceof Error ? err.message : "Could not open Cashfree checkout");
+          if (payment.sessionId) {
+            navigate(`/subscription/payment-result?order_id=${encodeURIComponent(payment.sessionId)}`);
+          }
+          return;
+        }
+      }
+      if (payment.sessionId) {
+        navigate(`/subscription/payment-result?order_id=${encodeURIComponent(payment.sessionId)}`);
+      }
     },
   });
 
@@ -83,24 +91,8 @@ export function SubscriptionPaymentPage() {
     if (!planName) navigate("/subscription", { replace: true });
   }, [planName, navigate]);
 
-  const payment = checkout.data;
-  const pricing = payment?.pricing || quote.data;
-  const email = payment?.registeredEmail || current?.registeredEmail || user?.email || "";
-  const scannerSrc = payment?.qrImageUrl || DEFAULT_SCANNER;
-  const payee = payment?.payeeName || "VISHAL KUMAR MISHRA";
-  const whatsappNumber = payment?.whatsappNumber || "";
-  const whatsappDigitsValue = whatsappDigits(whatsappNumber);
-  const whatsappDisplay = formatWhatsapp(whatsappNumber);
-
-  async function copyText(value: string, key: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(key);
-      window.setTimeout(() => setCopied(""), 1600);
-    } catch {
-      setCopied("");
-    }
-  }
+  const pricing = checkout.data?.pricing || quote.data;
+  const profileMobile = (user as { mobile?: string } | null)?.mobile || "";
 
   if (!planName) return null;
 
@@ -110,9 +102,10 @@ export function SubscriptionPaymentPage() {
         <Link to="/subscription" className="inline-flex items-center gap-1 text-sm font-medium text-teal-700 hover:underline">
           <ArrowLeft size={14} /> Back to plans
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">Checkout · {planName}</h1>
+        <h1 className="mt-2 text-2xl font-semibold">Checkout · {plan ? planTitle(plan) : planName}</h1>
         <p className="text-slate-500">
-          Review price, apply a promo, then pay. GST invoice details appear on your bill after activation.
+          Review price, apply a promo if you have one, then pay securely with Cashfree. Your plan activates automatically
+          after successful payment.
         </p>
       </div>
 
@@ -121,7 +114,7 @@ export function SubscriptionPaymentPage() {
           <div>
             <h2 className="font-semibold">Order summary</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {plan ? `${plan.name} · billed ${plan.billingCycle?.toLowerCase()}` : "Loading plan…"}
+              {plan ? `${planTitle(plan)} · ${billedPhrase(plan.billingCycle)}` : "Loading plan…"}
             </p>
           </div>
 
@@ -131,7 +124,6 @@ export function SubscriptionPaymentPage() {
               value={promoCode}
               onChange={(event) => {
                 setPromoCode(event.target.value);
-                setShowPay(false);
                 checkout.reset();
               }}
               className="mt-1 w-full rounded-xl border px-3 py-2.5"
@@ -149,121 +141,55 @@ export function SubscriptionPaymentPage() {
             </select>
           </label>
 
+          {!profileMobile && (
+            <label className="block text-sm font-medium">
+              Mobile number (required for payment)
+              <input
+                value={customerPhone}
+                onChange={(event) => setCustomerPhone(event.target.value.replace(/[^\d+]/g, "").slice(0, 13))}
+                placeholder="10-digit Indian mobile"
+                className="mt-1 w-full rounded-xl border px-3 py-2.5"
+                inputMode="tel"
+              />
+            </label>
+          )}
+
           {quote.isError && (
             <p className="text-sm text-red-600">{apiErrorMessage(quote.error, "Could not apply promo")}</p>
           )}
 
           <PriceRows pricing={pricing} loading={quote.isLoading} />
 
-          {!showPay && (
-            <button
-              type="button"
-              disabled={checkout.isPending || !planName || quote.isError}
-              onClick={() => checkout.mutate()}
-              className="w-full rounded-xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
-            >
-              {checkout.isPending ? "Preparing payment…" : `Pay ${inr(pricing?.totalAmount)}`}
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={checkout.isPending || !planName || quote.isError}
+            onClick={() => checkout.mutate()}
+            className="w-full rounded-xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+          >
+            {checkout.isPending ? "Opening Cashfree…" : `Pay ${inr(pricing?.totalAmount)} securely`}
+          </button>
           {checkout.isError && (
-            <p className="text-sm text-red-600">{apiErrorMessage(checkout.error, t("sub.payFail"))}</p>
+            <p className="text-sm text-red-600">{apiErrorMessage(checkout.error, "Could not start payment")}</p>
           )}
+          {launchError && <p className="text-sm text-amber-700">{launchError}</p>}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-          {!showPay || !payment ? (
-            <div className="flex h-full min-h-[280px] flex-col items-center justify-center text-center text-sm text-slate-500">
-              <p className="max-w-xs">
-                Choose a promo if you have one, confirm the total, then click <span className="font-semibold text-slate-700">Pay</span> to
-                reveal the PhonePe QR and WhatsApp instructions.
-              </p>
+          <div className="flex h-full min-h-[280px] flex-col justify-center gap-4">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-100 text-teal-800">
+              <ShieldCheck size={24} />
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-2xl bg-black p-3 text-center">
-                <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">{t("sub.scan")}</p>
-                <img
-                  src={scannerSrc}
-                  alt={`Payment scanner for ${payee}`}
-                  className="mx-auto mt-3 w-full max-w-[240px] rounded-xl object-contain"
-                />
-                <p className="mt-3 text-sm font-medium text-white">{payee}</p>
-                <p className="mt-1 text-xs text-slate-300">Pay exactly {inr(payment.amount)}</p>
-              </div>
-
-              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
-                <p className="flex items-center gap-2 font-semibold text-amber-950">
-                  <MessageCircle size={18} />
-                  {t("sub.whatsapp")}
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-amber-950">{payment.notice}</p>
-                {whatsappDisplay && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-sm font-medium text-amber-950">{t("sub.waNumber")}</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <a
-                        className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-teal-800"
-                        href={`https://wa.me/${whatsappDigitsValue}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {whatsappDisplay}
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => copyText(whatsappDigitsValue, "whatsapp")}
-                        className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium"
-                      >
-                        {copied === "whatsapp" ? <Check size={14} /> : <Copy size={14} />}
-                        {copied === "whatsapp" ? t("common.copied") : t("sub.copyNumber")}
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <code className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-teal-800">{email}</code>
-                  <button
-                    type="button"
-                    onClick={() => copyText(email, "email")}
-                    className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium"
-                  >
-                    {copied === "email" ? <Check size={14} /> : <Copy size={14} />}
-                    {copied === "email" ? t("common.copied") : t("sub.copyEmail")}
-                  </button>
-                </div>
-              </div>
-
-              <p className="text-sm text-slate-600">{payment.instructions}</p>
-
-              {pricing?.companyGstin && (
-                <p className="text-xs text-slate-500">Company GSTIN: {pricing.companyGstin}</p>
-              )}
-
-              <div className="flex flex-wrap gap-3">
-                <a
-                  href={payment.whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#128C7E] px-4 py-2.5 text-sm font-medium text-white"
-                >
-                  <Smartphone size={16} />
-                  {t("sub.openWa")}
-                </a>
-                <button
-                  type="button"
-                  disabled={paymentSent.isPending}
-                  onClick={() => paymentSent.mutate()}
-                  className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium"
-                >
-                  {paymentSent.isPending ? t("app.extSaving") : t("sub.sent")}
-                </button>
-              </div>
-              {ack && <p className="text-sm text-teal-800">{ack}</p>}
-              {paymentSent.isError && (
-                <p className="text-sm text-red-600">{apiErrorMessage(paymentSent.error)}</p>
-              )}
-            </div>
-          )}
+            <h2 className="text-lg font-semibold text-slate-900">Secure online payment</h2>
+            <ul className="space-y-2 text-sm text-slate-600">
+              <li>UPI, cards, and netbanking via Cashfree Payment Gateway.</li>
+              <li>No QR screenshots or WhatsApp confirmation needed.</li>
+              <li>Plan unlocks automatically when Cashfree confirms payment.</li>
+              <li>Tax invoice appears in Transactions after activation.</li>
+            </ul>
+            {current?.registeredEmail && (
+              <p className="text-xs text-slate-500">Billed to {current.registeredEmail}</p>
+            )}
+          </div>
         </section>
       </div>
     </div>

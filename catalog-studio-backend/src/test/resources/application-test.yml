@@ -12,12 +12,18 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
   flyway:
     enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
 
 catalogstudio:
+  redis:
+    enabled: false
   jwt:
     secret: test-secret-key-which-is-long-enough-for-hs256-algorithms
     access-token-minutes: 15
-    refresh-token-days: 7
+    refresh-token-days: 30
   ai:
     provider: mock
     api-key: test

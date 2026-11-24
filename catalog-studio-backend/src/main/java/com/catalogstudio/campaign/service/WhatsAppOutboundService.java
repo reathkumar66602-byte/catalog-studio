@@ -33,12 +33,9 @@ public class WhatsAppOutboundService {
 
     public String capabilityMessage() {
         if (configured()) {
-            return "WhatsApp send is configured. Messages go to users who have a mobile number.";
+            return "WhatsApp delivery is on.";
         }
-        return "WhatsApp templates are stored, but outbound WhatsApp API is not configured. "
-                + "Many users have a mobile field, but Catalog Studio currently only uses WhatsApp "
-                + "for payment screenshots (wa.me to support). Enable catalogstudio.whatsapp.send-enabled "
-                + "plus api-url and api-token to send campaign WhatsApp messages.";
+        return "";
     }
 
     /**

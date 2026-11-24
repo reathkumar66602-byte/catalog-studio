@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type AnalysisRow = {
   id: string;
@@ -24,6 +25,7 @@ type AnalysisPage = {
 };
 
 export function AnalysisHistoryPage() {
+  const { t } = useI18n();
   const [page, setPage] = useState(0);
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["analysis", page],
@@ -34,19 +36,26 @@ export function AnalysisHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Analysis history</h1>
+          <h1 className="text-2xl font-semibold">{t("analysisHistory.title")}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            AI listing analyses for this account{data ? ` · ${data.totalElements} total` : ""}.
+            {t("analysisHistory.subtitle")}
+            {data ? ` · ${t("analysisHistory.total", { total: data.totalElements })}` : ""}
           </p>
         </div>
+        <Link
+          to="/products/analyze"
+          className="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
+        >
+          {t("nav.productAnalysis")}
+        </Link>
       </div>
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
-              <th className="p-3">Product</th>
+              <th className="p-3">{t("inventory.product")}</th>
               <th>Provider</th>
               <th>Model</th>
               <th>Status</th>
@@ -59,16 +68,16 @@ export function AnalysisHistoryPage() {
             {isLoading && (
               <tr>
                 <td className="p-6 text-slate-500" colSpan={7}>
-                  Loading analysis history...
+                  {t("analysisHistory.loading")}
                 </td>
               </tr>
             )}
             {isError && (
               <tr>
                 <td className="p-6" colSpan={7}>
-                  <p className="text-rose-700">{apiErrorMessage(error, "Could not load analysis history")}</p>
+                  <p className="text-rose-700">{apiErrorMessage(error, t("analysisHistory.loadFail"))}</p>
                   <button type="button" className="mt-2 text-sm text-teal-700" onClick={() => refetch()}>
-                    Retry
+                    {t("common.retry")}
                   </button>
                 </td>
               </tr>
@@ -76,7 +85,7 @@ export function AnalysisHistoryPage() {
             {!isLoading && !isError && rows.length === 0 && (
               <tr>
                 <td className="p-6 text-slate-500" colSpan={7}>
-                  No analyses yet. Generate a listing from the Chrome extension or product analyze screen.
+                  {t("analysisHistory.empty")}
                 </td>
               </tr>
             )}
@@ -87,7 +96,7 @@ export function AnalysisHistoryPage() {
                     {row.productImage ? (
                       <img src={row.productImage} alt="" className="h-10 w-10 rounded-lg object-cover" />
                     ) : null}
-                    <span>{row.productName || "Draft"}</span>
+                    <span>{row.productName || t("analysisHistory.draft")}</span>
                   </div>
                 </td>
                 <td>{row.provider}</td>
@@ -98,7 +107,7 @@ export function AnalysisHistoryPage() {
                 <td>
                   {row.productId && (
                     <Link className="text-teal-700" to={`/products/${row.productId}/review`}>
-                      View
+                      {t("analysisHistory.view")}
                     </Link>
                   )}
                 </td>
@@ -115,18 +124,16 @@ export function AnalysisHistoryPage() {
             onClick={() => setPage((current) => Math.max(0, current - 1))}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-50"
           >
-            Previous
+            {t("common.previous")}
           </button>
-          <span>
-            Page {page + 1} of {totalPages}
-          </span>
+          <span>{t("common.pageOf", { page: page + 1, total: totalPages })}</span>
           <button
             type="button"
             disabled={page + 1 >= totalPages}
             onClick={() => setPage((current) => current + 1)}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-50"
           >
-            Next
+            {t("common.next")}
           </button>
         </div>
       )}

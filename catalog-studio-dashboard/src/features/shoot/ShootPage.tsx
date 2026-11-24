@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Upload } from "lucide-react";
 import { api, apiErrorMessage } from "../../api/client";
 import type { ApiResponse, SubscriptionStatus } from "../../types";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type Preview = { file: File; url: string };
 
@@ -112,6 +113,7 @@ export function plannedImageCount(input: {
 }
 
 export function ShootPage() {
+  const { t } = useI18n();
   const access = useQuery({
     queryKey: ["sub"],
     queryFn: async () => (await api.get("/subscriptions/current")).data.data as SubscriptionStatus,
@@ -126,10 +128,27 @@ export function ShootPage() {
   const [flipkart, setFlipkart] = useState(false);
   const [meeshoBackground, setMeeshoBackground] = useState<string>(DEFAULT_MEESHO_BACKGROUND);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ShootResult | null>(null);
 
   const trial = Boolean(access.data?.trialActive);
+
+  useEffect(() => {
+    if (!loading) return;
+    setProgress(8);
+    const ticks = [18, 28, 38, 48, 58, 68, 76, 84, 90, 94];
+    let index = 0;
+    const timer = window.setInterval(() => {
+      if (index >= ticks.length) {
+        window.clearInterval(timer);
+        return;
+      }
+      setProgress(ticks[index]);
+      index += 1;
+    }, 1400);
+    return () => window.clearInterval(timer);
+  }, [loading]);
   const backUnlocked = mode === "SINGLE" && Boolean(back);
   const imageCount = plannedImageCount({
     angles,
@@ -151,15 +170,15 @@ export function ShootPage() {
 
   async function generate() {
     if (!modelAge) {
-      setError("Choose a model age");
+      setError(t("shoot.chooseAge"));
       return;
     }
     if (mode === "SINGLE" && !front) {
-      setError("Front photo is required");
+      setError(t("shoot.frontRequiredErr"));
       return;
     }
     if (mode === "COMBO" && products.length === 0) {
-      setError("Upload at least one product photo");
+      setError(t("shoot.frontRequiredErr"));
       return;
     }
     if (angles.length === 0) {
@@ -167,6 +186,7 @@ export function ShootPage() {
       return;
     }
     setLoading(true);
+    setProgress(5);
     setError("");
     const form = new FormData();
     form.append("mode", mode);
@@ -179,6 +199,7 @@ export function ShootPage() {
     if (mode === "COMBO") products.forEach((item) => form.append("products", item.file));
     try {
       const { data } = await api.post<ApiResponse<ShootResult>>("/shoots", form, { timeout: 300000 });
+      setProgress(100);
       setResult(data.data);
     } catch (err) {
       setError(apiErrorMessage(err, "Could not generate catalog photos"));
@@ -190,12 +211,12 @@ export function ShootPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold">Shoot</h1>
-        <p className="text-slate-500">Turn a garment photo into catalog images with OpenAI. Colour, print, and design stay locked to your photo.</p>
+        <h1 className="text-2xl font-semibold">{t("shoot.title")}</h1>
+        <p className="text-slate-500">{t("shoot.subtitle")}</p>
       </div>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <Step n={1} title="Upload your photos" hint="Front required, back optional." />
+        <Step n={1} title={t("shoot.upload")} hint={t("shoot.frontRequired")} />
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
@@ -395,13 +416,29 @@ export function ShootPage() {
         <p className="text-sm text-slate-600">Free trial generated 1 image. A paid plan generates every angle you select.</p>
       )}
 
+      {loading && (
+        <div className="space-y-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-slate-800">{t("shoot.generating")}</span>
+            <span className="tabular-nums font-semibold text-teal-800">{progress}%</span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-teal-600 transition-[width] duration-500 ease-out"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-500">{t("shoot.progressHint")}</p>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={generate}
         disabled={loading || imageCount === 0}
         className="w-full rounded-2xl bg-slate-800 px-5 py-3 font-semibold text-white disabled:opacity-60"
       >
-        {loading ? "Generating catalog photos…" : `Generate ${imageCount} image${imageCount === 1 ? "" : "s"}`}
+        {loading ? t("shoot.generatingPct", { pct: progress }) : t("shoot.generate")}
       </button>
 
       {(result?.images.length ?? 0) > 0 && result && (
@@ -412,7 +449,7 @@ export function ShootPage() {
               <figcaption className="flex items-center justify-between px-3 py-2 text-sm">
                 <span>{KIND_LABEL[image.kind] || image.kind}</span>
                 <button type="button" className="inline-flex items-center gap-1 font-medium text-teal-800" onClick={() => downloadShootImage(result.id, image)}>
-                  <Download size={14} /> Download
+                  <Download size={14} /> {t("shoot.download")}
                 </button>
               </figcaption>
             </figure>

@@ -286,7 +286,11 @@ public class GstVerificationService {
         }
     }
 
-    /** Parses gstinapi.in GET /v1/gstin/{gstin} JSON. */
+    /**
+     * Parses gstinapi.in GET /v1/gstin/{gstin} JSON.
+     *
+     * <p>Live responses nest payload under {@code data}; sandbox / older responses may be flat at the root.
+     */
     public static Registered parseGstinApiResponse(JsonNode root) {
         if (root == null || root.isNull()) {
             throw ApiException.unavailable("GST verification returned an empty response");
@@ -298,7 +302,14 @@ public class GstVerificationService {
             }
             throw ApiException.badRequest(StringUtils.hasText(message) ? message : "GSTIN verification failed");
         }
-        String status = text(root.get("status"));
+        JsonNode payload = root.get("data");
+        if (payload == null || payload.isNull() || !payload.isObject()) {
+            payload = root;
+        }
+        String status = text(payload.get("status"));
+        if (!StringUtils.hasText(status)) {
+            status = text(root.get("status"));
+        }
         if (StringUtils.hasText(status)) {
             String normalized = status.trim().toUpperCase(Locale.ROOT);
             if (INACTIVE_STATUSES.contains(normalized)
@@ -308,9 +319,10 @@ public class GstVerificationService {
                 throw ApiException.badRequest("This GSTIN is not active (" + status + ")");
             }
         }
-        String legalName = text(root.get("legal_name"));
-        String tradeName = text(root.get("trade_name"));
+        String legalName = firstText(payload, root, "legal_name");
+        String tradeName = firstText(payload, root, "trade_name");
         if (!StringUtils.hasText(legalName) && !StringUtils.hasText(tradeName)) {
+            log.warn("GSTINAPI success response missing legal/trade name body={}", truncate(root.toString()));
             throw ApiException.badRequest("GST registry did not return a registered name for this GSTIN");
         }
         return new Registered(legalName, tradeName);
@@ -372,6 +384,18 @@ public class GstVerificationService {
         }
         String value = node.asText();
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /** Prefer nested payload field, then root (flat sandbox responses). */
+    private static String firstText(JsonNode primary, JsonNode fallback, String field) {
+        String value = text(primary == null ? null : primary.get(field));
+        if (StringUtils.hasText(value)) {
+            return value;
+        }
+        if (fallback != null && fallback != primary) {
+            return text(fallback.get(field));
+        }
+        return null;
     }
 
     private static String truncate(String body) {

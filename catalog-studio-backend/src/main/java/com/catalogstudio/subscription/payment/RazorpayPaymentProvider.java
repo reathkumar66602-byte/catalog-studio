@@ -2,10 +2,7 @@ package com.catalogstudio.subscription.payment;
 
 import org.springframework.stereotype.Component;
 
-/**
- * Placeholder for a later Razorpay (and similar hosted) checkout.
- * Scanner + WhatsApp remains the live path until this provider is enabled.
- */
+/** Placeholder — not used while Cashfree is the live gateway. */
 @Component
 public class RazorpayPaymentProvider implements PaymentProvider {
 
@@ -20,7 +17,9 @@ public class RazorpayPaymentProvider implements PaymentProvider {
     }
 
     @Override
-    public CheckoutSession createCheckout(Long userId, String planName) {
-        return new CheckoutSession("RAZORPAY", "/subscription?plan=" + planName, "razorpay-pending-" + userId);
+    public CheckoutSession createCheckout(PaymentCheckoutCommand command) {
+        String plan = command == null || command.planName() == null ? "" : command.planName();
+        Long userId = command == null ? 0L : command.userId();
+        return new CheckoutSession("RAZORPAY", "/subscription/pay?plan=" + plan, "razorpay-pending-" + userId);
     }
 }

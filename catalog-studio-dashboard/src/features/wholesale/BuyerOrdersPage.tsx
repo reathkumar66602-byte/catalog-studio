@@ -3,6 +3,8 @@ import { Mail, Phone } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
+import { useI18n } from "../../i18n/LanguageProvider";
+import { BillPdfButton } from "./BillPdfButton";
 import {
   formatDateTime,
   formatInr,
@@ -12,6 +14,7 @@ import {
 } from "./wholesale";
 
 export function BuyerOrdersPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [page, setPage] = useState(0);
 
@@ -35,23 +38,29 @@ export function BuyerOrdersPage() {
     <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold">My wholesale orders</h1>
-          <p className="text-sm text-slate-500">
-            Supplier phone and email appear here once the supplier accepts your order.
-          </p>
+          <h1 className="text-2xl font-semibold">{t("buyerOrders.title")}</h1>
+          <p className="text-sm text-slate-500">{t("buyerOrders.subtitle")}</p>
         </div>
-        <Link to="/live-stock" className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white">
-          Browse Live Stock
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/live-stock/bills"
+            className="rounded-xl border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+          >
+            My bills
+          </Link>
+          <Link to="/live-stock" className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white">
+            {t("buyerOrders.browse")}
+          </Link>
+        </div>
       </div>
 
-      {orders.isLoading && <p className="text-sm text-slate-500">Loading orders...</p>}
+      {orders.isLoading && <p className="text-sm text-slate-500">{t("buyerOrders.loading")}</p>}
       {orders.isError && <p className="text-sm text-red-600">{apiErrorMessage(orders.error)}</p>}
       {cancel.isError && <p className="text-sm text-red-600">{apiErrorMessage(cancel.error)}</p>}
 
       {!orders.isLoading && items.length === 0 && (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900">
-          You have not booked any stock yet.
+          {t("buyerOrders.empty")}
         </div>
       )}
 
@@ -76,11 +85,11 @@ export function BuyerOrdersPage() {
             <table className="w-full min-w-[480px] text-left text-sm">
               <thead className="text-xs text-slate-500">
                 <tr>
-                  <th className="py-1">Item</th>
-                  <th>Colour / Size</th>
-                  <th className="text-right">Qty</th>
-                  <th className="text-right">Price</th>
-                  <th className="text-right">Total</th>
+                  <th className="py-1">{t("common.item")}</th>
+                  <th>{t("common.colourSize")}</th>
+                  <th className="text-right">{t("common.qty")}</th>
+                  <th className="text-right">{t("common.price")}</th>
+                  <th className="text-right">{t("common.total")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,17 +118,27 @@ export function BuyerOrdersPage() {
             </table>
           </div>
 
+          <div className="w-full space-y-1 rounded-xl bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800">
+            <div className="flex justify-between"><span>Subtotal</span><span>{formatInr(order.subtotal)}</span></div>
+            {(order.discountAmount || 0) > 0 && (
+              <div className="flex justify-between text-emerald-700">
+                <span>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+                <span>-{formatInr(order.discountAmount)}</span>
+              </div>
+            )}
+            {(order.cgstAmount || 0) > 0 && (
+              <div className="flex justify-between"><span>CGST</span><span>{formatInr(order.cgstAmount)}</span></div>
+            )}
+            {(order.sgstAmount || 0) > 0 && (
+              <div className="flex justify-between"><span>SGST</span><span>{formatInr(order.sgstAmount)}</span></div>
+            )}
+            <div className="flex justify-between font-semibold">
+              <span>Bill total</span>
+              <span>{formatInr(order.acceptedTotal ?? order.grandTotal ?? order.subtotal)}</span>
+            </div>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span className="font-semibold">
-              {order.acceptedTotal != null && order.acceptedTotal !== order.subtotal ? (
-                <>
-                  Accepted total: {formatInr(order.acceptedTotal)}{" "}
-                  <span className="text-xs font-normal text-slate-400 line-through">{formatInr(order.subtotal)}</span>
-                </>
-              ) : (
-                <>Total: {formatInr(order.acceptedTotal ?? order.subtotal)}</>
-              )}
-            </span>
+            <span />
             {order.status === "PLACED" && (
               <button
                 type="button"
@@ -129,7 +148,7 @@ export function BuyerOrdersPage() {
                 }}
                 className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
               >
-                Cancel order
+                {t("buyerOrders.cancel")}
               </button>
             )}
           </div>
@@ -139,6 +158,14 @@ export function BuyerOrdersPage() {
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               Supplier note: {order.supplierNote}
             </p>
+          )}
+
+          {order.billPdfUrl && (
+            <BillPdfButton
+              url={order.billPdfUrl}
+              orderNumber={order.orderNumber}
+              className="inline-flex rounded-xl border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50"
+            />
           )}
 
           {order.supplierContact ? (
@@ -173,10 +200,10 @@ export function BuyerOrdersPage() {
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-40"
           >
-            Previous
+            {t("common.previous")}
           </button>
           <span className="text-slate-500">
-            Page {orders.data.page + 1} of {orders.data.totalPages}
+            {t("common.pageOf", { page: orders.data.page + 1, total: orders.data.totalPages })}
           </span>
           <button
             type="button"
@@ -184,7 +211,7 @@ export function BuyerOrdersPage() {
             onClick={() => setPage((p) => p + 1)}
             className="rounded-lg border px-3 py-1.5 disabled:opacity-40"
           >
-            Next
+            {t("common.next")}
           </button>
         </div>
       )}

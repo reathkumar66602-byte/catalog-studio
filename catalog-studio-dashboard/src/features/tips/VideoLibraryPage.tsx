@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, MessageCircle, PlayCircle, Send } from "lucide-react";
+import { MessageCircle, PlayCircle, Send } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 import { useI18n } from "../../i18n/LanguageProvider";
 import type { LocaleCode } from "../../i18n/catalog";
@@ -14,7 +15,6 @@ type TipVideo = {
   language?: string;
   seriesKey?: string;
   publicUrl: string;
-  downloadUrl?: string;
   contentType: string;
   sizeBytes: number;
   createdAt: string;
@@ -53,11 +53,6 @@ function preferredLang(locale: LocaleCode): VideoLang {
   if (locale === "hi") return "HI";
   if (locale === "bn") return "BN";
   return "EN";
-}
-
-function downloadHref(video: TipVideo) {
-  if (video.downloadUrl) return video.downloadUrl;
-  return video.publicUrl.includes("?") ? `${video.publicUrl}&download=1` : `${video.publicUrl}?download=1`;
 }
 
 function groupLessons(videos: TipVideo[]): LessonGroup[] {
@@ -112,8 +107,23 @@ export function VideoLibraryPage({
         <p className="mt-2 text-xs text-slate-500">{t("tips.langHint")}</p>
       </div>
       {videos.isLoading && <p className="text-sm text-slate-500">{t("tips.loading")}</p>}
-      {videos.isError && <p className="text-sm text-red-600">{apiErrorMessage(videos.error)}</p>}
-      {!videos.isLoading && lessons.length === 0 && (
+      {videos.isError && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950">
+          <p className="text-sm font-medium text-red-700">{apiErrorMessage(videos.error)}</p>
+          {apiPath === "/tutorials" && (
+            <div className="mt-4">
+              <p className="text-sm text-amber-900/90">{t("tips.subscribeHint")}</p>
+              <Link
+                to="/subscription?filter=tutorial"
+                className="mt-3 inline-flex rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
+              >
+                {t("tips.subscribeCta")}
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+      {!videos.isLoading && !videos.isError && lessons.length === 0 && (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
           {t("tips.empty")}
         </div>
@@ -223,14 +233,6 @@ function LessonCard({
             {formatBytes(active.sizeBytes)} · {new Date(active.createdAt).toLocaleString()}
           </p>
         </div>
-        <a
-          href={downloadHref(active)}
-          download
-          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          <Download className="h-3.5 w-3.5" />
-          {t("tips.download")}
-        </a>
       </div>
 
       {available.length > 1 && (
@@ -261,9 +263,12 @@ function LessonCard({
         ref={videoRef}
         className="aspect-video w-full bg-black"
         controls
+        controlsList="nodownload noplaybackrate"
+        disablePictureInPicture
         preload="metadata"
         playsInline
         src={active.publicUrl}
+        onContextMenu={(e) => e.preventDefault()}
         onPlay={() => void requestWakeLock()}
         onPause={() => void releaseWakeLock()}
         onEnded={() => void releaseWakeLock()}

@@ -12,6 +12,7 @@ import com.catalogstudio.wholesale.service.WholesaleCatalogService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/wholesale")
 @RequiredArgsConstructor
 @Tag(name = "Wholesale catalog")
+@ConditionalOnProperty(name = "catalogstudio.modules.wholesale-enabled", havingValue = "true", matchIfMissing = true)
 public class WholesaleCatalogController {
 
     private final WholesaleCatalogService catalogService;

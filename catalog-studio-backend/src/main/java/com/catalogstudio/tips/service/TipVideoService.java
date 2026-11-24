@@ -350,7 +350,6 @@ public class TipVideoService {
         TipVideo.Kind kind = video.getKind() == null ? TipVideo.Kind.ECOMMERCE_TUTORIAL : video.getKind();
         TipVideo.Language language = video.getLanguage() == null ? TipVideo.Language.EN : video.getLanguage();
         UUID seriesKey = video.getSeriesKey() == null ? video.getUuid() : video.getSeriesKey();
-        String downloadUrl = downloadUrlFor(video);
         return new TipVideoResponse(
                 video.getUuid(),
                 video.getTitle(),
@@ -358,19 +357,11 @@ public class TipVideoService {
                 language.name(),
                 seriesKey,
                 video.getPublicUrl(),
-                downloadUrl,
+                null,
                 video.getContentType(),
                 video.getSizeBytes(),
                 email,
                 video.getCreatedAt());
-    }
-
-    private String downloadUrlFor(TipVideo video) {
-        String publicUrl = video.getPublicUrl();
-        if (!StringUtils.hasText(publicUrl)) {
-            return publicUrl;
-        }
-        return publicUrl.contains("?") ? publicUrl + "&download=1" : publicUrl + "?download=1";
     }
 
     private TipVideoCommentResponse toCommentResponse(TipVideoComment comment) {

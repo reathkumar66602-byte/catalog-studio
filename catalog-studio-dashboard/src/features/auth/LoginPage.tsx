@@ -21,7 +21,12 @@ export function LoginPage() {
       setError("Login did not return a session");
       return;
     }
-    setSession(flow.session.user, flow.session.accessToken, flow.session.refreshToken);
+    setSession(
+      flow.session.user,
+      flow.session.accessToken,
+      flow.session.refreshToken,
+      flow.session.expiresInSeconds,
+    );
     const requested = params.get("next");
     const next = flow.session.user.requiresRecharge
       ? "/subscription"

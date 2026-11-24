@@ -54,6 +54,23 @@ class ListingCopyNormalizerTest {
         assertThat(ListingCopyNormalizer.colorMismatch("Women's Navy Blue Shirt", "Navy Blue")).isFalse();
     }
 
+    @Test
+    void alwaysReturnsFourDescriptionsAndRicherKeywords() {
+        ProductAnalysisResponse ai = sample(
+                "Men",
+                "Black",
+                "Solid",
+                "Blazer",
+                List.of("Men's Black Blazer for Formal Wear"),
+                List.of("A sharp black blazer with notched collar and full sleeves.")
+        );
+        ProductAnalysisResponse out = ListingCopyNormalizer.align(ai);
+        assertThat(out.suggestedDescriptions()).hasSize(4);
+        assertThat(out.suggestedDescriptions()).allMatch(text -> text != null && text.length() >= 40);
+        assertThat(out.keywords().size()).isGreaterThanOrEqualTo(6);
+        assertThat(out.keywords()).anyMatch(k -> k.toLowerCase().contains("blazer"));
+    }
+
     private ProductAnalysisResponse sample(
             String gender,
             String color,

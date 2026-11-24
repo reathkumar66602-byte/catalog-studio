@@ -108,7 +108,7 @@ export function BillingAdminPage() {
       <div>
         <h1 className="text-2xl font-semibold">Trial and payment</h1>
         <p className="text-slate-500">
-          Trial days, PhonePe scanner, GST, and promo codes. Service charge can be changed only by a super admin.
+          Trial days, Cashfree gateway, GST, and promo codes. Live payments use Cashfree Payment Links; plans activate via webhook.
         </p>
       </div>
       <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6">
@@ -135,15 +135,20 @@ export function BillingAdminPage() {
           </label>
           <label className="block text-sm font-medium">
             Payment provider
-            <select name="paymentProvider" defaultValue={data.paymentProvider || "MANUAL"} className="mt-1 w-full rounded-xl border px-3 py-2">
-              <option value="MANUAL">Scanner + WhatsApp (live)</option>
-              <option value="RAZORPAY">Razorpay (not enabled yet)</option>
+            <select name="paymentProvider" defaultValue={data.paymentProvider || "CASHFREE"} className="mt-1 w-full rounded-xl border px-3 py-2">
+              <option value="CASHFREE">Cashfree Payment Links (live)</option>
+              <option value="MANUAL">Manual (disabled when Cashfree keys are set)</option>
             </select>
           </label>
           <label className="block text-sm font-medium sm:col-span-2">
-            Scanner screenshot URL
-            <input name="qrImageUrl" defaultValue={data.qrImageUrl || "/payment-qr.jpg"} className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="/payment-qr.jpg" />
+            Legacy scanner URL (unused)
+            <input name="qrImageUrl" defaultValue={data.qrImageUrl || ""} className="mt-1 w-full rounded-xl border px-3 py-2" placeholder="Not used with Cashfree" />
           </label>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          Cashfree webhook (Payments / Orders):{" "}
+          <code className="font-mono text-xs">https://www.catalogstudio.in/api/v1/payments/cashfree/webhook</code>
+          <div className="mt-1 text-xs">Also whitelist domain <strong>www.catalogstudio.in</strong> under Developers → Whitelisting.</div>
         </div>
 
         <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-4">
@@ -188,14 +193,10 @@ export function BillingAdminPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-black p-3 sm:max-w-xs">
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Current scanner</p>
-          <img src={data.qrImageUrl || "/payment-qr.jpg"} alt="Configured payment scanner" className="mt-2 w-full rounded-xl object-contain" />
-        </div>
         <label className="block text-sm font-medium">
-          WhatsApp message template
+          Support WhatsApp template (optional)
           <textarea name="whatsappMessageTemplate" defaultValue={data.whatsappMessageTemplate} rows={3} className="mt-1 w-full rounded-xl border px-3 py-2" />
-          <span className="mt-1 block text-xs text-slate-500">Placeholders: {"{{plan}} {{amount}} {{email}} {{upi}} {{payee}} {{promo}}"}</span>
+          <span className="mt-1 block text-xs text-slate-500">Support only — not used for payment confirmation.</span>
         </label>
         <label className="block text-sm font-medium">
           Payment instructions

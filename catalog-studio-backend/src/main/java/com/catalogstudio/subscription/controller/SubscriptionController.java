@@ -5,6 +5,7 @@ import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.subscription.dto.BillingPromoCodeResponse;
 import com.catalogstudio.subscription.dto.CheckoutRequest;
 import com.catalogstudio.subscription.dto.PaymentCheckoutResponse;
+import com.catalogstudio.subscription.dto.PaymentStatusResponse;
 import com.catalogstudio.subscription.dto.PriceBreakdown;
 import com.catalogstudio.subscription.dto.SubscriptionStatusResponse;
 import com.catalogstudio.subscription.entity.SubscriptionPlan;
@@ -65,14 +66,19 @@ public class SubscriptionController {
             @RequestBody(required = false) CheckoutRequest request
     ) {
         String promo = request == null ? null : request.promoCode();
-        return ApiResponse.ok(accessService.checkout(SecurityUtils.currentUserId(), name, promo));
+        String phone = request == null ? null : request.customerPhone();
+        String returnOrigin = request == null ? null : request.returnOrigin();
+        return ApiResponse.ok(accessService.checkout(SecurityUtils.currentUserId(), name, promo, phone, returnOrigin));
+    }
+
+    @GetMapping("/payments/{orderId}")
+    public ApiResponse<PaymentStatusResponse> paymentStatus(@PathVariable String orderId) {
+        return ApiResponse.ok(accessService.paymentStatus(SecurityUtils.currentUserId(), orderId));
     }
 
     @PostMapping("/plans/{name}/payment-sent")
     public ApiResponse<SubscriptionStatusResponse> paymentSent(@PathVariable String name) {
-        return ApiResponse.ok(
-                "Payment screenshot noted. Keep your registered email in the WhatsApp message.",
-                accessService.markPaymentSent(SecurityUtils.currentUserId(), name));
+        return ApiResponse.ok(accessService.markPaymentSent(SecurityUtils.currentUserId(), name));
     }
 
     private Map<String, Object> toPlan(SubscriptionPlan plan) {

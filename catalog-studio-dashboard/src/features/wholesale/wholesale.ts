@@ -2,6 +2,19 @@ import type { SubscriptionStatus } from "../../types";
 
 export type WholesaleCategory = { id: string; name: string; slug: string; productCount: number };
 
+/** AI suggestions from POST /wholesale/supplier/products/autofill */
+export type ProductAutofill = {
+  title?: string | null;
+  description?: string | null;
+  details?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  primaryColor?: string | null;
+  colorHex?: string | null;
+  productType?: string | null;
+  overallConfidence?: number | null;
+};
+
 export type PageResult<T> = {
   items: T[];
   page: number;
@@ -61,7 +74,15 @@ export type ProductDetail = {
   totalStock: number;
   bookedCount: number;
   category: WholesaleCategory;
-  store: { id: string; name: string; slug: string; city?: string | null; state?: string | null };
+  store: {
+    id: string;
+    name: string;
+    slug: string;
+    city?: string | null;
+    state?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  };
   images: { id: string; url: string; colorLabel?: string | null; sortOrder: number }[];
   colors: ColorSwatch[];
   sizes: string[];
@@ -76,6 +97,9 @@ export type WholesaleStore = {
   description?: string | null;
   city?: string | null;
   state?: string | null;
+  addressLine?: string | null;
+  pincode?: string | null;
+  pan?: string | null;
   status: string;
   productCount: number;
   categories: WholesaleCategory[];
@@ -85,6 +109,38 @@ export type WholesaleStore = {
   gstVerifiedAt?: string | null;
   phone?: string | null;
   email?: string | null;
+  gstPercent?: number | null;
+  bankAccountName?: string | null;
+  bankAccountNumber?: string | null;
+  bankName?: string | null;
+  bankIfsc?: string | null;
+  bankBranch?: string | null;
+  invoiceTerms?: string | null;
+};
+
+export type WholesaleCoupon = {
+  id: string;
+  code: string;
+  discountType: "PERCENT" | "FIXED";
+  discountValue: number;
+  minOrder?: number | null;
+  maxDiscount?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  usageLimit?: number | null;
+  usedCount: number;
+  active: boolean;
+};
+
+export type OrderBillPreview = {
+  subtotal: number;
+  discountAmount: number;
+  taxableAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  gstPercent: number;
+  grandTotal: number;
+  couponCode?: string | null;
 };
 
 export type OrderItem = {
@@ -95,6 +151,7 @@ export type OrderItem = {
   colorLabel?: string | null;
   sizeLabel?: string | null;
   sku?: string | null;
+  hsnSac?: string | null;
   unitPrice: number;
   acceptedUnitPrice?: number | null;
   quantity: number;
@@ -105,19 +162,39 @@ export type WholesaleOrder = {
   id: string;
   orderNumber: string;
   status: "PLACED" | "ACCEPTED" | "REJECTED" | "CANCELLED" | "FULFILLED";
+  source?: "ONLINE" | "MANUAL" | null;
   buyerNote?: string | null;
   supplierNote?: string | null;
   subtotal: number;
+  discountAmount?: number | null;
+  taxableAmount?: number | null;
+  cgstAmount?: number | null;
+  sgstAmount?: number | null;
+  gstPercent?: number | null;
+  grandTotal?: number | null;
+  couponCode?: string | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+  buyerMobile?: string | null;
+  buyerGstin?: string | null;
+  buyerAddress?: string | null;
   acceptedTotal?: number | null;
   currency: string;
   placedAt: string;
   acceptedAt?: string | null;
   rejectedAt?: string | null;
+  billPdfUrl?: string | null;
   storeId?: string | null;
   storeName?: string | null;
   items: OrderItem[];
   supplierContact?: { phone?: string | null; email?: string | null } | null;
-  buyer?: { name?: string | null; email?: string | null; mobile?: string | null } | null;
+  buyer?: {
+    name?: string | null;
+    email?: string | null;
+    mobile?: string | null;
+    gstin?: string | null;
+    address?: string | null;
+  } | null;
 };
 
 export function formatInr(value?: number | null) {
@@ -138,7 +215,8 @@ export function priceRange(min?: number | null, max?: number | null) {
 /** Same rule as the backend: plan SUPPLIER or features.wholesaleSupplier = true. */
 export function canSupply(access?: Pick<SubscriptionStatus, "plan" | "features" | "accessEntitled"> | null) {
   if (!access) return false;
-  if (String(access.plan || "").toUpperCase() === "SUPPLIER") return true;
+  const plan = String(access.plan || "").toUpperCase();
+  if (plan === "SUPPLIER" || plan.startsWith("SUPPLIER_")) return true;
   const flag = access.features?.wholesaleSupplier;
   return flag === true || flag === "true";
 }
@@ -166,4 +244,21 @@ export function formatDateTime(value?: string | null) {
   return Number.isNaN(date.getTime())
     ? ""
     : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** Fetch bill PDF as a blob and trigger a real file download (avoids PWA/SPA navigation). */
+export async function downloadBillPdf(url: string, orderNumber?: string | null) {
+  const response = await fetch(url, { credentials: "omit", cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Could not download bill PDF");
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = `${(orderNumber || "invoice").replace(/[^\w.-]+/g, "_")}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
 }

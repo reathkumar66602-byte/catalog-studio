@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { ApiResponse, AuthPayload } from "../types";
+import { accessNeedsRefresh, refreshAccessToken } from "./session";
 
 const baseURL = import.meta.env.VITE_API_URL || "/api/v1";
 
@@ -8,12 +8,19 @@ export const api = axios.create({
   timeout: 120000,
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("cs_access");
+api.interceptors.request.use(async (config) => {
   const url = String(config.url || "");
   const publicSite = url === "/site" || url.startsWith("/site/");
   const publicAuth =
-    url.startsWith("/auth/forgot-password") || url.startsWith("/auth/reset-password");
+    url.startsWith("/auth/forgot-password") ||
+    url.startsWith("/auth/reset-password") ||
+    url.startsWith("/auth/refresh-token") ||
+    url.startsWith("/auth/login") ||
+    url.startsWith("/auth/register");
+  if (!publicSite && !publicAuth && accessNeedsRefresh() && localStorage.getItem("cs_refresh")) {
+    await refreshAccessToken();
+  }
+  const token = localStorage.getItem("cs_access");
   if (token && !publicSite && !publicAuth) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -30,20 +37,13 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       original._retry = true;
-      try {
-        const refresh = localStorage.getItem("cs_refresh");
-        const { data } = await axios.post<ApiResponse<AuthPayload>>(`${baseURL}/auth/refresh-token`, {
-          refreshToken: refresh,
-        });
-        localStorage.setItem("cs_access", data.data.accessToken);
-        localStorage.setItem("cs_refresh", data.data.refreshToken);
-        original.headers.Authorization = `Bearer ${data.data.accessToken}`;
+      const access = await refreshAccessToken();
+      if (access) {
+        original.headers.Authorization = `Bearer ${access}`;
         return api(original);
-      } catch {
-        localStorage.removeItem("cs_access");
-        localStorage.removeItem("cs_refresh");
-        window.location.href = "/login";
       }
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?next=${next}`;
     }
     if (error.response?.status === 402) {
       const here = window.location.pathname;

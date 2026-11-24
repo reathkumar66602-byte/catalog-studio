@@ -1,10 +1,14 @@
 package com.catalogstudio.wholesale.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** Owner-only fields (gstin, phone, email, GST status) are null on public listings. */
+/**
+ * Phone is always exposed for public store pages.
+ * Owner-only fields (gstin, email, GST status) are null on public listings.
+ */
 public record StoreResponse(
         UUID id,
         String storeName,
@@ -12,6 +16,9 @@ public record StoreResponse(
         String description,
         String city,
         String state,
+        String addressLine,
+        String pincode,
+        String pan,
         String status,
         int productCount,
         List<CategoryResponse> categories,
@@ -20,5 +27,12 @@ public record StoreResponse(
         String gstVerificationStatus,
         Instant gstVerifiedAt,
         String phone,
-        String email
+        String email,
+        BigDecimal gstPercent,
+        String bankAccountName,
+        String bankAccountNumber,
+        String bankName,
+        String bankIfsc,
+        String bankBranch,
+        String invoiceTerms
 ) {}

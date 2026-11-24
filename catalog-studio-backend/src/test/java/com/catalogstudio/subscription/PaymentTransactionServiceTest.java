@@ -10,6 +10,7 @@ import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionStatu
 import com.catalogstudio.subscription.entity.PaymentTransaction.TransactionType;
 import com.catalogstudio.subscription.entity.SubscriptionPlan;
 import com.catalogstudio.subscription.repository.PaymentTransactionRepository;
+import com.catalogstudio.subscription.service.BillingSettingsService;
 import com.catalogstudio.subscription.service.PaymentTransactionService;
 import com.catalogstudio.user.entity.User;
 import java.math.BigDecimal;
@@ -24,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PaymentTransactionServiceTest {
 
     @Mock PaymentTransactionRepository transactionRepository;
+    @Mock BillingSettingsService billingSettingsService;
     @InjectMocks PaymentTransactionService paymentTransactionService;
 
     @Test

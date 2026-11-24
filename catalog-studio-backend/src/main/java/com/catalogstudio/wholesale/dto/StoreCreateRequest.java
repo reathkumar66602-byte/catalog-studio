@@ -1,9 +1,12 @@
 package com.catalogstudio.wholesale.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,5 +19,6 @@ public record StoreCreateRequest(
         @NotBlank @Size(max = 120) String state,
         @NotBlank @Pattern(regexp = "^[+0-9][0-9 \\-]{7,18}$", message = "Enter a valid phone number") String phone,
         @NotBlank @Email @Size(max = 255) String email,
+        @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal gstPercent,
         List<UUID> categoryIds
 ) {}

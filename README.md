@@ -10,10 +10,15 @@ The application **never auto-submits** a marketplace listing. Sellers review AI 
 
 | Path | Description |
 | --- | --- |
-| `catalog-studio-backend/` | Spring Boot 3.4 / Java 21 API, PostgreSQL, Flyway, JWT, OpenAPI |
-| `listingai-dashboard/` | React + Vite seller dashboard |
-| `listingai-extension/` | Chrome Manifest V3 autofill extension |
-| `docker-compose.yml` | PostgreSQL + API + dashboard |
+| `catalog-studio-backend/` | Platform API (transitional monolith for non-extracted domains) |
+| `services/supplier-service/` | Independent Supplier Management (wholesale) microservice |
+| `gateway/api-gateway/` | Spring Cloud Gateway (public `/api` entry) |
+| `platform/` | Shared libraries (`platform-common`, `platform-security`, `platform-events`) |
+| `services/*-service/` | Scaffolds for identity, product, marketplace, billing, notification, media |
+| `catalog-studio-dashboard/` | React + Vite seller dashboard |
+| `catalog-studio-extension/` | Chrome Manifest V3 autofill extension |
+| `docs/ARCHITECTURE_MICROSERVICES.md` | Service boundaries and cutover runbook |
+| `docker-compose.yml` | Postgres, Redis, RabbitMQ, platform, supplier, gateway, dashboard |
 | `.env.example` | Environment template |
 
 ## Prerequisites

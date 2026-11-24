@@ -46,6 +46,8 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: "/index.html",
+        // Never serve the SPA shell for API/file URLs (bill PDFs, uploads, etc.).
+        navigateFallbackDenylist: [/^\/api\//, /^\/swagger-ui/, /^\/v3\/api-docs/],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff2}"],
         runtimeCaching: [
           {

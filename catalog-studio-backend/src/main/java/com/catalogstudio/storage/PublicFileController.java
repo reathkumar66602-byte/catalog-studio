@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Serves uploaded/generated files under {@code /api/v1/files/**}.
- * PDFs always download. Videos/images are inline unless {@code ?download=1}.
+ * PDFs always download. Images may use {@code ?download=1}. Videos are always inline
+ * (download attachments are refused so tip/tutorial clips stay stream-only).
  */
 @RestController
 @RequestMapping("/api/v1/files")
@@ -28,9 +29,10 @@ public class PublicFileController {
             @RequestParam(value = "download", required = false) String downloadFlag) {
         byte[] bytes = storageService.read(fileName);
         MediaType mediaType = mediaTypeFor(fileName);
-        boolean forceDownload = "1".equals(downloadFlag)
-                || "true".equalsIgnoreCase(downloadFlag)
-                || fileName.toLowerCase(Locale.ROOT).endsWith(".pdf");
+        boolean video = isVideo(fileName);
+        boolean wantDownload = "1".equals(downloadFlag) || "true".equalsIgnoreCase(downloadFlag);
+        boolean forceDownload = !video
+                && (wantDownload || fileName.toLowerCase(Locale.ROOT).endsWith(".pdf"));
         String disposition = (forceDownload ? "attachment" : "inline") + "; filename=\"" + fileName + "\"";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
@@ -38,6 +40,11 @@ public class PublicFileController {
                 .contentType(mediaType)
                 .contentLength(bytes.length)
                 .body(bytes);
+    }
+
+    private static boolean isVideo(String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".mov");
     }
 
     private static MediaType mediaTypeFor(String fileName) {

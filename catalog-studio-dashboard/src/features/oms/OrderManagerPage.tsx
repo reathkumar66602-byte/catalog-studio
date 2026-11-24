@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { api, apiErrorMessage } from "../../api/client";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type ChannelOrder = {
   id: string;
@@ -19,6 +20,7 @@ type ChannelOrder = {
 };
 
 export function OrderManagerPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [channel, setChannel] = useState("ALL");
   const [message, setMessage] = useState("");
@@ -55,7 +57,7 @@ export function OrderManagerPage() {
     mutationFn: async (orderId: string) =>
       (await api.post(`/oms/orders/${orderId}/courier`, { provider: courierProvider })).data.data,
     onSuccess: async () => {
-      setMessage("Courier shipment created");
+      setMessage(t("oms.courierCreated"));
       await qc.invalidateQueries({ queryKey: ["oms-orders"] });
       await qc.invalidateQueries({ queryKey: ["oms-couriers"] });
     },
@@ -66,11 +68,8 @@ export function OrderManagerPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Order Manager</h1>
-        <p className="text-slate-500">
-          Base-style inbox for Flipkart, Amazon, and Meesho. Sync pulls live channel orders; courier creates AWB beyond
-          marketplace labels.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("oms.title")}</h1>
+        <p className="text-slate-500">{t("oms.subtitle")}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -92,7 +91,7 @@ export function OrderManagerPage() {
           onClick={() => syncChannel.mutate("orders")}
           className="rounded-xl border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-50"
         >
-          Sync orders
+          {t("oms.syncOrders")}
         </button>
         <button
           type="button"
@@ -100,7 +99,7 @@ export function OrderManagerPage() {
           onClick={() => syncChannel.mutate("stock")}
           className="rounded-xl border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-50"
         >
-          Push stock
+          {t("oms.pushStock")}
         </button>
         <button
           type="button"
@@ -108,17 +107,17 @@ export function OrderManagerPage() {
           onClick={() => syncChannel.mutate("labels")}
           className="rounded-xl border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-50"
         >
-          Fetch labels
+          {t("oms.fetchLabels")}
         </button>
         <select
           value={courierProvider}
           onChange={(e) => setCourierProvider(e.target.value)}
           className="rounded-xl border px-3 py-2 text-sm"
         >
-          <option value="MANUAL">Courier: MANUAL</option>
-          <option value="SHIPROCKET">Courier: SHIPROCKET</option>
-          <option value="DELHIVERY">Courier: DELHIVERY</option>
-          <option value="MARKETPLACE">Courier: MARKETPLACE labels</option>
+          <option value="MANUAL">{t("oms.courierManual")}</option>
+          <option value="SHIPROCKET">{t("oms.courierShiprocket")}</option>
+          <option value="DELHIVERY">{t("oms.courierDelhivery")}</option>
+          <option value="MARKETPLACE">{t("oms.courierMarketplace")}</option>
         </select>
       </div>
 
@@ -133,21 +132,21 @@ export function OrderManagerPage() {
         <table className="min-w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
-              <th className="px-3 py-2">Channel</th>
-              <th className="px-3 py-2">Order</th>
-              <th className="px-3 py-2">SKU</th>
-              <th className="px-3 py-2">Qty</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Label</th>
-              <th className="px-3 py-2">AWB</th>
-              <th className="px-3 py-2">Courier</th>
+              <th className="px-3 py-2">{t("oms.channel")}</th>
+              <th className="px-3 py-2">{t("oms.order")}</th>
+              <th className="px-3 py-2">{t("common.sku")}</th>
+              <th className="px-3 py-2">{t("common.qty")}</th>
+              <th className="px-3 py-2">{t("common.status")}</th>
+              <th className="px-3 py-2">{t("oms.label")}</th>
+              <th className="px-3 py-2">{t("oms.awb")}</th>
+              <th className="px-3 py-2">{t("oms.courier")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-6 text-slate-500">
-                  No orders yet. Select a channel and click Sync orders (requires OMS credentials in .env).
+                  {t("oms.empty")}
                 </td>
               </tr>
             )}
@@ -174,7 +173,7 @@ export function OrderManagerPage() {
                     className="rounded-lg border px-2 py-1 text-xs font-semibold"
                     onClick={() => createCourier.mutate(o.id)}
                   >
-                    Create
+                    {t("oms.create")}
                   </button>
                 </td>
               </tr>
@@ -185,8 +184,10 @@ export function OrderManagerPage() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="font-semibold">Listings sync</h2>
-          <p className="mt-1 text-xs text-slate-500">{(listings.data || []).length} listing mirror rows</p>
+          <h2 className="font-semibold">{t("oms.listingsSync")}</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {(listings.data || []).length} {t("oms.listingRows")}
+          </p>
           <ul className="mt-3 space-y-2 text-sm">
             {(listings.data || []).slice(0, 10).map((l: any) => (
               <li key={l.id} className="flex justify-between gap-2 border-b border-slate-100 py-1">
@@ -194,14 +195,14 @@ export function OrderManagerPage() {
                   {l.marketplace} · {l.sku}
                 </span>
                 <span className="text-slate-500">
-                  {l.status} · stock {l.stockMirror ?? "—"}
+                  {l.status} · {t("oms.stock")} {l.stockMirror ?? "—"}
                 </span>
               </li>
             ))}
           </ul>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <h2 className="font-semibold">Courier shipments</h2>
+          <h2 className="font-semibold">{t("oms.courierShipments")}</h2>
           <ul className="mt-3 space-y-2 text-sm">
             {(couriers.data || []).slice(0, 10).map((c: any) => (
               <li key={c.id} className="flex justify-between gap-2 border-b border-slate-100 py-1">

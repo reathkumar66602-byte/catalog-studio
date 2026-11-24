@@ -93,7 +93,7 @@ export function CampaignPanel() {
       const filter =
         run.maxPriorSends == null ? "any prior sends" : `prior sends ≤ ${run.maxPriorSends}`;
       setMessage(
-        `Queued ${run.campaignType} for ${run.totalRecipients} users (${run.channel}, ${filter}). Backend job sends in batches.`,
+        `Queued ${run.campaignType} for ${run.totalRecipients} sellers (${run.channel}, ${filter}). Messages go out in batches.`,
       );
       await qc.invalidateQueries({ queryKey: ["admin-campaign-runs"] });
     },
@@ -106,17 +106,13 @@ export function CampaignPanel() {
       <div>
         <h2 className="text-lg font-semibold">Campaigns & alerts</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Queue email or WhatsApp alerts for a batch of sellers. Edit message structure under{" "}
+          Email a group of sellers. Edit the message under{" "}
           <Link to="/settings/email-templates" className="text-teal-700 underline">
             Email templates → Campaigns
           </Link>
-          . Use “Prior sends” so you do not re-blast users already contacted many times. Deactivated accounts are never
-          included. WhatsApp needs an outbound API — otherwise those items are skipped.
+          . Prior sends keeps people you already contacted off the list. Deactivated accounts are left out.
         </p>
       </div>
-      {caps.data && (
-        <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">{caps.data.whatsappMessage}</p>
-      )}
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <label className="text-sm">
           <span className="mb-1 block text-slate-500">Audience</span>
@@ -136,8 +132,8 @@ export function CampaignPanel() {
           <span className="mb-1 block text-slate-500">Channel</span>
           <select value={channel} onChange={(e) => setChannel(e.target.value)} className="w-full rounded-lg border px-2 py-2">
             <option value="EMAIL">Email</option>
-            <option value="WHATSAPP">WhatsApp</option>
-            <option value="BOTH">Email + WhatsApp</option>
+            {caps.data?.whatsappConfigured && <option value="WHATSAPP">WhatsApp</option>}
+            {caps.data?.whatsappConfigured && <option value="BOTH">Email + WhatsApp</option>}
           </select>
         </label>
         <label className="text-sm">

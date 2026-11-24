@@ -18,9 +18,10 @@ describe("workspace roles", () => {
   });
 
   it("labels seller accounts as User", () => {
-    expect(roleLabel("SELLER")).toBe("User");
-    expect(roleLabel("USER")).toBe("User");
-    expect(roleLabel("ADMIN")).toBe("Admin");
-    expect(roleLabel("SUPERADMIN")).toBe("Super admin");
+    expect(roleLabel("SELLER", "en")).toBe("User");
+    expect(roleLabel("USER", "en")).toBe("User");
+    expect(roleLabel("ADMIN", "en")).toBe("Admin");
+    expect(roleLabel("SUPERADMIN", "en")).toBe("Super admin");
+    expect(roleLabel("SUPERADMIN", "hi")).toBe("सुपर एडमिन");
   });
 });

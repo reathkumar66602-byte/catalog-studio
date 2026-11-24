@@ -22,9 +22,35 @@ public final class ListingCopyNormalizer {
         }
         String gender = canonicalGender(ai.gender());
         List<String> titles = alignTitles(ai.suggestedTitles(), gender, ai.primaryColor(), ai.pattern(), ai.productType());
-        List<String> descriptions = alignDescriptions(ai.suggestedDescriptions(), gender, ai.primaryColor());
+        List<String> descriptions = ensureFourDescriptions(
+                alignDescriptions(ai.suggestedDescriptions(), gender, ai.primaryColor()),
+                ai.productDescription(),
+                gender,
+                ai.primaryColor(),
+                ai.productType(),
+                ai.fit(),
+                ai.occasion(),
+                ai.style(),
+                ai.material(),
+                ai.pattern(),
+                ai.sleeveType(),
+                ai.neckType());
         String productDescription = rewriteAudience(ai.productDescription(), gender);
         productDescription = rewriteColor(productDescription, ai.primaryColor());
+        if ((productDescription == null || productDescription.isBlank()) && !descriptions.isEmpty()) {
+            productDescription = descriptions.getFirst();
+        }
+        List<String> keywords = enrichKeywords(
+                ai.keywords(),
+                gender,
+                ai.primaryColor(),
+                ai.productType(),
+                ai.category(),
+                ai.subCategory(),
+                ai.occasion(),
+                ai.style(),
+                ai.pattern(),
+                ai.material());
         return new ProductAnalysisResponse(
                 ai.productType(),
                 ai.category(),
@@ -47,7 +73,7 @@ public final class ListingCopyNormalizer {
                 productDescription,
                 titles,
                 descriptions,
-                ai.keywords(),
+                keywords,
                 ai.overallConfidence(),
                 ai.uncertainFields(),
                 ai.provider(),
@@ -96,13 +122,153 @@ public final class ListingCopyNormalizer {
 
     private static List<String> alignDescriptions(List<String> descriptions, String gender, String color) {
         if (descriptions == null || descriptions.isEmpty()) {
-            return descriptions == null ? List.of() : descriptions;
+            return List.of();
         }
         List<String> out = new ArrayList<>();
         for (String description : descriptions) {
+            if (description == null || description.isBlank()) {
+                continue;
+            }
             out.add(rewriteColor(rewriteAudience(description, gender), color));
         }
         return out;
+    }
+
+    /** Always surface four listing descriptions for the review UI. */
+    static List<String> ensureFourDescriptions(
+            List<String> fromAi,
+            String productDescription,
+            String gender,
+            String color,
+            String productType,
+            String fit,
+            String occasion,
+            String style,
+            String material,
+            String pattern,
+            String sleeveType,
+            String neckType) {
+        List<String> out = new ArrayList<>();
+        if (fromAi != null) {
+            for (String text : fromAi) {
+                if (text != null && !text.isBlank() && out.stream().noneMatch(existing -> existing.equalsIgnoreCase(text.trim()))) {
+                    out.add(text.trim());
+                }
+                if (out.size() >= 4) {
+                    return out.subList(0, 4);
+                }
+            }
+        }
+        String primary = rewriteColor(rewriteAudience(productDescription, gender), color);
+        if (primary != null && !primary.isBlank() && out.stream().noneMatch(existing -> existing.equalsIgnoreCase(primary.trim()))) {
+            out.add(primary.trim());
+        }
+        String audience = audienceWord(gender);
+        String type = blankTo(productType, "product");
+        String hue = blankTo(color, "");
+        String fitLabel = blankTo(fit, "regular");
+        String occ = blankTo(occasion, "everyday");
+        String styleLabel = blankTo(style, "casual");
+        String patternLabel = blankTo(pattern, "clean");
+        String materialLabel = blankTo(material, "comfortable");
+        addDescription(out, String.format(
+                "Upgrade your look with this %s %s %s. The %s fit, %s finish, and thoughtful detailing make it easy to style day to day.",
+                blankTo(audience, "versatile"),
+                blankTo(hue, "classic"),
+                type,
+                fitLabel,
+                patternLabel).trim());
+        addDescription(out, String.format(
+                "Ideal for %s and %s looks. Pair this %s %s with trousers, jeans, or coordinated sets for a polished appearance.",
+                occ,
+                styleLabel,
+                blankTo(audience, "").toLowerCase(Locale.ROOT),
+                type).replaceAll("\\s+", " ").trim());
+        addDescription(out, String.format(
+                "A %s feel and careful stitching keep this %s comfortable through the day. Choose this %s %s when you want reliable everyday style.",
+                materialLabel,
+                type,
+                blankTo(hue, "favourite"),
+                type).replaceAll("\\s+", " ").trim());
+        addDescription(out, String.format(
+                "Shop this %s %s %s for %s wear. Key highlights buyers search for: %s, %s %s, %s %s.",
+                blankTo(audience, "").toLowerCase(Locale.ROOT),
+                blankTo(hue, ""),
+                type,
+                occ,
+                type,
+                blankTo(hue, ""),
+                type,
+                styleLabel,
+                occ).replaceAll("\\s+", " ").trim());
+        while (out.size() < 4 && !out.isEmpty()) {
+            out.add(out.getFirst());
+        }
+        return out.size() > 4 ? new ArrayList<>(out.subList(0, 4)) : out;
+    }
+
+    private static void addDescription(List<String> out, String text) {
+        String cleaned = text == null ? "" : text.replaceAll("\\s+", " ").trim();
+        if (cleaned.length() < 40) {
+            return;
+        }
+        if (out.stream().noneMatch(existing -> existing.equalsIgnoreCase(cleaned))) {
+            out.add(cleaned);
+        }
+    }
+
+    static List<String> enrichKeywords(
+            List<String> fromAi,
+            String gender,
+            String color,
+            String productType,
+            String category,
+            String subCategory,
+            String occasion,
+            String style,
+            String pattern,
+            String material) {
+        List<String> out = new ArrayList<>();
+        addKeyword(out, fromAi);
+        String audience = audienceWord(gender);
+        String type = blankTo(productType, "");
+        String hue = blankTo(color, "");
+        addKeyword(out, type);
+        addKeyword(out, category);
+        addKeyword(out, subCategory);
+        addKeyword(out, join(audience, type));
+        addKeyword(out, join(hue, type));
+        addKeyword(out, join(audience, hue, type));
+        addKeyword(out, occasion);
+        addKeyword(out, style);
+        addKeyword(out, pattern);
+        addKeyword(out, material);
+        addKeyword(out, join(hue, blankTo(occasion, "wear")));
+        addKeyword(out, join(type, "for", blankTo(occasion, "daily wear")));
+        addKeyword(out, join(blankTo(style, "casual"), type));
+        return out.size() > 12 ? out.subList(0, 12) : out;
+    }
+
+    private static void addKeyword(List<String> out, List<String> values) {
+        if (values == null) {
+            return;
+        }
+        for (String value : values) {
+            addKeyword(out, value);
+        }
+    }
+
+    private static void addKeyword(List<String> out, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        String cleaned = value.replaceAll("\\s+", " ").trim();
+        if (cleaned.length() < 2 || cleaned.length() > 48) {
+            return;
+        }
+        if (out.stream().noneMatch(existing -> existing.equalsIgnoreCase(cleaned))) {
+            out.add(cleaned);
+        }
     }
 
     static boolean audienceMismatch(String title, String gender) {

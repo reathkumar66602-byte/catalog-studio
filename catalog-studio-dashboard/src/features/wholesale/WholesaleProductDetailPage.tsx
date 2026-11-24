@@ -1,11 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Minus, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowLeft, Minus, Phone, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
-import { formatInr, priceRange, type ProductDetail, type VariantCell } from "./wholesale";
+import { useI18n } from "../../i18n/LanguageProvider";
+import { useAuth } from "../../store/auth";
+import { formatInr, priceRange, type OrderBillPreview, type ProductDetail, type VariantCell } from "./wholesale";
 
 export function WholesaleProductDetailPage() {
+  const { t } = useI18n();
+  const { user } = useAuth();
   const { idOrSlug = "" } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -13,6 +17,9 @@ export function WholesaleProductDetailPage() {
   const [imageIndex, setImageIndex] = useState(0);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [preview, setPreview] = useState<OrderBillPreview | null>(null);
 
   const product = useQuery({
     queryKey: ["ws-product", idOrSlug],
@@ -44,14 +51,26 @@ export function WholesaleProductDetailPage() {
   const totalPcs = lines.reduce((sum, line) => sum + line.quantity, 0);
   const totalAmount = lines.reduce((sum, line) => sum + line.quantity * line.variant.price, 0);
 
-  const place = useMutation({
+  useEffect(() => {
+    const fromUser = (user as { mobile?: string } | null)?.mobile;
+    if (fromUser) setMobile(fromUser);
+  }, [user]);
+
+  const orderPayload = () => ({
+    items: lines.map((line) => ({ variantId: line.variant.id, quantity: line.quantity })),
+    note: note.trim() || undefined,
+    mobile: mobile.trim() || undefined,
+    couponCode: couponCode.trim() || undefined,
+  });
+
+  const previewBill = useMutation({
     mutationFn: async () =>
-      (
-        await api.post("/wholesale/buyer/orders", {
-          items: lines.map((line) => ({ variantId: line.variant.id, quantity: line.quantity })),
-          note: note.trim() || undefined,
-        })
-      ).data,
+      (await api.post("/wholesale/buyer/orders/preview", orderPayload())).data.data as OrderBillPreview,
+    onSuccess: (bill) => setPreview(bill),
+  });
+
+  const place = useMutation({
+    mutationFn: async () => (await api.post("/wholesale/buyer/orders", orderPayload())).data,
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["ws-products"] });
       await qc.invalidateQueries({ queryKey: ["ws-buyer-orders"] });
@@ -61,6 +80,10 @@ export function WholesaleProductDetailPage() {
       void qc.invalidateQueries({ queryKey: ["ws-product", idOrSlug] });
     },
   });
+
+  useEffect(() => {
+    setPreview(null);
+  }, [qty, couponCode]);
 
   function setVariantQty(variant: VariantCell, next: number) {
     const clamped = Math.max(0, Math.min(next, variant.available));
@@ -80,17 +103,19 @@ export function WholesaleProductDetailPage() {
     });
   }
 
-  if (product.isLoading) return <p className="text-sm text-slate-500">Loading product...</p>;
+  if (product.isLoading) return <p className="text-sm text-slate-500">{t("wholesaleProduct.loading")}</p>;
   if (product.isError || !data) {
     return (
       <div className="space-y-3">
         <Link to="/live-stock" className="inline-flex items-center gap-1 text-sm text-teal-700">
-          <ArrowLeft size={16} /> Back to Live Stock
+          <ArrowLeft size={16} /> {t("wholesaleProduct.back")}
         </Link>
-        <p className="text-sm text-red-600">{apiErrorMessage(product.error, "Product not found")}</p>
+        <p className="text-sm text-red-600">{apiErrorMessage(product.error, t("wholesaleProduct.notFound"))}</p>
       </div>
     );
   }
+
+  const storeLabel = data.store.city ? `${data.store.name}, ${data.store.city}` : data.store.name;
 
   const colorImages = data.images.filter((image) => image.colorLabel && image.colorLabel === activeColor);
   const gallery = colorImages.length > 0 ? colorImages : data.images;
@@ -101,7 +126,7 @@ export function WholesaleProductDetailPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <Link to="/live-stock" className="inline-flex items-center gap-1 text-sm font-medium text-teal-700 hover:underline">
-        <ArrowLeft size={16} /> Back to Live Stock
+        <ArrowLeft size={16} /> {t("wholesaleProduct.back")}
       </Link>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
@@ -110,7 +135,7 @@ export function WholesaleProductDetailPage() {
             {mainImage ? (
               <img src={mainImage.url} alt={data.title} className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">No photo</div>
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">{t("common.noPhoto")}</div>
             )}
           </div>
           {gallery.length > 1 && (
@@ -136,19 +161,26 @@ export function WholesaleProductDetailPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-teal-700">{data.category.name}</p>
             <h1 className="mt-1 text-2xl font-semibold">{data.title}</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Code: {data.code} - Sold by{" "}
-              <span className="font-medium text-slate-700 dark:text-slate-200">{data.store.name}</span>
-              {data.store.city ? `, ${data.store.city}` : ""}
+              {t("common.code", { code: data.code })} - {t("wholesaleProduct.soldBy", { store: storeLabel })}
             </p>
+            {data.store.phone && (
+              <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-teal-800 dark:text-teal-300">
+                <Phone size={14} />
+                <a href={`tel:${data.store.phone}`} className="hover:underline">
+                  {data.store.phone}
+                </a>
+                {data.store.email ? <span className="font-normal text-slate-500">· {data.store.email}</span> : null}
+              </p>
+            )}
             <p className="mt-3 flex flex-wrap items-baseline gap-3">
               <span className="text-3xl font-bold text-teal-800 dark:text-teal-300">{priceRange(data.minPrice, data.maxPrice)}</span>
               {showMrp && <span className="text-sm text-slate-400 line-through">{formatInr(data.mrp)}</span>}
               <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                {data.totalStock} pcs in stock
+                {t("common.pcs", { count: data.totalStock })}
               </span>
               {data.bookedCount > 0 && (
                 <span className="rounded-full bg-teal-700 px-2.5 py-0.5 text-xs font-semibold text-white">
-                  {data.bookedCount} booked
+                  {t("common.booked", { count: data.bookedCount })}
                 </span>
               )}
             </p>
@@ -238,7 +270,8 @@ export function WholesaleProductDetailPage() {
                     <div>
                       <p className="text-sm font-medium">Size {variant.sizeLabel}</p>
                       <p className="text-xs text-slate-500">
-                        {formatInr(variant.price)} - {variant.available > 0 ? `${variant.available} pcs` : "Out of stock"}
+                        {formatInr(variant.price)} -{" "}
+                        {variant.available > 0 ? t("common.pcs", { count: variant.available }) : t("common.soldOut")}
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -277,9 +310,7 @@ export function WholesaleProductDetailPage() {
           </div>
 
           {isOwner ? (
-            <p className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">
-              This is your own product. Booking is available to other buyers.
-            </p>
+            <p className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600">{t("wholesaleProduct.ownProduct")}</p>
           ) : (
             <div className="space-y-3 rounded-2xl border border-teal-200 bg-teal-50/60 p-4 dark:border-teal-900 dark:bg-teal-950/30">
               {lines.length > 0 && (
@@ -294,6 +325,36 @@ export function WholesaleProductDetailPage() {
                   ))}
                 </ul>
               )}
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium">Your mobile (shown to supplier)</span>
+                <input
+                  type="tel"
+                  required
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  placeholder="10-digit mobile"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-600 dark:border-slate-700 dark:bg-slate-900"
+                />
+              </label>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <label className="block space-y-1 text-sm sm:col-span-1">
+                  <span className="font-medium">Coupon code (optional)</span>
+                  <input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Ask supplier for a code"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm uppercase outline-none focus:border-teal-600 dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={totalPcs === 0 || previewBill.isPending}
+                  onClick={() => previewBill.mutate()}
+                  className="self-end rounded-xl border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50"
+                >
+                  {previewBill.isPending ? "Checking…" : "Apply / preview bill"}
+                </button>
+              </div>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -302,23 +363,45 @@ export function WholesaleProductDetailPage() {
                 placeholder="Note for the supplier (optional)"
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-600 dark:border-slate-700 dark:bg-slate-900"
               />
+              {preview && (
+                <div className="space-y-1 rounded-xl bg-white/80 px-3 py-2 text-sm dark:bg-slate-900/60">
+                  <div className="flex justify-between"><span>Subtotal</span><span>{formatInr(preview.subtotal)}</span></div>
+                  {preview.discountAmount > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Discount{preview.couponCode ? ` (${preview.couponCode})` : ""}</span>
+                      <span>-{formatInr(preview.discountAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between"><span>Taxable</span><span>{formatInr(preview.taxableAmount)}</span></div>
+                  <div className="flex justify-between"><span>CGST ({(preview.gstPercent / 2).toFixed(1)}%)</span><span>{formatInr(preview.cgstAmount)}</span></div>
+                  <div className="flex justify-between"><span>SGST ({(preview.gstPercent / 2).toFixed(1)}%)</span><span>{formatInr(preview.sgstAmount)}</span></div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold dark:border-slate-700">
+                    <span>Grand total</span>
+                    <span>{formatInr(preview.grandTotal)}</span>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm">
                   <span className="font-semibold">{totalPcs}</span> pcs -{" "}
-                  <span className="text-lg font-bold text-teal-800">{formatInr(totalAmount)}</span>
+                  <span className="text-lg font-bold text-teal-800">
+                    {formatInr(preview?.grandTotal ?? totalAmount)}
+                  </span>
                 </p>
                 <button
                   type="button"
-                  disabled={totalPcs === 0 || place.isPending}
+                  disabled={totalPcs === 0 || !mobile.trim() || place.isPending}
                   onClick={() => place.mutate()}
                   className="rounded-xl bg-teal-700 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
                 >
-                  {place.isPending ? "Placing order..." : "Place order"}
+                  {place.isPending ? t("wholesaleProduct.placing") : t("wholesaleProduct.placeOrder")}
                 </button>
               </div>
-              {place.isError && <p className="text-sm text-red-600">{apiErrorMessage(place.error)}</p>}
+              {(place.isError || previewBill.isError) && (
+                <p className="text-sm text-red-600">{apiErrorMessage(place.error || previewBill.error)}</p>
+              )}
               <p className="text-xs text-slate-500">
-                Stock is reserved when you book. Supplier contact details unlock after the supplier accepts your order.
+                Stock is reserved when you book. Bill includes GST at the supplier store rate. Pay the supplier using their GSTIN on the order.
               </p>
             </div>
           )}
@@ -329,7 +412,7 @@ export function WholesaleProductDetailPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {data.description && (
             <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-              <h2 className="mb-1 text-sm font-semibold">Description</h2>
+              <h2 className="mb-1 text-sm font-semibold">{t("common.description")}</h2>
               <p className="whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{data.description}</p>
             </section>
           )}

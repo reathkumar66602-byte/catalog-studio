@@ -1,6 +1,7 @@
 package com.catalogstudio.subscription.service;
 
 import com.catalogstudio.common.exception.ApiException;
+import com.catalogstudio.subscription.dto.AdminPaymentLedgerItem;
 import com.catalogstudio.subscription.dto.PriceBreakdown;
 import com.catalogstudio.subscription.dto.TransactionHistoryItem;
 import com.catalogstudio.subscription.entity.BillingSettings;
@@ -104,25 +105,79 @@ public class PaymentTransactionService {
 
     @Transactional(readOnly = true)
     public Page<TransactionHistoryItem> history(Long userId, Pageable pageable) {
-        return transactionRepository.findByUser_Id(userId, pageable).map(TransactionHistoryItem::from);
+        // Sellers should see one row per payment: activation / changes — not a duplicate "checkout" line.
+        return transactionRepository.findByUser_IdAndTypeNot(userId, TransactionType.CHECKOUT, pageable)
+                .map(TransactionHistoryItem::from);
     }
 
     @Transactional(readOnly = true)
     public List<TransactionHistoryItem> recent(Long userId) {
-        return transactionRepository.findTop5ByUser_IdOrderByCreatedAtDesc(userId).stream()
+        return transactionRepository.findTop5ByUser_IdAndTypeNotOrderByCreatedAtDesc(userId, TransactionType.CHECKOUT)
+                .stream()
                 .map(TransactionHistoryItem::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public long count(Long userId) {
-        return transactionRepository.countByUser_Id(userId);
+        return transactionRepository.countByUser_IdAndTypeNot(userId, TransactionType.CHECKOUT);
     }
 
     @Transactional(readOnly = true)
     public PaymentTransaction requireOwned(Long userId, UUID transactionId) {
         return transactionRepository.findByUuidAndUser_Id(transactionId, userId)
                 .orElseThrow(() -> ApiException.notFound("Transaction not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminPaymentLedgerItem> adminLedger(
+            String query,
+            String provider,
+            String status,
+            String type,
+            Pageable pageable
+    ) {
+        String q = query == null ? "" : query.trim();
+        String providerFilter = provider == null ? "" : provider.trim();
+        TransactionStatus statusFilter = parseStatus(status);
+        TransactionType typeFilter = parseType(type);
+        return transactionRepository
+                .searchAdminLedger(q, providerFilter, statusFilter, typeFilter, pageable)
+                .map(AdminPaymentLedgerItem::from);
+    }
+
+    private static TransactionStatus parseStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return TransactionStatus.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private static TransactionType parseType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return TransactionType.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentTransaction requireAny(UUID transactionId) {
+        return transactionRepository.findByUuid(transactionId)
+                .orElseThrow(() -> ApiException.notFound("Transaction not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public String renderBillHtmlAdmin(UUID transactionId) {
+        PaymentTransaction txn = requireAny(transactionId);
+        return renderBillHtml(txn.getUser().getId(), transactionId);
     }
 
     @Transactional(readOnly = true)

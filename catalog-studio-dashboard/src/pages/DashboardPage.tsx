@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { Calculator, Camera, Chrome, History, MapPin, Scissors, TrendingUp } from "lucide-react";
+import { Calculator, Camera, Chrome, History, MapPin, Scissors, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
 import { useI18n } from "../i18n/LanguageProvider";
 import { useAuth } from "../store/auth";
-import { hasFeature } from "../routes/roles";
+import type { SubscriptionStatus } from "../types";
 
 export function DashboardPage() {
   const { t } = useI18n();
@@ -13,30 +13,54 @@ export function DashboardPage() {
     queryKey: ["dashboard"],
     queryFn: async () => (await api.get("/dashboard")).data.data,
   });
+  const { data: sub } = useQuery({
+    queryKey: ["sub"],
+    queryFn: async () => (await api.get("/subscriptions/current")).data.data as SubscriptionStatus,
+    enabled: Boolean(user) && user.role !== "ADMIN" && user.role !== "SUPERADMIN",
+  });
+
+  const needsRecharge = Boolean(data?.requiresRecharge || sub?.requiresRecharge || user?.requiresRecharge);
 
   const cards = [
     { label: t("dash.aiThisMonth"), value: data?.aiAnalysesThisMonth ?? 0 },
     { label: t("dash.currentPlan"), value: data?.currentPlan ?? "FREE" },
   ];
   const actions = [
-    { to: "/trending", icon: TrendingUp, label: t("nav.trending"), feature: "trending" },
-    { to: "/shoot", icon: Camera, label: t("nav.shoot"), feature: "shoot" },
-    { to: "/tools/labels", icon: Scissors, label: t("nav.labels"), feature: "labels" },
-    { to: "/tools/meesho-calculator", icon: Calculator, label: t("nav.calculator"), feature: "meesho_calculator" },
-    { to: "/extension", icon: Chrome, label: t("dash.extension"), feature: "extension" },
-    { to: "/analysis", icon: History, label: t("nav.analysis"), feature: "analysis" },
-    { to: "/billing-address", icon: MapPin, label: t("nav.billing"), feature: "billing_address" },
-  ].filter((item) => hasFeature(user, item.feature));
+    { to: "/trending", icon: TrendingUp, label: t("nav.trending") },
+    { to: "/shoot", icon: Camera, label: t("nav.shoot") },
+    { to: "/products/analyze", icon: Sparkles, label: t("nav.productAnalysis") },
+    { to: "/tools/labels", icon: Scissors, label: t("nav.labels") },
+    { to: "/tools/meesho-calculator", icon: Calculator, label: t("nav.calculator") },
+    { to: "/extension", icon: Chrome, label: t("dash.extension") },
+    { to: "/analysis", icon: History, label: t("nav.analysis") },
+    { to: "/billing-address", icon: MapPin, label: t("nav.billing") },
+  ];
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold">{t("dash.title")}</h1>
         <p className="text-slate-500">{t("dash.subtitle")}</p>
-        {data?.requiresRecharge && (
-          <p className="mt-2 text-sm text-amber-800">{t("dash.rechargeHint")}</p>
-        )}
       </div>
+
+      {needsRecharge && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950">
+          <p className="flex items-center gap-2 font-semibold">
+            <ShieldAlert size={18} />
+            {sub?.rechargeHeadline || t("dash.rechargeTitle")}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed">
+            {sub?.rechargeBody || t("dash.rechargeHint")}
+          </p>
+          <Link
+            to="/subscription"
+            className="mt-4 inline-flex rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
+          >
+            {t("dash.rechargeCta")}
+          </Link>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => (
           <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

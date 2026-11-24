@@ -1,16 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { ChevronDown, ChevronUp, Plus, Trash2, Upload } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { ChevronDown, ChevronUp, FileText, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
+import { useI18n } from "../../i18n/LanguageProvider";
+import { ManualBillPanel } from "./ManualBillPanel";
 import {
   formatInr,
   priceRange,
   type PageResult,
+  type ProductAutofill,
   type ProductCard,
   type ProductDetail,
   type WholesaleCategory,
+  type WholesaleStore,
 } from "./wholesale";
 
 const inputClass =
@@ -20,6 +24,19 @@ type VariantRow = { colorLabel: string; colorHex: string; sizeLabel: string; pri
 
 const blankVariant = (): VariantRow => ({ colorLabel: "", colorHex: "", sizeLabel: "", price: "", mrp: "", stock: "0" });
 
+/** Short product code from AI title when the user left code blank. */
+function suggestProductCode(title: string): string {
+  const words = title
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3);
+  const prefix = (words.map((w) => w.slice(0, 3)).join("-") || "SKU").slice(0, 24);
+  const suffix = String(Date.now() % 10000).padStart(4, "0");
+  return `${prefix}-${suffix}`.slice(0, 60);
+}
+
 const STATUS_STYLE: Record<string, string> = {
   ACTIVE: "bg-teal-100 text-teal-800",
   DRAFT: "bg-amber-100 text-amber-800",
@@ -27,10 +44,20 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export function SupplierInventoryPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showManualBill, setShowManualBill] = useState(false);
+  const [manualProductId, setManualProductId] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  const store = useQuery({
+    queryKey: ["ws-my-store"],
+    queryFn: async () => ((await api.get("/wholesale/supplier/store")).data.data as WholesaleStore | undefined) ?? null,
+    retry: false,
+  });
 
   const products = useQuery({
     queryKey: ["ws-my-products", page],
@@ -47,6 +74,21 @@ export function SupplierInventoryPage() {
     mutationFn: (id: string) => api.delete(`/wholesale/supplier/products/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ws-my-products"] }),
   });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/wholesale/supplier/products/${id}/permanent`),
+    onSuccess: (_data, id) => {
+      setExpanded((current) => (current === id ? null : current));
+      setEditingId((current) => (current === id ? null : current));
+      return qc.invalidateQueries({ queryKey: ["ws-my-products"] });
+    },
+  });
+
+  const openManualBill = (productId?: string) => {
+    setManualProductId(productId || "");
+    setShowForm(false);
+    setShowManualBill(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const status = axios.isAxiosError(products.error) ? products.error.response?.status : undefined;
   const items = products.data?.items || [];
@@ -54,10 +96,12 @@ export function SupplierInventoryPage() {
   if (status === 403 || status === 404) {
     return (
       <div className="mx-auto max-w-2xl space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-950">
-        <p className="text-base font-semibold">{status === 403 ? "Supplier plan required" : "Create your store first"}</p>
+        <p className="text-base font-semibold">
+          {status === 403 ? t("store.planRequiredTitle") : t("supplierInv.createStoreFirst")}
+        </p>
         <p>{apiErrorMessage(products.error)}</p>
         <Link to={status === 403 ? "/subscription" : "/supplier/store"} className="inline-block rounded-xl bg-teal-700 px-4 py-2 font-semibold text-white">
-          {status === 403 ? "View plans" : "Open my store"}
+          {status === 403 ? t("common.viewPlans") : t("supplierInv.openStore")}
         </Link>
       </div>
     );
@@ -67,17 +111,43 @@ export function SupplierInventoryPage() {
     <div className="mx-auto max-w-5xl space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Supplier inventory</h1>
-          <p className="text-sm text-slate-500">Add products with colour and size variants, upload photos, then publish to Live Stock.</p>
+          <h1 className="text-2xl font-semibold">{t("supplierInv.title")}</h1>
+          <p className="text-sm text-slate-500">{t("supplierInv.subtitle")}</p>
+          {store.data?.storeName && (
+            <p className="mt-1 text-sm font-medium text-teal-800 dark:text-teal-300">Store: {store.data.storeName}</p>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
-        >
-          <Plus size={16} /> {showForm ? "Close form" : "Add product"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => openManualBill()}
+            className="inline-flex items-center gap-2 rounded-xl border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/40"
+          >
+            <FileText size={16} /> Manual bill
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowManualBill(false);
+              setShowForm((v) => !v);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+          >
+            <Plus size={16} /> {showForm ? t("common.close") : t("supplierInv.addProduct")}
+          </button>
+        </div>
       </div>
+
+      {showManualBill && (
+        <ManualBillPanel
+          initialProductId={manualProductId}
+          onCancel={() => {
+            setShowManualBill(false);
+            setManualProductId("");
+          }}
+          onDone={() => setManualProductId("")}
+        />
+      )}
 
       {showForm && (
         <ProductForm
@@ -88,15 +158,26 @@ export function SupplierInventoryPage() {
         />
       )}
 
-      {products.isLoading && <p className="text-sm text-slate-500">Loading products...</p>}
-      {products.isError && <p className="text-sm text-red-600">{apiErrorMessage(products.error)}</p>}
-      {(publish.isError || archive.isError) && (
-        <p className="text-sm text-red-600">{apiErrorMessage(publish.error || archive.error)}</p>
+      {editingId && (
+        <EditProductPanel
+          productId={editingId}
+          onCancel={() => setEditingId(null)}
+          onDone={async () => {
+            setEditingId(null);
+            await qc.invalidateQueries({ queryKey: ["ws-my-products"] });
+          }}
+        />
       )}
 
-      {!products.isLoading && items.length === 0 && !showForm && (
+      {products.isLoading && <p className="text-sm text-slate-500">{t("supplierInv.loading")}</p>}
+      {products.isError && <p className="text-sm text-red-600">{apiErrorMessage(products.error)}</p>}
+      {(publish.isError || archive.isError || remove.isError) && (
+        <p className="text-sm text-red-600">{apiErrorMessage(publish.error || archive.error || remove.error)}</p>
+      )}
+
+      {!products.isLoading && items.length === 0 && !showForm && !showManualBill && !editingId && (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900">
-          No products yet. Click <strong>Add product</strong> to list your first item.
+          {t("supplierInv.empty")}
         </div>
       )}
 
@@ -110,14 +191,36 @@ export function SupplierInventoryPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{product.title}</p>
                 <p className="text-xs text-slate-500">
-                  {product.code} - {product.categoryName} - {priceRange(product.minPrice, product.maxPrice)} - {product.totalStock} pcs -{" "}
-                  {product.bookedCount} booked
+                  {t("common.code", { code: product.code })} - {product.categoryName} - {priceRange(product.minPrice, product.maxPrice)} -{" "}
+                  {t("common.pcs", { count: product.totalStock })}
+                  {product.bookedCount > 0 ? ` - ${t("common.booked", { count: product.bookedCount })}` : ""}
                 </p>
               </div>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLE[product.status] || "bg-slate-100"}`}>
                 {product.status}
               </span>
               <div className="flex items-center gap-2">
+                {product.status === "ACTIVE" && (
+                  <button
+                    type="button"
+                    onClick={() => openManualBill(product.id)}
+                    className="rounded-lg border border-teal-700 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-50"
+                  >
+                    Bill
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false);
+                    setShowManualBill(false);
+                    setEditingId(product.id);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <Pencil size={12} /> Edit
+                </button>
                 {product.status !== "ACTIVE" && (
                   <button
                     type="button"
@@ -125,21 +228,43 @@ export function SupplierInventoryPage() {
                     onClick={() => publish.mutate(product.id)}
                     className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                   >
-                    Publish
+                    {t("supplierInv.publish")}
                   </button>
                 )}
                 {product.status !== "ARCHIVED" && (
                   <button
                     type="button"
-                    disabled={archive.isPending}
+                    disabled={archive.isPending || remove.isPending}
                     onClick={() => {
-                      if (window.confirm("Archive this product? It will disappear from Live Stock.")) archive.mutate(product.id);
+                      if (
+                        window.confirm(
+                          "Archive this product? It will leave Live Stock but stay in your inventory so you can Publish it again later.",
+                        )
+                      ) {
+                        archive.mutate(product.id);
+                      }
                     }}
                     className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                   >
                     Archive
                   </button>
                 )}
+                <button
+                  type="button"
+                  disabled={remove.isPending || archive.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Delete permanently? Photos are removed from storage and this cannot be undone. If the product is on any bill/order, delete is blocked — Archive instead.",
+                      )
+                    ) {
+                      remove.mutate(product.id);
+                    }
+                  }}
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Delete
+                </button>
                 <button
                   type="button"
                   aria-label="Toggle stock details"
@@ -158,13 +283,13 @@ export function SupplierInventoryPage() {
       {products.data && products.data.totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 text-sm">
           <button type="button" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">
-            Previous
+            {t("common.previous")}
           </button>
           <span className="text-slate-500">
-            Page {products.data.page + 1} of {products.data.totalPages}
+            {t("common.pageOf", { page: products.data.page + 1, total: products.data.totalPages })}
           </span>
           <button type="button" disabled={!products.data.hasNext} onClick={() => setPage((p) => p + 1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">
-            Next
+            {t("common.next")}
           </button>
         </div>
       )}
@@ -173,6 +298,7 @@ export function SupplierInventoryPage() {
 }
 
 function StockPanel({ productId }: { productId: string }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [photoMessage, setPhotoMessage] = useState("");
@@ -208,7 +334,7 @@ function StockPanel({ productId }: { productId: string }) {
     onError: () => setPhotoMessage(""),
   });
 
-  if (detail.isLoading) return <p className="border-t px-4 py-3 text-sm text-slate-500">Loading variants...</p>;
+  if (detail.isLoading) return <p className="border-t px-4 py-3 text-sm text-slate-500">{t("supplierInv.loading")}</p>;
   if (detail.isError || !detail.data) return <p className="border-t px-4 py-3 text-sm text-red-600">{apiErrorMessage(detail.error)}</p>;
   const data = detail.data;
 
@@ -218,12 +344,12 @@ function StockPanel({ productId }: { productId: string }) {
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="text-xs text-slate-500">
             <tr>
-              <th className="py-1">SKU</th>
-              <th>Colour / Size</th>
-              <th>Price</th>
-              <th>On hand</th>
-              <th>Reserved</th>
-              <th>Available</th>
+              <th className="py-1">{t("common.sku")}</th>
+              <th>{t("common.colourSize")}</th>
+              <th>{t("common.price")}</th>
+              <th>{t("common.onHand")}</th>
+              <th>{t("common.reserved")}</th>
+              <th>{t("common.available")}</th>
               <th />
             </tr>
           </thead>
@@ -255,7 +381,7 @@ function StockPanel({ productId }: { productId: string }) {
                       onClick={() => adjust.mutate({ variantId: variant.id, onHand: Number(draft) })}
                       className="rounded-lg bg-teal-700 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
                     >
-                      Save
+                      {t("common.save")}
                     </button>
                   </td>
                 </tr>
@@ -290,7 +416,126 @@ function StockPanel({ productId }: { productId: string }) {
   );
 }
 
+function EditProductPanel({
+  productId,
+  onCancel,
+  onDone,
+}: {
+  productId: string;
+  onCancel: () => void;
+  onDone: () => void | Promise<void>;
+}) {
+  const { t } = useI18n();
+  const detail = useQuery({
+    queryKey: ["ws-product-edit", productId],
+    queryFn: async () => (await api.get(`/wholesale/supplier/products/${productId}`)).data.data as ProductDetail,
+  });
+  const categories = useQuery({
+    queryKey: ["ws-categories"],
+    queryFn: async () => (await api.get("/wholesale/categories")).data.data as WholesaleCategory[],
+    staleTime: 60_000,
+  });
+  const [title, setTitle] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [mrp, setMrp] = useState("");
+  const [description, setDescription] = useState("");
+  const [details, setDetails] = useState("");
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!detail.data || ready) return;
+    setTitle(detail.data.title || "");
+    setCategoryId(detail.data.category?.id || "");
+    setMrp(detail.data.mrp != null ? String(detail.data.mrp) : "");
+    setDescription(detail.data.description || "");
+    setDetails(detail.data.details || "");
+    setReady(true);
+  }, [detail.data, ready]);
+
+  const save = useMutation({
+    mutationFn: async () =>
+      api.put(`/wholesale/supplier/products/${productId}`, {
+        title: title.trim(),
+        categoryId: categoryId || undefined,
+        description: description.trim(),
+        details: details.trim(),
+        mrp: mrp === "" ? undefined : Number(mrp),
+      }),
+    onSuccess: async () => {
+      await onDone();
+    },
+  });
+
+  if (detail.isLoading || !ready) {
+    return <p className="text-sm text-slate-500">Loading product…</p>;
+  }
+  if (detail.isError) {
+    return <p className="text-sm text-red-600">{apiErrorMessage(detail.error)}</p>;
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+      className="space-y-4 rounded-2xl border border-teal-200 bg-white p-5 dark:border-teal-900 dark:bg-slate-900"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">Edit product</h2>
+        <p className="text-xs text-slate-500">Code: {detail.data?.code} · Status: {detail.data?.status}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-sm sm:col-span-2">
+          <span className="font-medium">Title</span>
+          <input required maxLength={255} value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">{t("common.category")}</span>
+          <select required value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass}>
+            <option value="">Select category</option>
+            {(categories.data || []).map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="font-medium">MRP (optional)</span>
+          <input type="number" min={0} step="0.01" value={mrp} onChange={(e) => setMrp(e.target.value)} className={inputClass} />
+        </label>
+      </div>
+      <label className="block space-y-1 text-sm">
+        <span className="font-medium">{t("common.description")}</span>
+        <textarea rows={3} maxLength={8000} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="font-medium">Product details</span>
+        <textarea rows={3} maxLength={8000} value={details} onChange={(e) => setDetails(e.target.value)} className={inputClass} />
+      </label>
+      <p className="text-xs text-slate-500">
+        Stock, sizes, and photos stay in the expand row under each product. Use Archive to hide from Live Stock (Publish to restore). Use Delete to permanently remove the product and free photo storage.
+      </p>
+      {save.isError && <p className="text-sm text-red-600">{apiErrorMessage(save.error)}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          disabled={save.isPending || !title.trim() || !categoryId}
+          className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {save.isPending ? "Saving…" : "Save changes"}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-xl border px-4 py-2 text-sm font-semibold text-slate-700">
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [code, setCode] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -300,8 +545,12 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
   const [variants, setVariants] = useState<VariantRow[]>([blankVariant()]);
   const [files, setFiles] = useState<File[]>([]);
   const [publishNow, setPublishNow] = useState(true);
+  const [aiAutofill, setAiAutofill] = useState(true);
   const [progress, setProgress] = useState("");
+  const [aiMessage, setAiMessage] = useState("");
+  const [aiError, setAiError] = useState("");
   const [bulk, setBulk] = useState({ colorLabel: "", colorHex: "", sizes: "S, M, L, XL", price: "", stock: "10" });
+  const autofillSeq = useRef(0);
 
   const categories = useQuery({
     queryKey: ["ws-categories"],
@@ -350,6 +599,58 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
     onError: () => setProgress(""),
   });
 
+  const autofill = useMutation({
+    mutationFn: async (selected: File[]) => {
+      const body = new FormData();
+      selected.slice(0, 3).forEach((file) => body.append("images", file));
+      return (await api.post("/wholesale/supplier/products/autofill", body)).data.data as ProductAutofill;
+    },
+  });
+
+  function applyAutofill(suggestion: ProductAutofill) {
+    if (suggestion.title?.trim()) setTitle((current) => current.trim() || suggestion.title!.trim());
+    if (suggestion.description?.trim()) setDescription((current) => current.trim() || suggestion.description!.trim());
+    if (suggestion.details?.trim()) setDetails((current) => current.trim() || suggestion.details!.trim());
+    if (suggestion.categoryId) setCategoryId((current) => current || suggestion.categoryId!);
+    const color = suggestion.primaryColor?.trim() || "";
+    const hex = suggestion.colorHex || "";
+    if (color || hex) {
+      setBulk((current) => ({
+        ...current,
+        colorLabel: current.colorLabel.trim() || color,
+        colorHex: current.colorHex || hex,
+      }));
+      setVariants((rows) => {
+        if (rows.length === 0) return rows;
+        const [first, ...rest] = rows;
+        if (first.colorLabel.trim()) return rows;
+        return [{ ...first, colorLabel: color || first.colorLabel, colorHex: hex || first.colorHex }, ...rest];
+      });
+    }
+    setCode((current) => (current.trim() ? current : suggestion.title?.trim() ? suggestProductCode(suggestion.title) : current));
+  }
+
+  async function onPhotosSelected(selected: File[]) {
+    const next = selected.slice(0, 10);
+    setFiles(next);
+    setAiMessage("");
+    setAiError("");
+    if (!aiAutofill || next.length === 0) return;
+    const seq = ++autofillSeq.current;
+    setAiMessage(t("supplierInv.aiAnalyzing"));
+    try {
+      const suggestion = await autofill.mutateAsync(next);
+      if (seq !== autofillSeq.current) return;
+      applyAutofill(suggestion);
+      setAiError("");
+      setAiMessage(t("supplierInv.aiFilled"));
+    } catch (error) {
+      if (seq !== autofillSeq.current) return;
+      setAiMessage("");
+      setAiError(apiErrorMessage(error));
+    }
+  }
+
   function setVariant(index: number, patch: Partial<VariantRow>) {
     setVariants((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
@@ -381,6 +682,7 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
 
   const valid =
     title.trim() && code.trim() && categoryId && variants.length > 0 && variants.every((v) => v.price !== "" && Number(v.price) >= 0);
+  const analyzing = autofill.isPending;
 
   return (
     <form onSubmit={submit} className="space-y-4 rounded-2xl border border-teal-200 bg-white p-5 dark:border-teal-900 dark:bg-slate-900">
@@ -395,7 +697,7 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
           <input required maxLength={60} value={code} onChange={(e) => setCode(e.target.value)} placeholder="KT-101" className={inputClass} />
         </label>
         <label className="space-y-1 text-sm">
-          <span className="font-medium">Category</span>
+          <span className="font-medium">{t("common.category")}</span>
           <select required value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass}>
             <option value="">Select category</option>
             {(categories.data || []).map((category) => (
@@ -411,7 +713,7 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
         </label>
       </div>
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">Description</span>
+        <span className="font-medium">{t("common.description")}</span>
         <textarea rows={2} maxLength={8000} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
       </label>
       <label className="block space-y-1 text-sm">
@@ -447,7 +749,7 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
                 <th className="py-1">Colour</th>
                 <th>Swatch</th>
                 <th>Size</th>
-                <th>Price</th>
+                <th>{t("common.price")}</th>
                 <th>MRP</th>
                 <th>Stock</th>
                 <th />
@@ -503,12 +805,27 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
 
       <div className="space-y-2">
         <p className="text-sm font-medium">Photos (up to 10)</p>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={aiAutofill}
+            disabled={analyzing || create.isPending}
+            onChange={(e) => setAiAutofill(e.target.checked)}
+          />
+          <span>{t("supplierInv.aiAutofill")}</span>
+        </label>
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
           multiple
-          onChange={(e) => setFiles(Array.from(e.target.files || []).slice(0, 10))}
-          className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+          disabled={analyzing || create.isPending}
+          onChange={(e) => {
+            const selected = Array.from(e.target.files || []);
+            e.target.value = "";
+            void onPhotosSelected(selected);
+          }}
+          className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white disabled:opacity-50"
         />
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -516,6 +833,12 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
               <img key={file.name + file.size} src={URL.createObjectURL(file)} alt="" className="h-16 w-14 rounded-lg object-cover" />
             ))}
           </div>
+        )}
+        {aiMessage && <p className="text-sm text-teal-800 dark:text-teal-300">{aiMessage}</p>}
+        {aiError && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+            {aiError}
+          </p>
         )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} />
@@ -531,12 +854,12 @@ function ProductForm({ onDone }: { onDone: () => void | Promise<void> }) {
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={!valid || create.isPending}
+          disabled={!valid || create.isPending || analyzing}
           className="rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
         >
-          {create.isPending ? "Saving..." : "Save product"}
+          {create.isPending ? t("common.saving") : t("review.saveProduct")}
         </button>
-        {progress && <span className="text-sm text-slate-500">{progress}</span>}
+        {(progress || (analyzing && aiMessage)) && <span className="text-sm text-slate-500">{progress || aiMessage}</span>}
       </div>
     </form>
   );

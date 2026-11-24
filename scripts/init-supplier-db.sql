@@ -1,0 +1,1 @@
+CREATE DATABASE catalog_studio_supplier OWNER catalog_studio;

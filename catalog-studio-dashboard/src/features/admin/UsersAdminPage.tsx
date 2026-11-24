@@ -5,6 +5,8 @@ import { AdminDialog } from "./AdminDialog";
 import { AdminTableBar, SortHeader, StatusBadge } from "./AdminTableBar";
 import { CampaignPanel } from "./CampaignPanel";
 import type { AdminUserRow, PageResult, PlanOption } from "./adminTypes";
+import { cycleUnit, planTitle } from "../subscription/planDisplay";
+import { useI18n } from "../../i18n/LanguageProvider";
 
 type PendingAction = {
   row: AdminUserRow;
@@ -14,6 +16,7 @@ type PendingAction = {
 };
 
 export function UsersAdminPage() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -62,7 +65,7 @@ export function UsersAdminPage() {
       setPending(null);
       setMessage(
         variables.action === "ACTIVATE"
-          ? "Plan activated. The seller workspace is open and a WhatsApp payment was added to Transactions."
+          ? "Plan activated. The seller workspace is open and an activation row was added to the payment ledger."
           : variables.action === "DEACTIVATE"
             ? "Workspace locked. This seller will be asked to recharge."
             : "Plan switched. Access dates are unchanged and a plan-change record was added to Transactions.",
@@ -99,12 +102,8 @@ export function UsersAdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Users</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          After a seller sends the UPI screenshot on WhatsApp, select the plan and click Activate. Filter by paid,
-          trial, expired, or deactivated accounts. Use campaigns below to email (or WhatsApp when configured) batches
-          of sellers.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("admin.users.title")}</h1>
+        <p className="mt-1 text-sm text-slate-500">{t("admin.users.subtitle")}</p>
       </div>
 
       <CampaignPanel />
@@ -149,11 +148,18 @@ export function UsersAdminPage() {
                 <SortHeader label="Email" field="email" sort={sort} onSort={(next) => { setSort(next); setPage(0); }} />
               </th>
               <th>Phone</th>
-              <th>Plan</th>
+              <th>
+                <SortHeader label="Plan" field="plan" sort={sort} onSort={(next) => { setSort(next); setPage(0); }} />
+              </th>
               <th>
                 <SortHeader label="Status" field="status" sort={sort} onSort={(next) => { setSort(next); setPage(0); }} />
               </th>
-              <th>Access</th>
+              <th>
+                <SortHeader label="Access" field="access" sort={sort} onSort={(next) => { setSort(next); setPage(0); }} />
+              </th>
+              <th>
+                <SortHeader label="Joined" field="createdAt" sort={sort} onSort={(next) => { setSort(next); setPage(0); }} />
+              </th>
               <th>Checkout / promo</th>
               <th>WhatsApp ref</th>
               <th>Action</th>
@@ -162,17 +168,17 @@ export function UsersAdminPage() {
           <tbody>
             {list.isLoading && (
               <tr>
-                <td className="p-6 text-slate-500" colSpan={9}>Loading users...</td>
+                <td className="p-6 text-slate-500" colSpan={10}>Loading users...</td>
               </tr>
             )}
             {list.isError && (
               <tr>
-                <td className="p-6 text-red-600" colSpan={9}>{apiErrorMessage(list.error, "Could not load users")}</td>
+                <td className="p-6 text-red-600" colSpan={10}>{apiErrorMessage(list.error, "Could not load users")}</td>
               </tr>
             )}
             {!list.isLoading && !list.isError && rows.length === 0 && (
               <tr>
-                <td className="p-6 text-slate-500" colSpan={9}>No sellers match this search.</td>
+                <td className="p-6 text-slate-500" colSpan={10}>No sellers match this search.</td>
               </tr>
             )}
             {rows.map((row) => {
@@ -195,7 +201,7 @@ export function UsersAdminPage() {
                     >
                       {paidPlans.map((plan) => (
                         <option key={plan.name} value={plan.name}>
-                          {plan.name} · ₹{Number(plan.price || 0).toLocaleString("en-IN")}
+                          {planTitle(plan)} · ₹{Number(plan.price || 0).toLocaleString("en-IN")} / {cycleUnit(plan.billingCycle)}
                         </option>
                       ))}
                     </select>
@@ -204,6 +210,9 @@ export function UsersAdminPage() {
                   <td className="p-3">{row.status}</td>
                   <td className="p-3">
                     <StatusBadge entitled={row.accessEntitled} status={row.planStatus} />
+                  </td>
+                  <td className="p-3 text-xs text-slate-500">
+                    {row.createdAt ? new Date(row.createdAt).toLocaleDateString("en-IN") : "—"}
                   </td>
                   <td className="p-3">
                     <CheckoutPromoCell row={row} />
@@ -234,7 +243,7 @@ export function UsersAdminPage() {
                         title={
                           row.accessEntitled
                             ? "Switch the paid plan without collecting another payment"
-                            : "Access has ended. Use Activate after the WhatsApp payment."
+                            : "Access has ended. Prefer Cashfree auto-activate; use Activate only for manual override."
                         }
                         onClick={() => openAction(row, "CHANGE_PLAN")}
                         className="rounded-lg border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
@@ -350,7 +359,7 @@ function dialogCopy(pending: PendingAction | null) {
       infoOnly: false,
       body: [
         `${row.email} is on ${row.plan || "no plan"}, and access ${row.subscriptionEndDate ? `ended on ${row.subscriptionEndDate}` : "is not active"}.`,
-        "Changing the plan does not reopen the workspace. After you confirm the WhatsApp payment, activate the selected plan.",
+        "Changing the plan does not reopen the workspace. After Cashfree payment (or manual confirmation), activate the selected plan.",
       ],
     };
   }

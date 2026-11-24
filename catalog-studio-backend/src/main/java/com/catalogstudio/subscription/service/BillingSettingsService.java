@@ -135,7 +135,7 @@ public class BillingSettingsService {
                 .whatsappNumber(StringUtils.hasText(fromProperty()) ? fromProperty() : "919560111849")
                 .payeeName("VISHAL KUMAR MISHRA")
                 .qrImageUrl(DEFAULT_SCANNER)
-                .paymentProvider("MANUAL")
+                .paymentProvider("CASHFREE")
                 .companyLegalName("Catalog Studio")
                 .companyGstin("19CMZPM0096H1ZA")
                 .parentCompanyName("Shritaji")

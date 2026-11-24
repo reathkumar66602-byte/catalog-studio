@@ -28,7 +28,12 @@ export function RegisterPage() {
       setError("Registration did not return a session");
       return;
     }
-    setSession(flow.session.user, flow.session.accessToken, flow.session.refreshToken);
+    setSession(
+      flow.session.user,
+      flow.session.accessToken,
+      flow.session.refreshToken,
+      flow.session.expiresInSeconds,
+    );
     navigate(flow.session.user.requiresRecharge ? "/subscription" : "/dashboard");
   }
 
