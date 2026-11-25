@@ -18,6 +18,7 @@ import {
   MapPin,
   Menu,
   Package,
+  PackageCheck,
   PlayCircle,
   BookOpen,
   GraduationCap,
@@ -179,6 +180,7 @@ export function AppLayout() {
         links: [
           { to: "/live-stock", label: t("nav.liveStock"), icon: Store, feature: "live_stock" },
           { to: "/live-stock/orders", label: t("nav.wholesaleOrders"), icon: ShoppingBag, feature: "live_stock" },
+          { to: "/live-stock/receipts", label: t("nav.goodsReceipt"), icon: PackageCheck, feature: "live_stock" },
           { to: "/live-stock/bills", label: t("nav.buyerBills"), icon: Receipt, feature: "live_stock" },
         ].filter(allow),
       },

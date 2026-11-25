@@ -1,166 +1,123 @@
 # Catalog Studio
 
-AI-powered product listing, image analysis, marketplace mapping, and Chrome autofill for e-commerce sellers.
+Enterprise seller workspace for AI listings, marketplace tools, wholesale supplier management, and Chrome autofill.
 
-Catalog Studio is an original SaaS workspace. The UI follows a typical seller registration → dashboard → AI listing → extension autofill workflow. It does not copy source code, logos, or branding from any marketplace or third-party product.
+Public API contract is stable: `/api/v1/**` with `{ success, message, data }`.
 
-The application **never auto-submits** a marketplace listing. Sellers review AI suggestions, review filled fields, and submit the listing themselves.
+## Runtime architecture (what actually runs)
+
+```text
+Client (Dashboard / Extension)
+        │
+        ▼
+  api-gateway :8080
+        ├── /api/v1/wholesale/**  →  supplier-service :8081  →  DB catalog_studio_supplier
+        └── /api/** (other)       →  platform-api :8082      →  DB catalog_studio
+```
+
+| Component | Port | Role | Database / schema |
+| --- | --- | --- | --- |
+| `gateway/api-gateway` | 8080 | Public entry | — |
+| `services/supplier-service` | 8081 | Wholesale + goods receipt | `catalog_studio_supplier.public` |
+| `catalog-studio-backend` (platform-api) | 8082 | Auth, products, inventory, billing, OMS, email | `catalog_studio.public` |
+| Postgres | 5432 | Two databases, schema `public` each | — |
+| Redis | 6379 | Cache / rate limits | — |
+| RabbitMQ | 5672 | Domain events (prod; optional locally) | — |
+| `catalog-studio-dashboard` | 5173 | React seller UI | — |
+
+**Important:** Only **supplier-service** has been extracted from the monolith so far. Folders under `services/*` other than `supplier-service` are **scaffolds for future extracts** — they are not production services. See [`services/README.md`](services/README.md).
 
 ## Repository layout
 
-| Path | Description |
-| --- | --- |
-| `catalog-studio-backend/` | Platform API (transitional monolith for non-extracted domains) |
-| `services/supplier-service/` | Independent Supplier Management (wholesale) microservice |
-| `gateway/api-gateway/` | Spring Cloud Gateway (public `/api` entry) |
-| `platform/` | Shared libraries (`platform-common`, `platform-security`, `platform-events`) |
-| `services/*-service/` | Scaffolds for identity, product, marketplace, billing, notification, media |
-| `catalog-studio-dashboard/` | React + Vite seller dashboard |
-| `catalog-studio-extension/` | Chrome Manifest V3 autofill extension |
-| `docs/ARCHITECTURE_MICROSERVICES.md` | Service boundaries and cutover runbook |
-| `docker-compose.yml` | Postgres, Redis, RabbitMQ, platform, supplier, gateway, dashboard |
-| `.env.example` | Environment template |
+| Path | Status | Description |
+| --- | --- | --- |
+| `gateway/api-gateway/` | **Live** | Spring Cloud Gateway |
+| `services/supplier-service/` | **Live** | Wholesale / supplier microservice |
+| `catalog-studio-backend/` | **Live** | Platform API (remaining domains) |
+| `platform/` | **Live libs** | Shared `platform-common`, `platform-security`, `platform-events` |
+| `catalog-studio-dashboard/` | **Live** | React + Vite dashboard |
+| `catalog-studio-extension/` | **Live** | Chrome Manifest V3 extension |
+| `services/{identity,product,marketplace,billing,notification,media}-service/` | **Scaffold** | Future extracts only |
+| `docs/ARCHITECTURE_MICROSERVICES.md` | Docs | Boundaries and deploy notes |
+| `docker-compose.yml` | Ops | Local / base stack |
+| `docker-compose.gcp.yml` | Ops | Production GCP overlay |
+
+## Data ownership
+
+| Data | Database | Owner |
+| --- | --- | --- |
+| Users, sessions, products, inventory, billing, OMS | `catalog_studio` | platform-api |
+| Wholesale stores, catalog, orders, coupons, goods receipts | `catalog_studio_supplier` | supplier-service |
+
+Goods receipt flow: buyer confirms receipt on **supplier-service** → accepted qty credited on **platform-api** via internal API `POST /internal/v1/inventory/wholesale-receipts`.
+
+Legacy monolith `wholesale_*` tables were removed from `catalog_studio` (Flyway V51). Do not reintroduce them on platform.
 
 ## Prerequisites
 
-- Java 21 (this project was compiled with `D:\jdk\jdk-21.0.10`)
+- Java 21
 - Maven 3.8+
 - Node.js 20+
-- Local PostgreSQL 16/17 (already running as `postgresql-x64-17` on this machine)
+- PostgreSQL 16/17
+- Redis (recommended)
+- RabbitMQ (required when `MESSAGING_ENABLED=true`)
 
-## Quick start (local)
-
-Set JDK 21 for this session:
+## Quick start (microservices local)
 
 ```powershell
 $env:JAVA_HOME = "D:\jdk\jdk-21.0.10"
 $env:Path = "$env:JAVA_HOME\bin;" + $env:Path
+
+# Preferred: full stack
+docker compose up --build
 ```
 
-### 1. Database
+Or run jars/processes individually (gateway 8080, platform 8082, supplier 8081, dashboard 5173).
 
-Create the app database in pgAdmin (or psql) using `scripts/create-db.sql`.
+Set on platform:
 
-Default API connection in `application-dev.yml`:
-
-- host: `localhost:5432`
-- database: `catalog_studio`
-- user/password: `catalog_studio` / `catalog_studio`
-
-### 2. Backend
-
-```powershell
-cd catalog-studio-backend
-mvn -DskipTests spring-boot:run
+```text
+WHOLESALE_MODULE_ENABLED=false
 ```
 
-API: `http://localhost:8080`  
-Swagger UI: `http://localhost:8080/swagger-ui`
+API entry: `http://localhost:8080`  
+Dashboard: `http://localhost:5173`  
+Swagger (via gateway/platform): `/swagger-ui`
 
-Seeded accounts (dev profile):
+### Dev accounts (when seeded)
 
 - Admin: `admin@catalogstudio.local` / `Admin@CatalogStudio1`
 - Seller: `seller@catalogstudio.local` / `Seller@CatalogStudio1`
-- Referral code: `ABC2026`
 
-Default AI provider is `mock`, so analysis works without an API key.
+### AI
 
-To use OpenAI vision:
+Default provider is `mock`. For OpenAI:
 
-```
+```text
 AI_PROVIDER=openai
 AI_API_KEY=sk-...
 AI_MODEL=gpt-4o-mini
 ```
 
-### 3. Dashboard
+## Dashboard & extension
 
 ```bash
-cd listingai-dashboard
-npm install
-npm run dev
+cd catalog-studio-dashboard && npm install && npm run dev
+cd catalog-studio-extension && npm install && npm run build
 ```
 
-Open `http://localhost:5173`
+Load `catalog-studio-extension/dist` in Chrome (`chrome://extensions` → Developer mode).
 
-Register at `/register?ref=ABC2026` or sign in with the seeded seller.
-
-### 4. Chrome extension
+## Production (GCP)
 
 ```bash
-cd listingai-extension
-npm install
-npm run build
+scripts/gcp-deploy-microservices.sh
 ```
 
-In Chrome: `chrome://extensions` → Developer mode → Load unpacked → select `listingai-extension/dist`.
+Uses `docker-compose.yml` + `docker-compose.gcp.yml` with `.env.gcp`.  
+Prod runs gateway + platform-api + supplier-service + Postgres + Redis + RabbitMQ (`MESSAGING_ENABLED=true`, `WHOLESALE_MODULE_ENABLED=false`).
 
-Then in the dashboard open **Chrome Extension**, generate a pairing key, and paste it into the extension popup.
+## Documentation
 
-On a supported supplier listing page, click the Catalog Studio button to open the sidebar. Choose a product and Autofill. Review fields, then submit the listing yourself.
-
-## Core API
-
-`POST /api/v1/product/analyze` (multipart)
-
-- `images` — 1 to 5 JPG/PNG/WEBP files
-- optional `marketplace`, `categoryHint`, `productTypeHint`, `primaryIndex`
-
-Auth APIs live under `/api/v1/auth/*`. Extension APIs use header `X-Extension-Key`.
-
-All responses use:
-
-```json
-{ "success": true, "message": "...", "data": {} }
-```
-
-## Product flow
-
-Register → Login → Dashboard → Analyze images → Review/edit AI result → Save product → Map marketplace attributes → Chrome extension autofill → Seller submits listing.
-
-AI values are stored with `source = AI`. Seller edits are stored with `source = USER`. Marketplace-mapped values use `source = MARKETPLACE`.
-
-## Marketplace adapters
-
-`MarketplaceAdapter` has Meesho, Amazon, and Flipkart implementations. Color/pattern/material mappings are stored in `marketplace_attribute_mappings` and can be changed without code deploys.
-
-Meesho autofill uses label-based field matching first, then name, placeholder, accessibility label, data attributes, and CSS as a last resort.
-
-## Docker
-
-```bash
-docker compose up --build
-```
-
-Dashboard: `http://localhost`  
-API: `http://localhost:8080`
-
-## Tests
-
-```bash
-cd catalog-studio-backend && mvn test
-cd listingai-dashboard && npm test
-cd listingai-extension && npm test
-```
-
-Covered scenarios include invalid image rejection, uncertain AI material, invalid AI JSON, revoked extension keys, and stop-autofill.
-
-## Security notes
-
-- Passwords hashed with BCrypt
-- Refresh tokens and extension keys stored as SHA-256 hashes only
-- JWT access tokens
-- Rate limiting on API and auth routes
-- File type and size validation
-- Secrets via environment variables only
-- No marketplace passwords stored
-
-## Development phases in this repo
-
-1. PostgreSQL schema + Spring entities  
-2. Auth, referral codes, JWT  
-3. React dashboard shell  
-4–7. Image upload, `POST /api/v1/product/analyze`, mock/OpenAI providers, review UI  
-8–9. Product CRUD, templates, profiles  
-10–13. Chrome extension, Meesho autofill, Amazon/Flipkart adapters, pairing  
-14. Subscriptions, admin, Docker, tests
+- [`docs/ARCHITECTURE_MICROSERVICES.md`](docs/ARCHITECTURE_MICROSERVICES.md) — topology and integration
+- [`services/README.md`](services/README.md) — live vs planned services

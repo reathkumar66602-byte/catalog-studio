@@ -22,4 +22,11 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     Optional<ProductVariant> findByUuidAndUserId(@Param("uuid") UUID uuid, @Param("userId") Long userId);
 
     boolean existsByProductIdAndSkuIgnoreCase(Long productId, String sku);
+
+    @Query("""
+            select v from ProductVariant v
+            join fetch v.product p
+            where p.user.id = :userId and lower(v.sku) = lower(:sku)
+            """)
+    List<ProductVariant> findAllByUserIdAndSkuIgnoreCase(@Param("userId") Long userId, @Param("sku") String sku);
 }

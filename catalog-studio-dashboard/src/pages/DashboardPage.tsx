@@ -16,7 +16,7 @@ export function DashboardPage() {
   const { data: sub } = useQuery({
     queryKey: ["sub"],
     queryFn: async () => (await api.get("/subscriptions/current")).data.data as SubscriptionStatus,
-    enabled: Boolean(user) && user.role !== "ADMIN" && user.role !== "SUPERADMIN",
+    enabled: user != null && user.role !== "ADMIN" && user.role !== "SUPERADMIN",
   });
 
   const needsRecharge = Boolean(data?.requiresRecharge || sub?.requiresRecharge || user?.requiresRecharge);

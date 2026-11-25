@@ -4,6 +4,8 @@ import com.catalogstudio.common.exception.ApiException;
 import com.catalogstudio.inventory.dto.InventoryAdjustRequest;
 import com.catalogstudio.inventory.dto.VariantCreateRequest;
 import com.catalogstudio.inventory.dto.VariantResponse;
+import com.catalogstudio.inventory.dto.WholesaleReceiptCreditRequest;
+import com.catalogstudio.inventory.dto.WholesaleReceiptCreditResult;
 import com.catalogstudio.inventory.entity.InventoryLevel;
 import com.catalogstudio.inventory.entity.InventoryMovement;
 import com.catalogstudio.inventory.entity.InventoryMovement.MovementType;
@@ -13,6 +15,7 @@ import com.catalogstudio.inventory.repository.InventoryLevelRepository;
 import com.catalogstudio.inventory.repository.InventoryMovementRepository;
 import com.catalogstudio.inventory.repository.ProductVariantRepository;
 import com.catalogstudio.product.entity.Product;
+import com.catalogstudio.product.entity.Product.ProductStatus;
 import com.catalogstudio.product.repository.ProductRepository;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
@@ -75,7 +78,7 @@ public class InventoryService {
                 .reserved(0)
                 .build());
         if (initial > 0) {
-            recordMovement(userId, variant, level, MovementType.ADJUST, initial, "Initial stock");
+            recordMovement(userId, variant, level, MovementType.ADJUST, initial, null, "Initial stock");
         }
         return toResponse(variant, level);
     }
@@ -98,8 +101,104 @@ public class InventoryService {
         int delta = next - level.getOnHand();
         level.setOnHand(next);
         levelRepository.save(level);
-        recordMovement(userId, variant, level, MovementType.ADJUST, delta, request.note());
+        recordMovement(userId, variant, level, MovementType.ADJUST, delta, null, request.note());
         return toResponse(variant, level);
+    }
+
+    /**
+     * Credits only the accepted quantity from a wholesale goods receipt.
+     * An existing retailer product keeps its title, description, and price.
+     * The same receipt line is applied at most once.
+     */
+    @Transactional
+    public WholesaleReceiptCreditResult applyWholesaleReceipt(WholesaleReceiptCreditRequest request) {
+        if (request.buyerUserId() == null || request.receiptId() == null) {
+            throw ApiException.badRequest("buyerUserId and receiptId are required");
+        }
+        User buyer = userRepository.findById(request.buyerUserId())
+                .orElseThrow(() -> ApiException.notFound("Retailer not found"));
+        int credited = 0;
+        List<WholesaleReceiptCreditRequest.Line> lines = request.lines() == null ? List.of() : request.lines();
+        for (WholesaleReceiptCreditRequest.Line line : lines) {
+            if (line.lineId() == null) {
+                throw ApiException.badRequest("Each receipt line needs an id");
+            }
+            if (line.acceptedQty() <= 0) {
+                continue;
+            }
+            String reference = "GR:" + request.receiptId() + ":" + line.lineId();
+            if (movementRepository.existsByReference(reference)) {
+                continue;
+            }
+            ProductVariant variant = resolveReceiptVariant(buyer, line);
+            InventoryLevel level = levelRepository.findByVariantId(variant.getId())
+                    .orElseGet(() -> levelRepository.save(InventoryLevel.builder()
+                            .variant(variant)
+                            .locationCode("DEFAULT")
+                            .onHand(0)
+                            .reserved(0)
+                            .build()));
+            level = levelRepository.lockById(level.getId())
+                    .orElseThrow(() -> ApiException.conflict("Inventory row is not available"));
+            if (movementRepository.existsByReference(reference)) {
+                continue;
+            }
+            int next;
+            try {
+                next = Math.addExact(level.getOnHand(), line.acceptedQty());
+            } catch (ArithmeticException ex) {
+                throw ApiException.badRequest("Accepted quantity is too large");
+            }
+            level.setOnHand(next);
+            levelRepository.save(level);
+            recordMovement(
+                    buyer.getId(),
+                    variant,
+                    level,
+                    MovementType.RECEIPT,
+                    line.acceptedQty(),
+                    reference,
+                    "Wholesale goods receipt " + request.receiptId());
+            credited += line.acceptedQty();
+        }
+        return new WholesaleReceiptCreditResult(request.receiptId(), credited);
+    }
+
+    private ProductVariant resolveReceiptVariant(User buyer, WholesaleReceiptCreditRequest.Line line) {
+        String sku = line.sku() == null ? "" : line.sku().trim();
+        if (sku.isEmpty() || sku.length() > 80) {
+            throw ApiException.badRequest("Accepted stock needs a SKU of 1 to 80 characters");
+        }
+        List<ProductVariant> matches = variantRepository.findAllByUserIdAndSkuIgnoreCase(buyer.getId(), sku);
+        if (matches.size() > 1) {
+            throw ApiException.conflict("Multiple catalog variants use SKU " + sku);
+        }
+        if (matches.size() == 1) {
+            return matches.get(0);
+        }
+        Product product = productRepository.findByUserIdAndSkuIgnoreCase(buyer.getId(), sku).orElse(null);
+        if (product == null) {
+            String title = line.title() == null || line.title().isBlank() ? sku : line.title().trim();
+            if (title.length() > 255) {
+                title = title.substring(0, 255);
+            }
+            product = productRepository.save(Product.builder()
+                    .user(buyer)
+                    .name(title)
+                    .sku(sku)
+                    .basePrice(line.unitCost())
+                    .description("Imported from a wholesale goods receipt. This retailer copy is not overwritten by later supplier edits.")
+                    .status(ProductStatus.ACTIVE)
+                    .build());
+        }
+        return variantRepository.save(ProductVariant.builder()
+                .product(product)
+                .sku(sku)
+                .sizeLabel(trimLimit(line.sizeLabel(), 40))
+                .colorLabel(trimLimit(line.colorLabel(), 80))
+                .price(line.unitCost())
+                .status(VariantStatus.ACTIVE)
+                .build());
     }
 
     private void recordMovement(
@@ -108,6 +207,7 @@ public class InventoryService {
             InventoryLevel level,
             MovementType type,
             int quantity,
+            String reference,
             String note
     ) {
         User actor = userRepository.findById(userId).orElse(null);
@@ -117,6 +217,7 @@ public class InventoryService {
                 .quantity(quantity)
                 .onHandAfter(level.getOnHand())
                 .reservedAfter(level.getReserved())
+                .reference(reference)
                 .note(trimToNull(note))
                 .createdBy(actor)
                 .build());
@@ -154,5 +255,13 @@ public class InventoryService {
             return null;
         }
         return value.trim();
+    }
+
+    private static String trimLimit(String value, int max) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null || trimmed.length() <= max) {
+            return trimmed;
+        }
+        return trimmed.substring(0, max);
     }
 }

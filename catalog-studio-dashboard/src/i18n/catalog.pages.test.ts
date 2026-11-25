@@ -36,6 +36,7 @@ describe("wholesale nav UI_CATALOG", () => {
     for (const key of [
       "nav.liveStock",
       "nav.wholesaleOrders",
+      "nav.goodsReceipt",
       "nav.buyerBills",
       "nav.supplierStore",
       "nav.supplierInventory",

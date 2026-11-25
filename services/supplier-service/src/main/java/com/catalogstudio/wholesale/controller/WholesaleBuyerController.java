@@ -3,11 +3,14 @@ package com.catalogstudio.wholesale.controller;
 import com.catalogstudio.common.api.ApiResponse;
 import com.catalogstudio.security.SecurityUtils;
 import com.catalogstudio.wholesale.dto.BillHistoryResponse;
+import com.catalogstudio.wholesale.dto.ConfirmGoodsReceiptRequest;
+import com.catalogstudio.wholesale.dto.GoodsReceiptResponse;
 import com.catalogstudio.wholesale.dto.OrderPreviewRequest;
 import com.catalogstudio.wholesale.dto.OrderPreviewResponse;
 import com.catalogstudio.wholesale.dto.OrderResponse;
 import com.catalogstudio.wholesale.dto.PageResponse;
 import com.catalogstudio.wholesale.dto.PlaceOrderRequest;
+import com.catalogstudio.wholesale.service.GoodsReceiptService;
 import com.catalogstudio.wholesale.service.WholesaleBillHistoryService;
 import com.catalogstudio.wholesale.service.WholesaleOrderService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +37,7 @@ public class WholesaleBuyerController {
 
     private final WholesaleOrderService orderService;
     private final WholesaleBillHistoryService billHistoryService;
+    private final GoodsReceiptService goodsReceiptService;
 
     @PostMapping("/orders/preview")
     public ApiResponse<OrderPreviewResponse> previewOrder(@Valid @RequestBody OrderPreviewRequest request) {
@@ -62,6 +66,21 @@ public class WholesaleBuyerController {
     @PostMapping("/orders/{id}/cancel")
     public ApiResponse<OrderResponse> cancel(@PathVariable UUID id) {
         return ApiResponse.ok("Order cancelled", orderService.cancelOrder(SecurityUtils.currentUserId(), id));
+    }
+
+    @GetMapping("/orders/{id}/goods-receipt")
+    public ApiResponse<GoodsReceiptResponse> goodsReceipt(@PathVariable UUID id) {
+        return ApiResponse.ok(goodsReceiptService.get(SecurityUtils.currentUserId(), id));
+    }
+
+    @PostMapping("/orders/{id}/goods-receipt")
+    public ApiResponse<GoodsReceiptResponse> confirmGoodsReceipt(
+            @PathVariable UUID id,
+            @Valid @RequestBody ConfirmGoodsReceiptRequest request
+    ) {
+        return ApiResponse.ok(
+                "Accepted quantities added to your inventory",
+                goodsReceiptService.confirm(SecurityUtils.currentUserId(), id, request));
     }
 
     @GetMapping("/bills")

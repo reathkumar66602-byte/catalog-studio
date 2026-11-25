@@ -372,10 +372,11 @@ public record CatalogStudioProperties(
 
     /**
      * Feature flags for strangler-fig extraction.
-     * When wholesaleEnabled=false, supplier-service owns /api/v1/wholesale/**.
+     * wholesaleEnabled must stay false: supplier-service owns /api/v1/wholesale/**
+     * and platform no longer ships the wholesale module.
      */
     public record Modules(
-            @DefaultValue("true") boolean wholesaleEnabled,
+            @DefaultValue("false") boolean wholesaleEnabled,
             @DefaultValue("catalog-studio-internal") String internalApiKey
     ) {}
 }

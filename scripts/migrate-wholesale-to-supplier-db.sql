@@ -1,4 +1,8 @@
--- Copy wholesale_* from catalog_studio into catalog_studio_supplier (same Postgres instance).
+-- HISTORICAL one-time cutover script (do not re-run on cleaned environments).
+-- After Flyway V51, platform catalog_studio no longer has wholesale_* tables.
+-- Live wholesale data is only in catalog_studio_supplier.
+--
+-- Original purpose: copy wholesale_* from catalog_studio into catalog_studio_supplier.
 -- Run as catalog_studio against catalog_studio_supplier AFTER supplier Flyway has created empty tables.
 
 CREATE EXTENSION IF NOT EXISTS dblink;

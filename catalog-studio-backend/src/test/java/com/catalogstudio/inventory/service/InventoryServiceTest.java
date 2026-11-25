@@ -3,12 +3,14 @@ package com.catalogstudio.inventory.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.catalogstudio.common.exception.ApiException;
 import com.catalogstudio.inventory.dto.InventoryAdjustRequest;
 import com.catalogstudio.inventory.dto.VariantCreateRequest;
+import com.catalogstudio.inventory.dto.WholesaleReceiptCreditRequest;
 import com.catalogstudio.inventory.entity.InventoryLevel;
 import com.catalogstudio.inventory.entity.ProductVariant;
 import com.catalogstudio.inventory.repository.InventoryLevelRepository;
@@ -18,6 +20,7 @@ import com.catalogstudio.product.entity.Product;
 import com.catalogstudio.product.repository.ProductRepository;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,5 +92,56 @@ class InventoryServiceTest {
                 ApiException.class,
                 () -> service.adjust(1L, new InventoryAdjustRequest(variantId, 2, "oops")));
         assertEquals(400, ex.getStatus().value());
+    }
+
+    @Test
+    void receiptCreditsAcceptedQtyWithoutChangingExistingProduct() {
+        UUID receiptId = UUID.randomUUID();
+        ProductVariant variant = ProductVariant.builder()
+                .id(5L)
+                .uuid(UUID.randomUUID())
+                .product(product)
+                .sku("TEE-M")
+                .status(ProductVariant.VariantStatus.ACTIVE)
+                .build();
+        InventoryLevel level = InventoryLevel.builder()
+                .id(7L)
+                .variant(variant)
+                .onHand(10)
+                .reserved(1)
+                .build();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(product.getUser()));
+        when(movementRepository.existsByReference(org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
+        when(variantRepository.findAllByUserIdAndSkuIgnoreCase(1L, "TEE-M")).thenReturn(List.of(variant));
+        when(levelRepository.findByVariantId(5L)).thenReturn(Optional.of(level));
+        when(levelRepository.lockById(7L)).thenReturn(Optional.of(level));
+
+        var result = service.applyWholesaleReceipt(new WholesaleReceiptCreditRequest(
+                1L,
+                receiptId,
+                List.of(new WholesaleReceiptCreditRequest.Line(
+                        UUID.randomUUID(), "TEE-M", "Replacement title", "Red", "M", 3, null))));
+
+        assertEquals(3, result.creditedUnits());
+        assertEquals(13, level.getOnHand());
+        assertEquals("Tee", product.getName());
+        verify(productRepository, never()).save(any());
+        verify(variantRepository, never()).save(any());
+    }
+
+    @Test
+    void receiptDoesNotCreditALineTwice() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(product.getUser()));
+        when(movementRepository.existsByReference(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+
+        var result = service.applyWholesaleReceipt(new WholesaleReceiptCreditRequest(
+                1L,
+                UUID.randomUUID(),
+                List.of(new WholesaleReceiptCreditRequest.Line(
+                        UUID.randomUUID(), "TEE-M", "Tee", null, null, 3, null))));
+
+        assertEquals(0, result.creditedUnits());
+        verify(levelRepository, never()).lockById(any());
+        verify(movementRepository, never()).save(any());
     }
 }

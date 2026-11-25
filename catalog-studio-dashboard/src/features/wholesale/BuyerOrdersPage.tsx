@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../../api/client";
 import { useI18n } from "../../i18n/LanguageProvider";
 import { BillPdfButton } from "./BillPdfButton";
+import { GoodsReceiptPanel } from "./GoodsReceiptPanel";
 import {
   formatDateTime,
   formatInr,
@@ -152,6 +153,8 @@ export function BuyerOrdersPage() {
               </button>
             )}
           </div>
+
+          {(order.status === "ACCEPTED" || order.status === "FULFILLED") && <GoodsReceiptPanel order={order} />}
 
           {order.buyerNote && <p className="text-xs text-slate-500">Your note: {order.buyerNote}</p>}
           {order.supplierNote && (

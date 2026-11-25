@@ -78,6 +78,6 @@ public class InventoryMovement {
     }
 
     public enum MovementType {
-        ADJUST, RESERVE, RELEASE, SALE, RETURN
+        ADJUST, RESERVE, RELEASE, SALE, RETURN, RECEIPT
     }
 }

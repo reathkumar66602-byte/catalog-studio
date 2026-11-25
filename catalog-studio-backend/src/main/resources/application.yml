@@ -75,7 +75,7 @@ catalogstudio:
   messaging:
     enabled: ${MESSAGING_ENABLED:false}
   modules:
-    wholesale-enabled: ${WHOLESALE_MODULE_ENABLED:true}
+    wholesale-enabled: ${WHOLESALE_MODULE_ENABLED:false}
     internal-api-key: ${INTERNAL_API_KEY:catalog-studio-internal}
   jwt:
     secret: ${JWT_SECRET:change-this-to-a-256-bit-secret-key-for-catalog-studio-dev-only}

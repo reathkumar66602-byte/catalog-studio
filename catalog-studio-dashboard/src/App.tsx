@@ -136,6 +136,7 @@ export default function App() {
                   <Route element={<FeatureRoute feature="live_stock" />}>
                     <Route path="/live-stock" element={<LiveStockPage />} />
                     <Route path="/live-stock/orders" element={<BuyerOrdersPage />} />
+                    <Route path="/live-stock/receipts" element={<BuyerOrdersPage />} />
                     <Route path="/live-stock/bills" element={<BuyerBillHistoryPage />} />
                     <Route path="/live-stock/:idOrSlug" element={<WholesaleProductDetailPage />} />
                   </Route>

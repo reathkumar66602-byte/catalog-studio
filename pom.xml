@@ -18,20 +18,29 @@
     <name>Catalog Studio Parent</name>
     <description>Enterprise microservices parent for CatalogStudio</description>
 
+    <!-- Default reactor = live runtime only. Scaffolds activate with -Pfuture-services -->
     <modules>
         <module>platform/platform-common</module>
         <module>platform/platform-security</module>
         <module>platform/platform-events</module>
         <module>catalog-studio-backend</module>
         <module>services/supplier-service</module>
-        <module>services/identity-service</module>
-        <module>services/product-service</module>
-        <module>services/marketplace-service</module>
-        <module>services/billing-service</module>
-        <module>services/notification-service</module>
-        <module>services/media-service</module>
         <module>gateway/api-gateway</module>
     </modules>
+
+    <profiles>
+        <profile>
+            <id>future-services</id>
+            <modules>
+                <module>services/identity-service</module>
+                <module>services/product-service</module>
+                <module>services/marketplace-service</module>
+                <module>services/billing-service</module>
+                <module>services/notification-service</module>
+                <module>services/media-service</module>
+            </modules>
+        </profile>
+    </profiles>
 
     <properties>
         <java.version>21</java.version>
