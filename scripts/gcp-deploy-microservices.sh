@@ -39,6 +39,18 @@ export PUBLIC_ORIGIN
 
 COMPOSE=(sudo docker compose --env-file .env.gcp -f docker-compose.yml -f docker-compose.gcp.yml)
 
+echo "==> Removing stale paths left by tar extracts (deleted in git are not removed by tar)"
+# Tar overlay does not delete removed files; force-clean known dead monolith/scaffold trees.
+rm -rf \
+  "${APP_DIR}/catalog-studio-backend/src/main/java/com/catalogstudio/wholesale" \
+  "${APP_DIR}/catalog-studio-backend/src/test/java/com/catalogstudio/wholesale" \
+  "${APP_DIR}/services/identity-service" \
+  "${APP_DIR}/services/product-service" \
+  "${APP_DIR}/services/marketplace-service" \
+  "${APP_DIR}/services/billing-service" \
+  "${APP_DIR}/services/notification-service" \
+  "${APP_DIR}/services/media-service"
+
 echo "==> Ensuring supplier database exists"
 "${COMPOSE[@]}" up -d postgres
 sleep 5
