@@ -25,7 +25,7 @@ Client (Dashboard / Extension)
 | RabbitMQ | 5672 | Domain events (prod; optional locally) | — |
 | `catalog-studio-dashboard` | 5173 | React seller UI | — |
 
-**Important:** Only **supplier-service** has been extracted from the monolith so far. Folders under `services/*` other than `supplier-service` are **scaffolds for future extracts** — they are not production services. See [`services/README.md`](services/README.md).
+**Important:** Only **supplier-service** has been extracted from the monolith so far. Other domains remain in platform-api. See [`services/README.md`](services/README.md).
 
 ## Repository layout
 
@@ -37,7 +37,6 @@ Client (Dashboard / Extension)
 | `platform/` | **Live libs** | Shared `platform-common`, `platform-security`, `platform-events` |
 | `catalog-studio-dashboard/` | **Live** | React + Vite dashboard |
 | `catalog-studio-extension/` | **Live** | Chrome Manifest V3 extension |
-| `services/{identity,product,marketplace,billing,notification,media}-service/` | **Scaffold** | Future extracts only |
 | `docs/ARCHITECTURE_MICROSERVICES.md` | Docs | Boundaries and deploy notes |
 | `docker-compose.yml` | Ops | Local / base stack |
 | `docker-compose.gcp.yml` | Ops | Production GCP overlay |

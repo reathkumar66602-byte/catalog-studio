@@ -4,7 +4,7 @@
 
 CatalogStudio uses a **strangler-fig** migration: domains are extracted from the modular Spring Boot platform into independently deployable services without breaking public API contracts (`/api/v1/**`, `{ success, message, data }`).
 
-## What runs in production today
+## Production runtime
 
 | Component | Port | Status | Role |
 | --- | --- | --- | --- |
@@ -15,20 +15,7 @@ CatalogStudio uses a **strangler-fig** migration: domains are extracted from the
 | Redis | 6379 | **Live** | Cache / rate limits |
 | RabbitMQ | 5672 | **Live (prod)** | Domain events (`catalogstudio.domain`) |
 
-## Planned services (scaffolds only)
-
-These folders exist under `services/` but are **not deployed**:
-
-| Service | Target ownership |
-| --- | --- |
-| identity-service | Auth / users / OTP / referral / business |
-| product-service | Products / AI / shoot |
-| marketplace-service | OMS / extension |
-| billing-service | Subscriptions / payments |
-| notification-service | Email / campaigns |
-| media-service | Storage |
-
-Until extract, that logic stays in **platform-api**.
+Only **supplier-service** has been extracted so far. Remaining domains stay in platform-api until a future extract wave.
 
 ## Gateway routing
 
@@ -51,7 +38,7 @@ Until extract, that logic stays in **platform-api**.
 
 | Env | Meaning |
 | --- | --- |
-| `WHOLESALE_MODULE_ENABLED=false` | **Required.** Platform must not own wholesale APIs (module removed). |
+| `WHOLESALE_MODULE_ENABLED=false` | **Required.** Platform does not own wholesale APIs. |
 | `MESSAGING_ENABLED=true` | Enables RabbitMQ publishers/listeners (prod default). |
 | `INTERNAL_API_KEY` | Shared service-to-service key |
 
@@ -62,7 +49,7 @@ Until extract, that logic stays in **platform-api**.
 | `catalog_studio` | platform-api | Users, products, inventory, billing, OMS, … |
 | `catalog_studio_supplier` | supplier-service | `wholesale_*`, `goods_receipts`, `goods_receipt_items` |
 
-Legacy monolith `wholesale_*` / goods-receipt tables on `catalog_studio` were dropped in Flyway **V51** after cutover.
+Legacy monolith `wholesale_*` / goods-receipt tables on `catalog_studio` are dropped by Flyway **V51**.
 
 ## Local
 
@@ -78,8 +65,7 @@ docker compose up --build
 
 ```text
 platform/platform-common|security|events
-services/supplier-service          # live extract
-services/*-service                 # scaffolds (future)
+services/supplier-service
 gateway/api-gateway
 catalog-studio-backend             # platform-api
 ```

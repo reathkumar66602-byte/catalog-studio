@@ -38,10 +38,17 @@ catalog-studio-extension/release/
 catalog-studio-extension/dist-local/
 catalog-studio-extension/dist-prod/
 
-# Test
+# Test / local ops junk
 coverage/
 .nyc_output/
 tmp/
+scripts/tmp-*
+backups/
+**/uploads-supplier/
+**/target-shoot-test/
+meesho.html
+monthlyTrendingProducts
+tingily-*.json
 
 # GCP service account keys
 **/secrets/
