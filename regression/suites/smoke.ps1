@@ -25,7 +25,7 @@ foreach ($probe in @(
         @{ Name = 'gateway-wholesale-route'; Path = '/api/v1/wholesale/categories'; Allowed = @(200, 401, 403) },
         @{ Name = 'gateway-supplier-route'; Path = '/api/v1/wholesale/supplier/store'; Allowed = @(200, 401, 403) },
         @{ Name = 'gateway-support-route'; Path = '/api/v1/support/categories'; Allowed = @(200, 401, 403) },
-        @{ Name = 'gateway-extension-route'; Path = '/api/v1/extension/ping'; Allowed = @(200, 401, 403) },
+        @{ Name = 'gateway-extension-route'; Path = '/api/v1/extension/ping'; Allowed = @(200, 400, 401, 403) },
         @{ Name = 'gateway-oms-route'; Path = '/api/v1/oms/orders'; Allowed = @(200, 401, 403) },
         @{ Name = 'gateway-inventory-route'; Path = '/api/v1/inventory'; Allowed = @(200, 401, 403) }
     )) {

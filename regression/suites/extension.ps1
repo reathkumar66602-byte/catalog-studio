@@ -6,7 +6,8 @@ if (-not (Ensure-LoggedIn -State $State)) {
     return
 }
 
-$allowed = @(200, 403)
+# Extension device endpoints need X-Extension-Key; 400 without it still proves the route is live.
+$allowed = @(200, 400, 403)
 
 Test-ApiCheck -State $State -Suite $suite -Name 'ping' -Method GET -Path '/api/v1/extension/ping' -Auth -AllowedStatus $allowed | Out-Null
 Test-ApiCheck -State $State -Suite $suite -Name 'devices' -Method GET -Path '/api/v1/extension/devices' -Auth -AllowedStatus $allowed | Out-Null

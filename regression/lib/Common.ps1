@@ -234,9 +234,20 @@ function Invoke-LocalNpmTest {
         return $false
     }
 
-    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $npmCmd) {
-        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'npm not found on PATH'
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $nodeCmd) {
+        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'node not found on PATH'
+        return $false
+    }
+
+    $npmCliCandidates = @(
+        (Join-Path (Split-Path $nodeCmd.Source -Parent) 'node_modules\npm\bin\npm-cli.js'),
+        'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js',
+        (Join-Path $env:APPDATA 'npm\node_modules\npm\bin\npm-cli.js')
+    )
+    $npmCli = $npmCliCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $npmCli) {
+        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'npm-cli.js not found'
         return $false
     }
 
@@ -244,8 +255,8 @@ function Invoke-LocalNpmTest {
     $outFile = [System.IO.Path]::GetTempFileName()
     $errFile = [System.IO.Path]::GetTempFileName()
     try {
-        $argList = @('test', '--') + $NpmArgs
-        $proc = Start-Process -FilePath $npmCmd.Source -ArgumentList $argList -WorkingDirectory $ProjectDir `
+        $argList = @($npmCli, 'test', '--') + $NpmArgs
+        $proc = Start-Process -FilePath $nodeCmd.Source -ArgumentList $argList -WorkingDirectory $ProjectDir `
             -NoNewWindow -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
         if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
             try { $proc.Kill() } catch { }
@@ -262,6 +273,11 @@ function Invoke-LocalNpmTest {
             return $true
         }
         Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'FAIL' -Detail ("exit $($proc.ExitCode) | " + $tail) -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
+        return $false
+    }
+    catch {
+        $sw.Stop()
+        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'FAIL' -Detail $_.Exception.Message -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
         return $false
     }
     finally {

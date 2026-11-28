@@ -155,7 +155,12 @@ foreach ($name in $selected) {
         continue
     }
     Write-Host ("--- suite: {0} ---" -f $name) -ForegroundColor Cyan
-    & $path -State $State
+    try {
+        & $path -State $State
+    }
+    catch {
+        Add-CheckResult -State $State -Suite $name -Name 'suite-crash' -Status 'FAIL' -Detail $_.Exception.Message
+    }
 }
 
 $report = Write-RegressionReport -State $State -ReportsDir (Join-Path $Root 'reports')

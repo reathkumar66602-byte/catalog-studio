@@ -13,6 +13,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -63,6 +64,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.validation(
                         "Validation failed",
                         List.of(new ApiResponse.FieldError("images", "File size exceeds the allowed limit"))));
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.validation(
+                        "Validation failed",
+                        List.of(new ApiResponse.FieldError(ex.getHeaderName(), "Required header is missing"))));
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
