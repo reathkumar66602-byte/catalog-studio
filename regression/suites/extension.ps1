@@ -20,11 +20,14 @@ Test-ApiCheck -State $State -Suite $suite -Name 'categories' -Method GET -Path '
 # Public marketing page for extension
 Test-ApiCheck -State $State -Suite $suite -Name 'chrome-extension-page' -Method GET -Path "$($State.DashboardUrl)/chrome-extension" -AllowedStatus @(200) | Out-Null
 
-# Local autofill unit tests (client-side; always useful after code changes)
+# Local autofill unit tests (client-side; always useful after code changes).
+# Run autofill + content-bundle explicitly so failures are attributable.
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $extRoot = Join-Path $repoRoot 'catalog-studio-extension'
 if (Test-Path (Join-Path $extRoot 'package.json')) {
-    Invoke-LocalNpmTest -State $State -Suite $suite -Name 'autofill-unit-tests' -ProjectDir $extRoot -NpmArgs @('tests') | Out-Null
+    Invoke-LocalNpmTest -State $State -Suite $suite -Name 'autofill-unit-tests' -ProjectDir $extRoot `
+        -NpmArgs @('tests/autofill.test.ts', 'tests/content-bundle.test.ts', '--pool=forks', '--maxWorkers=1') `
+        -TimeoutSec 240 | Out-Null
 }
 else {
     Add-CheckResult -State $State -Suite $suite -Name 'autofill-unit-tests' -Status 'SKIP' -Detail 'catalog-studio-extension not found'

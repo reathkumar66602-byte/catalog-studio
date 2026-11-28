@@ -22,7 +22,8 @@ describe("meesho shoot backend contract", () => {
     expect(promptSrc).toContain('"AUTO".equals(choice)');
     expect(promptSrc).toContain("flatters this exact outfit");
     expect(promptSrc).toContain("Study the garment colour, print, fabric, occasion, and style");
-    expect(promptSrc).toContain("cute Indian");
+    expect(promptSrc).toContain("beautiful Indian lifestyle background");
+    expect(promptSrc).toContain("cute, beautiful Indian adult fashion model");
   });
 
   it("fixed scenes still use an exact setting string", () => {

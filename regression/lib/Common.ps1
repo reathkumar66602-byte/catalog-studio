@@ -234,43 +234,66 @@ function Invoke-LocalNpmTest {
         return $false
     }
 
-    if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue) -and -not (Get-Command npm -ErrorAction SilentlyContinue)) {
-        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'npm not found on PATH'
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    $npmCmdPath = $null
+    if ($nodeCmd) {
+        $candidate = Join-Path (Split-Path $nodeCmd.Source -Parent) 'npm.cmd'
+        if (Test-Path $candidate) { $npmCmdPath = $candidate }
+    }
+    if (-not $npmCmdPath) {
+        $npmOnPath = Get-Command npm.cmd -ErrorAction SilentlyContinue
+        if ($npmOnPath) { $npmCmdPath = $npmOnPath.Source }
+    }
+    if (-not $npmCmdPath) {
+        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'npm.cmd not found on PATH'
         return $false
     }
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $outFile = [System.IO.Path]::GetTempFileName()
-    $errFile = [System.IO.Path]::GetTempFileName()
     try {
-        # cmd.exe avoids Start-Process issues with npm.ps1 / paths that contain spaces.
-        $argList = @('/d', '/c', 'npm', 'test', '--') + $NpmArgs
-        $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList $argList -WorkingDirectory $ProjectDir `
-            -NoNewWindow -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        # Use ProcessStartInfo + npm.cmd so exit codes are reliable on Windows.
+        # Start-Process/cmd.exe argument arrays often report false non-zero exits.
+        $quotedArgs = @('test', '--') + $NpmArgs | ForEach-Object {
+            $a = [string]$_
+            if ($a -match '[\s"]') { '"' + ($a -replace '"', '\"') + '"' } else { $a }
+        }
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $npmCmdPath
+        $psi.Arguments = ($quotedArgs -join ' ')
+        $psi.WorkingDirectory = $ProjectDir
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+
+        $proc = New-Object System.Diagnostics.Process
+        $proc.StartInfo = $psi
+        [void]$proc.Start()
+        $outTask = $proc.StandardOutput.ReadToEndAsync()
+        $errTask = $proc.StandardError.ReadToEndAsync()
         if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
             try { $proc.Kill() } catch { }
             $sw.Stop()
             Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'FAIL' -Detail "Timed out after ${TimeoutSec}s" -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
             return $false
         }
+        $stdout = $outTask.GetAwaiter().GetResult()
+        $stderr = $errTask.GetAwaiter().GetResult()
         $sw.Stop()
-        $stdout = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
-        $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
-        $tail = (($stdout + "`n" + $stderr) -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 8) -join ' | '
-        if ($proc.ExitCode -eq 0) {
-            Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'PASS' -Detail $tail -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
+        $combined = (($stdout + "`n" + $stderr) -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 10) -join ' | '
+        $code = $proc.ExitCode
+        # Vitest may print warnings to stderr; only trust the process exit code.
+        if ($code -eq 0) {
+            Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'PASS' -Detail $combined -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
             return $true
         }
-        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'FAIL' -Detail ("exit $($proc.ExitCode) | " + $tail) -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
+        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'FAIL' -Detail ("exit $code | " + $combined) -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
         return $false
     }
     catch {
         $sw.Stop()
         Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'FAIL' -Detail $_.Exception.Message -DurationMs $sw.ElapsedMilliseconds -Request ("npm test -- " + ($NpmArgs -join ' '))
         return $false
-    }
-    finally {
-        Remove-Item $outFile, $errFile -Force -ErrorAction SilentlyContinue
     }
 }
 
