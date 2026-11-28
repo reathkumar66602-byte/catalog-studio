@@ -29,6 +29,12 @@
             <artifactId>spring-boot-starter-security</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- Optimistic-lock handler only. Optional so the gateway does not pull JPA. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-orm</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

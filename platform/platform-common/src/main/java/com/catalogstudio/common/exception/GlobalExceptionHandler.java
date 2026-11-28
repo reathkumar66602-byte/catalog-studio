@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -64,9 +65,8 @@ public class GlobalExceptionHandler {
                         List.of(new ApiResponse.FieldError("images", "File size exceeds the allowed limit"))));
     }
 
-    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(
-            org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("This ticket was updated by someone else. Refresh and try again."));
     }
