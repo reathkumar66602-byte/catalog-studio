@@ -15,8 +15,12 @@ $products = Invoke-Api -State $State -Method GET -Path '/api/v1/products?page=0&
 if ($products.ok -and $products.body -and $products.body.success) {
     $items = $null
     $data = $products.body.data
-    if ($data.content) { $items = @($data.content) }
-    elseif ($data.items) { $items = @($data.items) }
+    $props = @()
+    if ($null -ne $data -and $data.PSObject) {
+        $props = @($data.PSObject.Properties.Name)
+    }
+    if ($props -contains 'content' -and $data.content) { $items = @($data.content) }
+    elseif ($props -contains 'items' -and $data.items) { $items = @($data.items) }
     elseif ($data -is [System.Array]) { $items = @($data) }
 
     if ($items -and $items.Count -gt 0) {

@@ -234,20 +234,8 @@ function Invoke-LocalNpmTest {
         return $false
     }
 
-    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-    if (-not $nodeCmd) {
-        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'node not found on PATH'
-        return $false
-    }
-
-    $npmCliCandidates = @(
-        (Join-Path (Split-Path $nodeCmd.Source -Parent) 'node_modules\npm\bin\npm-cli.js'),
-        'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js',
-        (Join-Path $env:APPDATA 'npm\node_modules\npm\bin\npm-cli.js')
-    )
-    $npmCli = $npmCliCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if (-not $npmCli) {
-        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'npm-cli.js not found'
+    if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue) -and -not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        Add-CheckResult -State $State -Suite $Suite -Name $Name -Status 'SKIP' -Detail 'npm not found on PATH'
         return $false
     }
 
@@ -255,8 +243,9 @@ function Invoke-LocalNpmTest {
     $outFile = [System.IO.Path]::GetTempFileName()
     $errFile = [System.IO.Path]::GetTempFileName()
     try {
-        $argList = @($npmCli, 'test', '--') + $NpmArgs
-        $proc = Start-Process -FilePath $nodeCmd.Source -ArgumentList $argList -WorkingDirectory $ProjectDir `
+        # cmd.exe avoids Start-Process issues with npm.ps1 / paths that contain spaces.
+        $argList = @('/d', '/c', 'npm', 'test', '--') + $NpmArgs
+        $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList $argList -WorkingDirectory $ProjectDir `
             -NoNewWindow -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
         if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
             try { $proc.Kill() } catch { }

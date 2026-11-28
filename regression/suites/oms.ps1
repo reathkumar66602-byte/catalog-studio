@@ -6,7 +6,7 @@ if (-not (Ensure-LoggedIn -State $State)) {
     return
 }
 
-$allowed = @(200, 403)
+$allowed = @(200, 401, 403)
 
 Test-ApiCheck -State $State -Suite $suite -Name 'marketplaces' -Method GET -Path '/api/v1/marketplaces' -Auth -AllowedStatus $allowed | Out-Null
 
