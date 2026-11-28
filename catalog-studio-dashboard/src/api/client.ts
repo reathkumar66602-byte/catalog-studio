@@ -55,7 +55,8 @@ api.interceptors.response.use(
         here !== "/register" &&
         !here.startsWith("/transactions") &&
         !here.startsWith("/settings") &&
-        !here.startsWith("/billing-address")
+        !here.startsWith("/billing-address") &&
+        !here.startsWith("/support")
       ) {
         window.location.href = "/subscription";
       }

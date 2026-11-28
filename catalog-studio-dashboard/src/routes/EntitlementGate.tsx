@@ -13,6 +13,7 @@ const ALLOWED_WHEN_LOCKED = [
   "/billing-address",
   "/transactions",
   "/app-guide",
+  "/support",
 ];
 
 export function EntitlementGate() {

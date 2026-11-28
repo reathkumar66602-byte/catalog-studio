@@ -43,6 +43,18 @@ public class DomainEventsRabbitConfig {
     }
 
     @Bean
+    public Queue platformSupportNotificationsQueue() {
+        return new Queue(CatalogStudioExchanges.QUEUE_PLATFORM_SUPPORT_NOTIFICATIONS, true);
+    }
+
+    @Bean
+    public Binding supportEmailBinding(Queue platformSupportNotificationsQueue, TopicExchange catalogStudioDomainExchange) {
+        return BindingBuilder.bind(platformSupportNotificationsQueue)
+                .to(catalogStudioDomainExchange)
+                .with("support.#");
+    }
+
+    @Bean
     public MessageConverter domainEventsMessageConverter(ObjectMapper objectMapper) {
         return new Jackson2JsonMessageConverter(objectMapper);
     }

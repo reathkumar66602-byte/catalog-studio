@@ -14,6 +14,8 @@ public record CampaignRunResponse(
         int sentCount,
         int skippedCount,
         int failedCount,
+        int pendingCount,
+        String pauseReason,
         String notes,
         UUID tipVideoId,
         String tipVideoTitle,

@@ -135,6 +135,17 @@ catalogstudio:
     maps-api-key: ${GOOGLE_MAPS_API_KEY:}
   billing:
     whatsapp-number: ${BILLING_WHATSAPP_NUMBER:919560111849}
+  # Outbound campaign WhatsApp. Keep disabled until Zoho lists the WABA + agent API key.
+  # Zoho CPaaS IN: https://cpaas.zoho.in/v1.1/whatsapp (auth: Zoho-enczapikey …; template payload).
+  whatsapp:
+    send-enabled: ${CATALOGSTUDIO_WHATSAPP_SEND_ENABLED:false}
+    provider: ${CATALOGSTUDIO_WHATSAPP_PROVIDER:zoho}
+    api-url: ${CATALOGSTUDIO_WHATSAPP_API_URL:https://cpaas.zoho.in/v1.1/whatsapp}
+    api-token: ${CATALOGSTUDIO_WHATSAPP_API_TOKEN:}
+    from-number: ${CATALOGSTUDIO_WHATSAPP_FROM_NUMBER:}
+    template-alias: ${CATALOGSTUDIO_WHATSAPP_TEMPLATE_ALIAS:}
+    template-key: ${CATALOGSTUDIO_WHATSAPP_TEMPLATE_KEY:}
+    merge-body-field: ${CATALOGSTUDIO_WHATSAPP_MERGE_BODY_FIELD:body}
   cashfree:
     enabled: ${CASHFREE_ENABLED:true}
     env: ${CASHFREE_ENV:PROD}
@@ -202,8 +213,16 @@ catalogstudio:
       marketplace-id: ${AMAZON_MARKETPLACE_ID:A21TJRUUN4KGV}
       sandbox: ${AMAZON_SP_API_SANDBOX:true}
     meesho:
-      enabled: ${MEESHO_OMS_ENABLED:false}
+      # Feature flag. Per-seller Meesho email/password are saved when each user connects in UI.
+      enabled: ${MEESHO_OMS_ENABLED:true}
+      # Leave empty in multi-seller mode. Only used when prefer-property-credentials=true (single shop).
       email: ${MEESHO_PANEL_EMAIL:}
       password: ${MEESHO_PANEL_PASSWORD:}
       base-url: ${MEESHO_PANEL_BASE_URL:https://supplier.meesho.com}
       live-auth-required: ${MEESHO_PANEL_LIVE_AUTH_REQUIRED:false}
+      # false = each seller connects own Meesho (Base.com). true = one shared property-file account.
+      prefer-property-credentials: ${MEESHO_PREFER_PROPERTY_CREDENTIALS:false}
+      auto-sync-enabled: ${MEESHO_AUTO_SYNC_ENABLED:true}
+      order-poll-ms: ${MEESHO_ORDER_POLL_MS:300000}
+      push-stock-on-change: ${MEESHO_PUSH_STOCK_ON_CHANGE:true}
+      reserve-on-order-import: ${MEESHO_RESERVE_ON_ORDER_IMPORT:true}

@@ -57,4 +57,14 @@ public class CampaignController {
     public ApiResponse<CampaignRunResponse> trigger(@Valid @RequestBody CampaignTriggerRequest request) {
         return ApiResponse.ok("Campaign queued", campaignService.trigger(request));
     }
+
+    @PostMapping("/runs/{id}/resume")
+    public ApiResponse<CampaignRunResponse> resume(@PathVariable UUID id) {
+        return ApiResponse.ok("Campaign resumed", campaignService.resume(id));
+    }
+
+    @PostMapping("/runs/{id}/retry-failed")
+    public ApiResponse<CampaignRunResponse> retryFailed(@PathVariable UUID id) {
+        return ApiResponse.ok("Failed recipients re-queued", campaignService.retryFailed(id));
+    }
 }

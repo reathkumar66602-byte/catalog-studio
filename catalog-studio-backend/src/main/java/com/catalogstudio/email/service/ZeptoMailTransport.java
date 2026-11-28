@@ -38,15 +38,22 @@ public class ZeptoMailTransport implements MailTransport {
 
     @Override
     public boolean send(OutboundMail mail) {
+        return sendOrError(mail) == null;
+    }
+
+    /**
+     * @return {@code null} on success, otherwise a short provider error string
+     */
+    public String sendOrError(OutboundMail mail) {
         String token = properties.mail().zeptomailSendToken();
         String apiUrl = properties.mail().zeptomailApiUrl();
         if (!StringUtils.hasText(token)) {
             log.warn("ZEPTOMAIL_SEND_TOKEN is empty; skip send to {}", mail.to());
-            return false;
+            return "ZEPTOMAIL_SEND_TOKEN is empty";
         }
         if (!StringUtils.hasText(mail.fromEmail()) || !StringUtils.hasText(mail.to())) {
             log.warn("ZeptoMail skipped: from or to is blank");
-            return false;
+            return "from or to is blank";
         }
         try {
             String body = objectMapper.writeValueAsString(payload(mail));
@@ -65,13 +72,13 @@ public class ZeptoMailTransport implements MailTransport {
                     .body(String.class);
             if (!looksSuccessful(response, objectMapper)) {
                 log.error("ZeptoMail provider error to {}: {}", mail.to(), abbreviate(response));
-                return false;
+                return "ZeptoMail provider error: " + abbreviate(response);
             }
             log.info("ZeptoMail accepted send to {} ref={} body={}", mail.to(), mail.clientReference(), abbreviate(response));
-            return true;
+            return null;
         } catch (Exception ex) {
             log.error("ZeptoMail send failed to {}: {}", mail.to(), ex.getMessage());
-            return false;
+            return ex.getMessage() == null ? "ZeptoMail send failed" : ex.getMessage();
         }
     }
 

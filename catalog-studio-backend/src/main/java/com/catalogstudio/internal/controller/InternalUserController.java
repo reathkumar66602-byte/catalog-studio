@@ -74,6 +74,7 @@ public class InternalUserController {
                 user.getEmail(),
                 user.getMobile(),
                 user.getRole() == null ? null : user.getRole().name(),
-                user.isActive());
+                user.isActive(),
+                user.getPreferredLocale());
     }
 }

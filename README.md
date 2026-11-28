@@ -12,6 +12,7 @@ Client (Dashboard / Extension)
         ▼
   api-gateway :8080
         ├── /api/v1/wholesale/**  →  supplier-service :8081  →  DB catalog_studio_supplier
+        ├── /api/v1/support/**    →  support-service :8083   →  DB catalog_studio_support
         └── /api/** (other)       →  platform-api :8082      →  DB catalog_studio
 ```
 
@@ -20,12 +21,13 @@ Client (Dashboard / Extension)
 | `gateway/api-gateway` | 8080 | Public entry | — |
 | `services/supplier-service` | 8081 | Wholesale + goods receipt | `catalog_studio_supplier.public` |
 | `catalog-studio-backend` (platform-api) | 8082 | Auth, products, inventory, billing, OMS, email | `catalog_studio.public` |
-| Postgres | 5432 | Two databases, schema `public` each | — |
+| `services/support-service` | 8083 | Support tickets, AI chat, KB, SLA | `catalog_studio_support.public` |
+| Postgres | 5432 | Separate database per service | — |
 | Redis | 6379 | Cache / rate limits | — |
 | RabbitMQ | 5672 | Domain events (prod; optional locally) | — |
 | `catalog-studio-dashboard` | 5173 | React seller UI | — |
 
-**Important:** Only **supplier-service** has been extracted from the monolith so far. Other domains remain in platform-api. See [`services/README.md`](services/README.md).
+**Important:** Extracted microservices so far: **supplier-service** and **support-service**. Other domains remain in platform-api. See [`services/README.md`](services/README.md).
 
 ## Repository layout
 
@@ -33,6 +35,7 @@ Client (Dashboard / Extension)
 | --- | --- | --- |
 | `gateway/api-gateway/` | **Live** | Spring Cloud Gateway |
 | `services/supplier-service/` | **Live** | Wholesale / supplier microservice |
+| `services/support-service/` | **Live** | Customer support / helpdesk microservice |
 | `catalog-studio-backend/` | **Live** | Platform API (remaining domains) |
 | `platform/` | **Live libs** | Shared `platform-common`, `platform-security`, `platform-events` |
 | `catalog-studio-dashboard/` | **Live** | React + Vite dashboard |
@@ -47,6 +50,7 @@ Client (Dashboard / Extension)
 | --- | --- | --- |
 | Users, sessions, products, inventory, billing, OMS | `catalog_studio` | platform-api |
 | Wholesale stores, catalog, orders, coupons, goods receipts | `catalog_studio_supplier` | supplier-service |
+| Support tickets, chat, knowledge base, SLA | `catalog_studio_support` | support-service |
 
 Goods receipt flow: buyer confirms receipt on **supplier-service** → accepted qty credited on **platform-api** via internal API `POST /internal/v1/inventory/wholesale-receipts`.
 
@@ -71,7 +75,25 @@ $env:Path = "$env:JAVA_HOME\bin;" + $env:Path
 docker compose up --build
 ```
 
-Or run jars/processes individually (gateway 8080, platform 8082, supplier 8081, dashboard 5173).
+Or run jars/processes individually (gateway 8080, platform 8082, supplier 8081, support 8083, dashboard 5173).
+
+```powershell
+# Same Java 21 pattern for every Spring service (run from the service folder so Maven
+# does not try spring-boot:run on the parent POM):
+cd catalog-studio-backend; mvn spring-boot:run
+cd services/supplier-service; mvn spring-boot:run
+cd services/support-service; mvn spring-boot:run
+cd gateway/api-gateway; mvn spring-boot:run
+
+# Or package from root, then java -jar target/*.jar
+# mvn -pl services/support-service -am -DskipTests package
+```
+
+If Postgres already existed before support was added, create the DB once:
+
+```sql
+CREATE DATABASE catalog_studio_support OWNER catalog_studio;
+```
 
 Set on platform:
 

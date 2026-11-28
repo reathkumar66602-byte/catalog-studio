@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/marketplaces/flipkart/seller-api")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPERADMIN')")
+@PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'SELLER')")
 @Tag(name = "Flipkart Seller API")
 public class FlipkartSellerController {
 

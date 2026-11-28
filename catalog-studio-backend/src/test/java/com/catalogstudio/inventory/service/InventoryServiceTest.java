@@ -37,6 +37,7 @@ class InventoryServiceTest {
     @Mock InventoryLevelRepository levelRepository;
     @Mock InventoryMovementRepository movementRepository;
     @Mock UserRepository userRepository;
+    @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     InventoryService service;
     Product product;
@@ -44,7 +45,12 @@ class InventoryServiceTest {
     @BeforeEach
     void setUp() {
         service = new InventoryService(
-                productRepository, variantRepository, levelRepository, movementRepository, userRepository);
+                productRepository,
+                variantRepository,
+                levelRepository,
+                movementRepository,
+                userRepository,
+                eventPublisher);
         User user = User.builder().id(1L).email("s@test.com").build();
         product = Product.builder().id(10L).uuid(UUID.randomUUID()).user(user).name("Tee").build();
     }

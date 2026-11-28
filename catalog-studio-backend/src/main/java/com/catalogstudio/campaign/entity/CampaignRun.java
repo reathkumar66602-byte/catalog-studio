@@ -77,6 +77,10 @@ public class CampaignRun {
     @Column(name = "failed_count", nullable = false)
     private int failedCount = 0;
 
+    /** Set when dispatch pauses (e.g. insufficient Zoho/Meta credits). */
+    @Column(name = "pause_reason", columnDefinition = "text")
+    private String pauseReason;
+
     @Column(columnDefinition = "text")
     private String notes;
 
@@ -111,6 +115,6 @@ public class CampaignRun {
     }
 
     public enum RunStatus {
-        PENDING, RUNNING, DONE, FAILED
+        PENDING, RUNNING, PAUSED, DONE, FAILED
     }
 }

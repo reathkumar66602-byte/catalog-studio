@@ -24,6 +24,7 @@
         <module>platform/platform-events</module>
         <module>catalog-studio-backend</module>
         <module>services/supplier-service</module>
+        <module>services/support-service</module>
         <module>gateway/api-gateway</module>
     </modules>
 

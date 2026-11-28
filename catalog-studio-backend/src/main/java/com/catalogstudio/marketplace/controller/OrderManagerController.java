@@ -4,6 +4,8 @@ import com.catalogstudio.common.api.ApiResponse;
 import com.catalogstudio.marketplace.dto.MeeshoChannelOrderResponse;
 import com.catalogstudio.marketplace.service.CourierIntegrationService;
 import com.catalogstudio.marketplace.service.ListingSyncService;
+import com.catalogstudio.marketplace.service.MeeshoOrderLifecycleService;
+import com.catalogstudio.marketplace.service.MeeshoPanelSyncService;
 import com.catalogstudio.marketplace.service.OmsAutoActionService;
 import com.catalogstudio.marketplace.service.PlatformOmsService;
 import com.catalogstudio.security.SecurityUtils;
@@ -26,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/oms")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPERADMIN')")
+@PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'SELLER')")
 @Tag(name = "Order Manager OMS")
 public class OrderManagerController {
 
@@ -34,6 +36,8 @@ public class OrderManagerController {
     private final ListingSyncService listingSyncService;
     private final CourierIntegrationService courierIntegrationService;
     private final OmsAutoActionService autoActionService;
+    private final MeeshoOrderLifecycleService meeshoOrderLifecycleService;
+    private final MeeshoPanelSyncService meeshoPanelSyncService;
 
     @GetMapping("/orders")
     public ApiResponse<List<MeeshoChannelOrderResponse>> orders(
@@ -106,8 +110,50 @@ public class OrderManagerController {
     public ApiResponse<Map<String, Object>> createCourier(
             @PathVariable UUID orderId, @RequestBody Map<String, Object> body) {
         String provider = String.valueOf(body.getOrDefault("provider", "MANUAL"));
+        if ("MEESHO".equalsIgnoreCase(provider) || "MARKETPLACE".equalsIgnoreCase(provider)) {
+            // Prefer native Meesho shipment when provider asks for marketplace labels.
+            try {
+                return ApiResponse.ok(
+                        "Meesho shipment created",
+                        meeshoOrderLifecycleService.createMeeshoShipment(orderId));
+            } catch (Exception ex) {
+                if ("MEESHO".equalsIgnoreCase(provider)) {
+                    throw ex;
+                }
+            }
+        }
         return ApiResponse.ok(
                 "Courier shipment created",
                 courierIntegrationService.createShipment(orderId, provider));
+    }
+
+    @PostMapping("/orders/{orderId}/status")
+    public ApiResponse<Map<String, Object>> updateOrderStatus(
+            @PathVariable UUID orderId, @RequestBody Map<String, Object> body) {
+        String status = String.valueOf(body.getOrDefault("status", "PROCESSING"));
+        return ApiResponse.ok(
+                "Order status updated",
+                meeshoOrderLifecycleService.updateStatus(orderId, status));
+    }
+
+    @PostMapping("/orders/{orderId}/meesho-ship")
+    public ApiResponse<Map<String, Object>> meeshoShip(@PathVariable UUID orderId) {
+        return ApiResponse.ok(
+                "Meesho shipment created",
+                meeshoOrderLifecycleService.createMeeshoShipment(orderId));
+    }
+
+    @PostMapping("/meesho/sync/offers")
+    public ApiResponse<?> syncMeeshoOffers() {
+        return ApiResponse.ok(
+                "Meesho offers synced",
+                meeshoPanelSyncService.syncOffers(SecurityUtils.currentUserId()));
+    }
+
+    @PostMapping("/meesho/sync/returns")
+    public ApiResponse<?> syncMeeshoReturns() {
+        return ApiResponse.ok(
+                "Meesho returns synced",
+                meeshoPanelSyncService.syncReturns(SecurityUtils.currentUserId()));
     }
 }

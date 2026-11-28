@@ -222,11 +222,18 @@ public record CatalogStudioProperties(
     /**
      * Optional outbound WhatsApp API. When disabled, campaign WhatsApp items are skipped
      * (templates still live in DB). Users may have mobile numbers, but send requires a provider.
+     *
+     * <p>{@code provider}: {@code bearer} (generic) or {@code zoho} (CPaaS template API).
      */
     public record Whatsapp(
             @DefaultValue("false") boolean sendEnabled,
+            @DefaultValue("bearer") String provider,
             @DefaultValue("") String apiUrl,
-            @DefaultValue("") String apiToken
+            @DefaultValue("") String apiToken,
+            @DefaultValue("") String fromNumber,
+            @DefaultValue("") String templateAlias,
+            @DefaultValue("") String templateKey,
+            @DefaultValue("body") String mergeBodyField
     ) {}
 
     /** Wholesale marketplace (Live Stock) settings. */
@@ -331,7 +338,20 @@ public record CatalogStudioProperties(
                 @DefaultValue("") String email,
                 @DefaultValue("") String password,
                 @DefaultValue("https://supplier.meesho.com") String baseUrl,
-                @DefaultValue("false") boolean liveAuthRequired
+                @DefaultValue("false") boolean liveAuthRequired,
+                /**
+                 * When false (default, Base.com multi-seller): each user must connect their own
+                 * Meesho panel login; inventory/orders stay isolated per user.
+                 * When true: single-shop mode using MEESHO_PANEL_EMAIL/PASSWORD from the property file.
+                 */
+                @DefaultValue("false") boolean preferPropertyCredentials,
+                /** Poll Meesho orders on a schedule (Base ~5 min). */
+                @DefaultValue("true") boolean autoSyncEnabled,
+                @DefaultValue("300000") long orderPollMs,
+                /** Push stock to Meesho whenever CS inventory changes. */
+                @DefaultValue("true") boolean pushStockOnChange,
+                /** Reserve warehouse stock when a Meesho order is imported. */
+                @DefaultValue("true") boolean reserveOnOrderImport
         ) {
             public boolean configured() {
                 return notBlank(email) && notBlank(password);

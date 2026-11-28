@@ -1,0 +1,99 @@
+spring:
+  application:
+    name: support-service
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 20MB
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+  datasource:
+    url: ${SUPPORT_DATABASE_URL:jdbc:postgresql://localhost:5432/catalog_studio_support}
+    username: ${SUPPORT_DATABASE_USER:${DATABASE_USER:postgres}}
+    password: ${SUPPORT_DATABASE_PASSWORD:${DATABASE_PASSWORD:root}}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:catalogstudio}
+    password: ${RABBITMQ_PASSWORD:catalogstudio}
+    listener:
+      simple:
+        # When MESSAGING_ENABLED=false, avoid starting consumers against a missing broker.
+        auto-startup: ${MESSAGING_ENABLED:true}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+server:
+  port: ${SERVER_PORT:8083}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  health:
+    # When MESSAGING_ENABLED=false (local dry-run without RabbitMQ), do not mark the app DOWN.
+    rabbit:
+      enabled: ${MESSAGING_ENABLED:true}
+
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui
+
+catalogstudio:
+  messaging:
+    enabled: ${MESSAGING_ENABLED:true}
+  jwt:
+    secret: ${JWT_SECRET:change-this-to-a-256-bit-secret-key-for-catalog-studio-dev-only}
+    access-token-minutes: ${JWT_ACCESS_MINUTES:15}
+    refresh-token-days: ${JWT_REFRESH_DAYS:30}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173,http://localhost}
+  storage:
+    provider: local
+    local-path: ${STORAGE_LOCAL_PATH:./uploads-support}
+  upload:
+    max-file-bytes: ${SUPPORT_MAX_ATTACHMENT_BYTES:10485760}
+    allowed-content-types:
+      - image/jpeg
+      - image/jpg
+      - image/png
+      - image/webp
+      - application/pdf
+      - text/plain
+      - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  platform:
+    base-url: ${PLATFORM_BASE_URL:http://localhost:8082}
+    internal-api-key: ${INTERNAL_API_KEY:catalog-studio-internal}
+  support:
+    rate-limit-per-minute: ${SUPPORT_RATE_LIMIT_PER_MINUTE:30}
+    chat-rate-limit-per-minute: ${SUPPORT_CHAT_RATE_LIMIT_PER_MINUTE:20}
+    ticket-create-rate-limit-per-minute: ${SUPPORT_TICKET_RATE_LIMIT_PER_MINUTE:10}
+    ai:
+      provider: ${SUPPORT_AI_PROVIDER:${AI_PROVIDER:mock}}
+      api-key: ${SUPPORT_AI_API_KEY:${AI_API_KEY:}}
+      model: ${SUPPORT_AI_MODEL:${AI_MODEL:gpt-4o-mini}}
+      gemini-model: ${SUPPORT_AI_GEMINI_MODEL:gemini-2.0-flash}
+      timeout-seconds: ${SUPPORT_AI_TIMEOUT_SECONDS:25}
+    sla:
+      check-interval-ms: ${SUPPORT_SLA_CHECK_INTERVAL_MS:60000}

@@ -16,10 +16,10 @@ import com.catalogstudio.marketplace.entity.MarketplaceConnection.ConnectionStat
 import com.catalogstudio.marketplace.entity.MarketplaceSyncRun;
 import com.catalogstudio.marketplace.meesho.MeeshoLabelResult;
 import com.catalogstudio.marketplace.meesho.MeeshoPanelClient;
-import com.catalogstudio.marketplace.meesho.MeeshoPanelClient.AuthResult;
 import com.catalogstudio.marketplace.meesho.MeeshoPanelSession;
 import com.catalogstudio.marketplace.meesho.MeeshoRemoteOrder;
 import com.catalogstudio.marketplace.meesho.MeeshoStockUpdate;
+import com.catalogstudio.marketplace.oms.MeeshoStatusMapper;
 import com.catalogstudio.marketplace.oms.OmsChannel;
 import com.catalogstudio.marketplace.repository.MarketplaceChannelOrderRepository;
 import com.catalogstudio.marketplace.repository.MarketplaceConnectionRepository;
@@ -47,6 +47,10 @@ public class PlatformOmsService {
     private final InventoryLevelRepository inventoryLevelRepository;
     private final UserRepository userRepository;
     private final MeeshoPanelClient meeshoPanelClient;
+    private final MeeshoCredentialService meeshoCredentialService;
+    private final MeeshoStockPushService meeshoStockPushService;
+    private final ChannelStockReservationService reservationService;
+    private final MeeshoStatusMapper meeshoStatusMapper;
     private final FlipkartSellerApiClient flipkartSellerApiClient;
     private final AmazonSpApiClient amazonSpApiClient;
     private final OmsAutoActionService autoActionService;
@@ -144,19 +148,12 @@ public class PlatformOmsService {
         List<MeeshoRemoteOrder> remote = switch (channel) {
             case FLIPKART -> flipkartSellerApiClient.fetchOrders();
             case AMAZON -> amazonSpApiClient.fetchOrders();
-            case MEESHO -> {
-                CatalogStudioProperties.Oms.Meesho cfg = properties.oms().meesho();
-                AuthResult auth = meeshoPanelClient.authenticate(cfg.email().trim(), cfg.password());
-                if (!auth.success()) {
-                    throw new IllegalStateException(auth.message());
-                }
-                yield meeshoPanelClient.fetchPendingOrders(auth.session());
-            }
+            case MEESHO -> meeshoPanelClient.fetchPendingOrders(
+                    meeshoCredentialService.requireSession(platformUserId()));
         };
         int ok = 0;
         for (MeeshoRemoteOrder item : remote) {
             MarketplaceChannelOrder saved = upsertOrder(connection, channel.name(), item);
-            autoActionService.onOrderImported(platformUserId(), channel.name(), saved);
             ok++;
         }
         touch(connection, "lastOrdersSyncAt");
@@ -164,6 +161,13 @@ public class PlatformOmsService {
     }
 
     private SyncCounts syncStock(OmsChannel channel, MarketplaceConnection connection) {
+        if (channel == OmsChannel.MEESHO) {
+            MeeshoPanelSession session = meeshoCredentialService.requireSession(platformUserId());
+            MeeshoStockPushService.SyncResult result =
+                    meeshoStockPushService.pushAllDelta(platformUserId(), connection, session);
+            touch(connection, "lastStockSyncAt");
+            return new SyncCounts(result.ok(), result.failed(), result.message());
+        }
         List<InventoryLevel> levels = inventoryLevelRepository.findAllForUser(platformUserId());
         List<MeeshoStockUpdate> updates = levels.stream()
                 .map(level -> new MeeshoStockUpdate(
@@ -174,14 +178,7 @@ public class PlatformOmsService {
         int pushed = switch (channel) {
             case FLIPKART -> flipkartSellerApiClient.pushStock(updates);
             case AMAZON -> amazonSpApiClient.pushStock(updates);
-            case MEESHO -> {
-                CatalogStudioProperties.Oms.Meesho cfg = properties.oms().meesho();
-                AuthResult auth = meeshoPanelClient.authenticate(cfg.email().trim(), cfg.password());
-                if (!auth.success()) {
-                    throw new IllegalStateException(auth.message());
-                }
-                yield meeshoPanelClient.pushStock(auth.session(), updates);
-            }
+            case MEESHO -> 0;
         };
         touch(connection, "lastStockSyncAt");
         int failed = Math.max(0, updates.size() - pushed);
@@ -204,12 +201,8 @@ public class PlatformOmsService {
         List<MeeshoLabelResult> labels = switch (channel) {
             case FLIPKART -> flipkartSellerApiClient.fetchLabels(ids);
             case AMAZON -> amazonSpApiClient.fetchLabels(ids);
-            case MEESHO -> {
-                CatalogStudioProperties.Oms.Meesho cfg = properties.oms().meesho();
-                AuthResult auth = meeshoPanelClient.authenticate(cfg.email().trim(), cfg.password());
-                MeeshoPanelSession session = auth.success() ? auth.session() : null;
-                yield meeshoPanelClient.fetchLabels(session, ids);
-            }
+            case MEESHO -> meeshoPanelClient.fetchLabels(
+                    meeshoCredentialService.requireSession(platformUserId()), ids);
         };
         Map<String, MeeshoLabelResult> byId = new HashMap<>();
         for (MeeshoLabelResult label : labels) {
@@ -243,19 +236,29 @@ public class PlatformOmsService {
     }
 
     private MarketplaceChannelOrder upsertOrder(MarketplaceConnection connection, String marketplace, MeeshoRemoteOrder item) {
+        Long userId = platformUserId();
         String sub = item.externalSubOrderId() == null ? "" : item.externalSubOrderId();
+        boolean isNew = orderRepository
+                .findByConnectionIdAndExternalOrderIdAndExternalSubOrderId(
+                        connection.getId(), item.externalOrderId(), sub)
+                .isEmpty();
         MarketplaceChannelOrder order = orderRepository
                 .findByConnectionIdAndExternalOrderIdAndExternalSubOrderId(
                         connection.getId(), item.externalOrderId(), sub)
                 .orElseGet(() -> MarketplaceChannelOrder.builder()
                         .connection(connection)
-                        .user(userRepository.getReferenceById(platformUserId()))
+                        .user(userRepository.getReferenceById(userId))
                         .marketplace(marketplace)
                         .externalOrderId(item.externalOrderId())
                         .externalSubOrderId(sub)
                         .build());
-        order.setStatus(StringUtils.hasText(item.status()) ? item.status() : "PENDING");
-        order.setChannelStatus(order.getStatus());
+        String channelStatus = StringUtils.hasText(item.status()) ? item.status() : "PENDING";
+        String oms = "MEESHO".equalsIgnoreCase(marketplace)
+                ? meeshoStatusMapper.toInternal(channelStatus)
+                : channelStatus.toUpperCase(Locale.ROOT);
+        order.setStatus(oms);
+        order.setOmsStatus(oms);
+        order.setChannelStatus(channelStatus);
         order.setSku(item.sku());
         order.setQuantity(Math.max(1, item.quantity()));
         order.setBuyerName(item.buyerName());
@@ -266,11 +269,24 @@ public class PlatformOmsService {
         order.setOrderedAt(item.orderedAt() == null ? Instant.now() : item.orderedAt());
         order.setLastSyncedAt(Instant.now());
         order.setRawJson(item.raw() == null ? Map.of() : item.raw());
-        return orderRepository.save(order);
+        orderRepository.save(order);
+
+        if (ChannelStockReservationService.looksCancelled(oms) || meeshoStatusMapper.isTerminalCancel(oms)) {
+            reservationService.releaseForOrder(userId, order);
+        } else if (properties.oms().meesho().reserveOnOrderImport()) {
+            reservationService.reserveForOrder(userId, order);
+        }
+        if (isNew) {
+            autoActionService.onOrderImported(userId, marketplace, order);
+        }
+        return order;
     }
 
     private MarketplaceConnection ensurePlatformConnection(OmsChannel channel) {
         Long userId = platformUserId();
+        if (channel == OmsChannel.MEESHO) {
+            return meeshoCredentialService.ensureConnection(userId, userRepository);
+        }
         MarketplaceConnection connection = connectionRepository.findByUserIdAndMarketplace(userId, channel.name())
                 .orElseGet(() -> MarketplaceConnection.builder()
                         .user(userRepository.getReferenceById(userId))
@@ -306,10 +322,20 @@ public class PlatformOmsService {
         boolean ok = switch (channel) {
             case FLIPKART -> oms.flipkart().enabled() && oms.flipkart().configured();
             case AMAZON -> oms.amazon().enabled() && oms.amazon().configured();
-            case MEESHO -> oms.meesho().enabled() && oms.meesho().configured();
+            case MEESHO -> {
+                try {
+                    meeshoCredentialService.resolve(platformUserId());
+                    yield true;
+                } catch (RuntimeException ex) {
+                    // Multi-user default: no shared property-file Meesho login.
+                    yield false;
+                }
+            }
         };
         if (!ok) {
-            throw ApiException.badRequest(channelTitle(channel) + " is not connected yet.");
+            throw ApiException.badRequest(channel == OmsChannel.MEESHO
+                    ? "Connect your own Meesho Supplier Panel account first (each seller uses a separate Meesho login)."
+                    : channelTitle(channel) + " is not connected yet.");
         }
     }
 

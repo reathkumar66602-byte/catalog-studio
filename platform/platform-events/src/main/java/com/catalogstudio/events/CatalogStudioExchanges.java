@@ -12,5 +12,8 @@ public final class CatalogStudioExchanges {
 
     public static final String QUEUE_PLATFORM_SUPPLIER_NOTIFICATIONS = "platform.supplier.notifications";
 
+    public static final String ROUTING_SUPPORT_EMAIL = "support.email.notify";
+    public static final String QUEUE_PLATFORM_SUPPORT_NOTIFICATIONS = "platform.support.notifications";
+
     private CatalogStudioExchanges() {}
 }

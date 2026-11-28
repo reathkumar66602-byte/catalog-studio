@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/marketplaces/meesho/panel")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPERADMIN')")
+@PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'SELLER')")
 @Tag(name = "Meesho Panel OMS")
 public class MeeshoPanelController {
 
@@ -77,5 +77,15 @@ public class MeeshoPanelController {
     @PostMapping("/sync/full")
     public ApiResponse<MeeshoSyncResultResponse> syncFull() {
         return ApiResponse.ok("Meesho full sync finished", syncService.syncFull(SecurityUtils.currentUserId()));
+    }
+
+    @PostMapping("/sync/offers")
+    public ApiResponse<MeeshoSyncResultResponse> syncOffers() {
+        return ApiResponse.ok("Meesho offers linked", syncService.syncOffers(SecurityUtils.currentUserId()));
+    }
+
+    @PostMapping("/sync/returns")
+    public ApiResponse<MeeshoSyncResultResponse> syncReturns() {
+        return ApiResponse.ok("Meesho returns sync finished", syncService.syncReturns(SecurityUtils.currentUserId()));
     }
 }

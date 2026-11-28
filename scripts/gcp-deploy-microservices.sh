@@ -51,7 +51,7 @@ rm -rf \
   "${APP_DIR}/services/notification-service" \
   "${APP_DIR}/services/media-service"
 
-echo "==> Ensuring supplier database exists"
+echo "==> Ensuring supplier and support databases exist"
 "${COMPOSE[@]}" up -d postgres
 sleep 5
 if ! "${COMPOSE[@]}" exec -T postgres \
@@ -59,6 +59,12 @@ if ! "${COMPOSE[@]}" exec -T postgres \
   "${COMPOSE[@]}" exec -T postgres \
     psql -U catalog_studio -d postgres -v ON_ERROR_STOP=1 -c \
     "CREATE DATABASE catalog_studio_supplier OWNER catalog_studio;"
+fi
+if ! "${COMPOSE[@]}" exec -T postgres \
+  psql -U catalog_studio -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='catalog_studio_support'" | grep -q 1; then
+  "${COMPOSE[@]}" exec -T postgres \
+    psql -U catalog_studio -d postgres -v ON_ERROR_STOP=1 -c \
+    "CREATE DATABASE catalog_studio_support OWNER catalog_studio;"
 fi
 
 echo "==> Building and starting microservices stack (this can take a while)"
@@ -74,6 +80,20 @@ for i in $(seq 1 90); do
   if [[ "$i" -eq 90 ]]; then
     echo "supplier-service failed to become healthy"
     "${COMPOSE[@]}" logs --tail=120 supplier-service || true
+    exit 1
+  fi
+done
+
+echo "==> Waiting for support health"
+for i in $(seq 1 90); do
+  if curl -fsS http://127.0.0.1:8083/actuator/health >/dev/null 2>&1; then
+    echo "support-service is up"
+    break
+  fi
+  sleep 10
+  if [[ "$i" -eq 90 ]]; then
+    echo "support-service failed to become healthy"
+    "${COMPOSE[@]}" logs --tail=120 support-service || true
     exit 1
   fi
 done

@@ -6,5 +6,6 @@ public record InternalUserResponse(
         String email,
         String mobile,
         String role,
-        boolean active
+        boolean active,
+        String preferredLocale
 ) {}

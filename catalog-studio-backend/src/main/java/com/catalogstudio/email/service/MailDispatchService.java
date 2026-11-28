@@ -36,9 +36,17 @@ public class MailDispatchService {
      * hits 550 unusual-activity blocks under volume). Falls back to SMTP if Zepto fails.
      */
     public boolean sendCampaignHtml(String to, String subject, String htmlBody, String textBody) {
+        return sendCampaignHtmlOrError(to, subject, htmlBody, textBody) == null;
+    }
+
+    /**
+     * Campaign send that returns {@code null} on success, otherwise a provider error message
+     * (used to detect insufficient credits / quota and pause the run).
+     */
+    public String sendCampaignHtmlOrError(String to, String subject, String htmlBody, String textBody) {
         if (!properties.mail().enabled()) {
             log.info("Mail disabled; skip campaign send to {}", to);
-            return false;
+            return "Email sending is disabled";
         }
         MailIdentity identity = identityService.current();
         OutboundMail mail = new OutboundMail(
@@ -52,13 +60,17 @@ public class MailDispatchService {
                 "campaign");
         boolean zeptoReady = StringUtils.hasText(properties.mail().zeptomailSendToken());
         if (zeptoReady) {
-            boolean sent = zeptoMailTransport.send(mail);
-            if (sent) {
-                return true;
+            String zeptoError = zeptoMailTransport.sendOrError(mail);
+            if (zeptoError == null) {
+                return null;
             }
-            log.warn("ZeptoMail campaign send failed for {}; falling back to SMTP", to);
+            log.warn("ZeptoMail campaign send failed for {}; falling back to SMTP ({})", to, zeptoError);
+            if (zohoSmtpTransport.send(mail)) {
+                return null;
+            }
+            return zeptoError;
         }
-        return zohoSmtpTransport.send(mail);
+        return zohoSmtpTransport.send(mail) ? null : "Email provider did not accept message";
     }
 
     public boolean sendHtml(String to, String replyTo, String subject, String htmlBody, String textBody, String reference) {

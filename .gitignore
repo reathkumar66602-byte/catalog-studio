@@ -44,6 +44,10 @@ coverage/
 tmp/
 scripts/tmp-*
 backups/
+regression/.env
+regression/reports/*
+!regression/reports/.gitkeep
+
 **/uploads-supplier/
 **/target-shoot-test/
 meesho.html

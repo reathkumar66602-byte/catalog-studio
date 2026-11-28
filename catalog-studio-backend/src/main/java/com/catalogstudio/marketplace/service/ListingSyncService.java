@@ -9,11 +9,14 @@ import com.catalogstudio.marketplace.client.AmazonSpApiClient;
 import com.catalogstudio.marketplace.client.FlipkartSellerApiClient;
 import com.catalogstudio.marketplace.entity.MarketplaceConnection;
 import com.catalogstudio.marketplace.entity.MarketplaceListing;
+import com.catalogstudio.marketplace.meesho.MeeshoPanelClient;
+import com.catalogstudio.marketplace.meesho.MeeshoPanelSession;
 import com.catalogstudio.marketplace.meesho.MeeshoStockUpdate;
 import com.catalogstudio.marketplace.oms.OmsChannel;
 import com.catalogstudio.marketplace.repository.MarketplaceConnectionRepository;
 import com.catalogstudio.marketplace.repository.MarketplaceListingRepository;
 import com.catalogstudio.security.SecurityUtils;
+import com.catalogstudio.user.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
@@ -36,7 +39,10 @@ public class ListingSyncService {
     private final InventoryLevelRepository levelRepository;
     private final FlipkartSellerApiClient flipkartSellerApiClient;
     private final AmazonSpApiClient amazonSpApiClient;
+    private final MeeshoPanelClient meeshoPanelClient;
+    private final MeeshoCredentialService meeshoCredentialService;
     private final OmsAutoActionService autoActionService;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list() {
@@ -51,11 +57,16 @@ public class ListingSyncService {
         OmsChannel ch = OmsChannel.valueOf(channel.trim().toUpperCase());
         ProductVariant variant = variantRepository.findByUuidAndUserId(variantUuid, userId)
                 .orElseThrow(() -> ApiException.notFound("Variant not found"));
-        MarketplaceConnection connection = connectionRepository.findByUserIdAndMarketplace(userId, ch.name())
-                .orElseThrow(() -> ApiException.badRequest("Connect/sync " + ch.name() + " OMS first"));
 
-        InventoryLevel level = levelRepository.findByVariantId(variant.getId())
-                .orElse(null);
+        MarketplaceConnection connection = connectionRepository.findByUserIdAndMarketplace(userId, ch.name())
+                .orElseGet(() -> {
+                    if (ch == OmsChannel.MEESHO) {
+                        return meeshoCredentialService.ensureConnection(userId, userRepository);
+                    }
+                    throw ApiException.badRequest("Connect/sync " + ch.name() + " OMS first");
+                });
+
+        InventoryLevel level = levelRepository.findByVariantId(variant.getId()).orElse(null);
         int stock = level == null ? 0 : Math.max(0, level.getOnHand() - level.getReserved());
         BigDecimal listingPrice = price != null ? price : variant.getPrice();
 
@@ -65,9 +76,12 @@ public class ListingSyncService {
                         .connection(connection)
                         .build());
         listing.setExternalSku(variant.getSku());
+        if (!StringUtils.hasText(listing.getExternalListingId())) {
+            listing.setExternalListingId(variant.getSku());
+        }
         listing.setPrice(listingPrice);
         listing.setStockMirror(stock);
-        listing.setStatus("LIVE");
+        listing.setStatus(stock <= 0 ? "PAUSED" : "LIVE");
         listing.setLastSyncedAt(Instant.now());
         listing.setLastError(null);
 
@@ -76,14 +90,19 @@ public class ListingSyncService {
             int pushed = switch (ch) {
                 case FLIPKART -> flipkartSellerApiClient.pushStock(updates);
                 case AMAZON -> amazonSpApiClient.pushStock(updates);
-                case MEESHO -> 0;
+                case MEESHO -> {
+                    MeeshoPanelSession session = meeshoCredentialService.requireSession(userId);
+                    yield meeshoPanelClient.pushStock(session, updates);
+                }
             };
             if (listingPrice != null) {
                 Map<String, Double> prices = Map.of(variant.getSku(), listingPrice.doubleValue());
                 autoActionService.syncPrices(userId, ch.name(), prices);
+                listing.setLastPushedPrice(listingPrice);
             }
-            if (pushed == 0 && ch != OmsChannel.MEESHO) {
-                listing.setLastError("Stock push returned 0 — check location/seller id and listing SKU on channel");
+            listing.setLastPushedStock(stock);
+            if (pushed == 0) {
+                listing.setLastError("Stock push returned 0 — check channel credentials / listing SKU");
                 listing.setStatus("ERROR");
             }
         } catch (Exception ex) {
@@ -98,9 +117,12 @@ public class ListingSyncService {
         Map<String, Object> map = new HashMap<>();
         map.put("id", listing.getUuid());
         map.put("sku", listing.getExternalSku());
+        map.put("externalListingId", listing.getExternalListingId());
+        map.put("offerTitle", listing.getOfferTitle());
         map.put("marketplace", listing.getConnection().getMarketplace());
         map.put("price", listing.getPrice());
         map.put("stockMirror", listing.getStockMirror());
+        map.put("lastPushedStock", listing.getLastPushedStock());
         map.put("status", listing.getStatus());
         map.put("lastSyncedAt", listing.getLastSyncedAt());
         map.put("lastError", listing.getLastError());

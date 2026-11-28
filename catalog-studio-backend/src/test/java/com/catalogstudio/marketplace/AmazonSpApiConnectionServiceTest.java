@@ -45,12 +45,13 @@ class AmazonSpApiConnectionServiceTest {
                 new CatalogStudioProperties.Google(""),
                 new CatalogStudioProperties.Billing("91"),
                 new CatalogStudioProperties.Tingily("https://x", "", "", "", 40),
-                new CatalogStudioProperties.Whatsapp(false, "", ""),
+                new CatalogStudioProperties.Whatsapp(false, "", "", "", "", "", "", "body"),
                 new CatalogStudioProperties.MeeshoPanel("https://supplier.meesho.com", false),
                 new CatalogStudioProperties.Oms(
                         new CatalogStudioProperties.Oms.Flipkart(false, "", "", ""),
                         new CatalogStudioProperties.Oms.Amazon(false, "", "", "", "A21TJRUUN4KGV", "", true),
-                        new CatalogStudioProperties.Oms.Meesho(false, "", "", "https://supplier.meesho.com", false)),
+                        new CatalogStudioProperties.Oms.Meesho(
+                                false, "", "", "https://supplier.meesho.com", false, true, true, 300000L, true, true)),
                 new CatalogStudioProperties.Wholesale(new CatalogStudioProperties.Wholesale.Gst(
                         "mock", "", "", 0.72, "https://www.gstinapi.in", "")),
                 new CatalogStudioProperties.CloudCost(

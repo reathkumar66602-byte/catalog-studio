@@ -17,11 +17,13 @@ import com.catalogstudio.inventory.repository.ProductVariantRepository;
 import com.catalogstudio.product.entity.Product;
 import com.catalogstudio.product.entity.Product.ProductStatus;
 import com.catalogstudio.product.repository.ProductRepository;
+import com.catalogstudio.inventory.event.InventoryStockChangedEvent;
 import com.catalogstudio.user.entity.User;
 import com.catalogstudio.user.repository.UserRepository;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -35,6 +37,7 @@ public class InventoryService {
     private final InventoryLevelRepository levelRepository;
     private final InventoryMovementRepository movementRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<VariantResponse> listInventory(Long userId) {
@@ -80,6 +83,7 @@ public class InventoryService {
         if (initial > 0) {
             recordMovement(userId, variant, level, MovementType.ADJUST, initial, null, "Initial stock");
         }
+        publishStockChanged(userId, variant, level);
         return toResponse(variant, level);
     }
 
@@ -102,6 +106,7 @@ public class InventoryService {
         level.setOnHand(next);
         levelRepository.save(level);
         recordMovement(userId, variant, level, MovementType.ADJUST, delta, null, request.note());
+        publishStockChanged(userId, variant, level);
         return toResponse(variant, level);
     }
 
@@ -159,9 +164,20 @@ public class InventoryService {
                     line.acceptedQty(),
                     reference,
                     "Wholesale goods receipt " + request.receiptId());
+            publishStockChanged(buyer.getId(), variant, level);
             credited += line.acceptedQty();
         }
         return new WholesaleReceiptCreditResult(request.receiptId(), credited);
+    }
+
+    private void publishStockChanged(Long userId, ProductVariant variant, InventoryLevel level) {
+        eventPublisher.publishEvent(new InventoryStockChangedEvent(
+                userId,
+                variant.getUuid(),
+                variant.getSku(),
+                level.getOnHand(),
+                level.getReserved(),
+                level.available()));
     }
 
     private ProductVariant resolveReceiptVariant(User buyer, WholesaleReceiptCreditRequest.Line line) {

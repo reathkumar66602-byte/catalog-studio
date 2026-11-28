@@ -1,7 +1,6 @@
 package com.catalogstudio.marketplace.service;
 
-import com.catalogstudio.inventory.entity.InventoryLevel;
-import com.catalogstudio.inventory.repository.InventoryLevelRepository;
+import com.catalogstudio.config.CatalogStudioProperties;
 import com.catalogstudio.marketplace.dto.MeeshoChannelOrderResponse;
 import com.catalogstudio.marketplace.dto.MeeshoSyncResultResponse;
 import com.catalogstudio.marketplace.entity.MarketplaceChannelOrder;
@@ -11,7 +10,8 @@ import com.catalogstudio.marketplace.meesho.MeeshoLabelResult;
 import com.catalogstudio.marketplace.meesho.MeeshoPanelClient;
 import com.catalogstudio.marketplace.meesho.MeeshoPanelSession;
 import com.catalogstudio.marketplace.meesho.MeeshoRemoteOrder;
-import com.catalogstudio.marketplace.meesho.MeeshoStockUpdate;
+import com.catalogstudio.marketplace.meesho.MeeshoRemoteReturn;
+import com.catalogstudio.marketplace.oms.MeeshoStatusMapper;
 import com.catalogstudio.marketplace.repository.MarketplaceChannelOrderRepository;
 import com.catalogstudio.marketplace.repository.MarketplaceSyncRunRepository;
 import com.catalogstudio.user.repository.UserRepository;
@@ -29,11 +29,17 @@ import org.springframework.util.StringUtils;
 public class MeeshoPanelSyncService {
 
     private final MeeshoPanelConnectionService connectionService;
+    private final MeeshoCredentialService credentialService;
     private final MeeshoPanelClient meeshoPanelClient;
     private final MarketplaceChannelOrderRepository orderRepository;
     private final MarketplaceSyncRunRepository syncRunRepository;
-    private final InventoryLevelRepository inventoryLevelRepository;
     private final UserRepository userRepository;
+    private final CatalogStudioProperties properties;
+    private final ChannelStockReservationService reservationService;
+    private final OmsAutoActionService autoActionService;
+    private final MeeshoOfferLinkService offerLinkService;
+    private final MeeshoStockPushService stockPushService;
+    private final MeeshoStatusMapper statusMapper;
 
     @Transactional(readOnly = true)
     public List<MeeshoChannelOrderResponse> listOrders(Long userId) {
@@ -68,7 +74,7 @@ public class MeeshoPanelSyncService {
                     ? (ok == 0
                             ? "Order sync ran. No pending Meesho orders returned (panel route may still need mapping)."
                             : "Pulled " + ok + " Meesho order(s).")
-                    : "Session not live-verified yet — orders not pulled. Update password or retry after Meesho accepts login.";
+                    : "Session not live-verified yet — orders may be empty. Set MEESHO_PANEL_LIVE_AUTH_REQUIRED=true after credentials work.";
             return new SyncCounts(ok, 0, message);
         });
     }
@@ -76,28 +82,9 @@ public class MeeshoPanelSyncService {
     @Transactional
     public MeeshoSyncResultResponse syncStock(Long userId) {
         return runSync(userId, "STOCK", (connection, session, run) -> {
-            List<InventoryLevel> levels = inventoryLevelRepository.findAllForUser(userId);
-            List<MeeshoStockUpdate> updates = levels.stream()
-                    .map(level -> new MeeshoStockUpdate(
-                            level.getVariant().getSku(),
-                            Math.max(0, level.getOnHand() - level.getReserved())))
-                    .filter(u -> StringUtils.hasText(u.sku()))
-                    .toList();
-            int pushed = meeshoPanelClient.pushStock(session, updates);
-            int failed = session.verified() ? Math.max(0, updates.size() - pushed) : updates.size();
+            MeeshoStockPushService.SyncResult result = stockPushService.pushAllDelta(userId, connection, session);
             touchConfig(connection, "lastStockSyncAt");
-            String message;
-            if (!session.verified()) {
-                message = "Stock sync deferred — Meesho session not verified. "
-                        + updates.size() + " CS SKU(s) ready to push from Inventory.";
-            } else if (pushed == 0 && !updates.isEmpty()) {
-                message = "Stock push prepared for " + updates.size()
-                        + " SKU(s). Meesho inventory route pending panel mapping — CS remains source of truth.";
-                failed = 0;
-            } else {
-                message = "Pushed stock for " + pushed + " SKU(s) to Meesho.";
-            }
-            return new SyncCounts(session.verified() ? Math.max(pushed, updates.size()) : 0, failed, message);
+            return new SyncCounts(result.ok(), result.failed(), result.message());
         });
     }
 
@@ -147,22 +134,75 @@ public class MeeshoPanelSyncService {
             }
             orderRepository.saveAll(candidates);
             touchConfig(connection, "lastLabelsSyncAt");
-            String message = session.verified()
-                    ? "Label sync finished: " + ok + " ready, " + failed + " pending/error."
-                    : "Label sync deferred — verify Meesho panel login first.";
-            return new SyncCounts(ok, failed, message);
+            return new SyncCounts(ok, failed, "Label sync finished: " + ok + " ready, " + failed + " pending/error.");
+        });
+    }
+
+    @Transactional
+    public MeeshoSyncResultResponse syncOffers(Long userId) {
+        return runSync(userId, "OFFERS", (connection, session, run) -> {
+            Map<String, Object> result = offerLinkService.importAndLink(userId, connection, session);
+            touchConfig(connection, "lastOffersSyncAt");
+            int linked = ((Number) result.getOrDefault("linked", 0)).intValue();
+            int updated = ((Number) result.getOrDefault("updated", 0)).intValue();
+            int unmatched = ((Number) result.getOrDefault("unmatched", 0)).intValue();
+            return new SyncCounts(linked + updated, unmatched, String.valueOf(result.get("message")));
+        });
+    }
+
+    @Transactional
+    public MeeshoSyncResultResponse syncReturns(Long userId) {
+        return runSync(userId, "RETURNS", (connection, session, run) -> {
+            List<MeeshoRemoteReturn> returns = meeshoPanelClient.fetchReturns(session);
+            int ok = 0;
+            for (MeeshoRemoteReturn item : returns) {
+                if (!StringUtils.hasText(item.externalOrderId())) {
+                    continue;
+                }
+                String sub = item.externalSubOrderId() == null ? "" : item.externalSubOrderId();
+                MarketplaceChannelOrder order = orderRepository
+                        .findByConnectionIdAndExternalOrderIdAndExternalSubOrderId(
+                                connection.getId(), item.externalOrderId(), sub)
+                        .orElseGet(() -> MarketplaceChannelOrder.builder()
+                                .connection(connection)
+                                .user(userRepository.getReferenceById(userId))
+                                .marketplace(MeeshoPanelConnectionService.MARKETPLACE)
+                                .externalOrderId(item.externalOrderId())
+                                .externalSubOrderId(sub)
+                                .build());
+                order.setReturnStatus(item.returnStatus());
+                order.setOmsStatus("RETURN");
+                order.setStatus("RETURN");
+                order.setChannelStatus(item.returnStatus());
+                order.setSku(item.sku());
+                order.setQuantity(Math.max(1, item.quantity()));
+                order.setLastSyncedAt(Instant.now());
+                order.setRawJson(item.raw() == null ? Map.of() : item.raw());
+                orderRepository.save(order);
+                if (properties.oms().meesho().reserveOnOrderImport()) {
+                    reservationService.restockReturn(userId, order);
+                }
+                ok++;
+            }
+            touchConfig(connection, "lastReturnsSyncAt");
+            return new SyncCounts(ok, 0, returns.isEmpty()
+                    ? "No Meesho returns returned (route may still need mapping)."
+                    : "Synced " + ok + " Meesho return(s).");
         });
     }
 
     @Transactional
     public MeeshoSyncResultResponse syncFull(Long userId) {
+        MeeshoSyncResultResponse offers = syncOffers(userId);
         MeeshoSyncResultResponse orders = syncOrders(userId);
         MeeshoSyncResultResponse stock = syncStock(userId);
         MeeshoSyncResultResponse labels = syncLabels(userId);
-        int ok = orders.itemsOk() + stock.itemsOk() + labels.itemsOk();
-        int failed = orders.itemsFailed() + stock.itemsFailed() + labels.itemsFailed();
+        MeeshoSyncResultResponse returns = syncReturns(userId);
+        int ok = offers.itemsOk() + orders.itemsOk() + stock.itemsOk() + labels.itemsOk() + returns.itemsOk();
+        int failed = offers.itemsFailed() + orders.itemsFailed() + stock.itemsFailed()
+                + labels.itemsFailed() + returns.itemsFailed();
         String status = failed == 0 ? "SUCCESS" : (ok > 0 ? "PARTIAL" : "FAILED");
-        MarketplaceConnection connection = connectionService.requirePanelConnection(userId);
+        MarketplaceConnection connection = credentialService.ensureConnection(userId, userRepository);
         MarketplaceSyncRun run = syncRunRepository.save(MarketplaceSyncRun.builder()
                 .connection(connection)
                 .user(userRepository.getReferenceById(userId))
@@ -171,8 +211,11 @@ public class MeeshoPanelSyncService {
                 .status(status)
                 .itemsOk(ok)
                 .itemsFailed(failed)
-                .message("Orders: " + orders.message() + " | Stock: " + stock.message()
-                        + " | Labels: " + labels.message())
+                .message("Offers: " + offers.message()
+                        + " | Orders: " + orders.message()
+                        + " | Stock: " + stock.message()
+                        + " | Labels: " + labels.message()
+                        + " | Returns: " + returns.message())
                 .startedAt(Instant.now())
                 .finishedAt(Instant.now())
                 .build());
@@ -180,7 +223,7 @@ public class MeeshoPanelSyncService {
     }
 
     private MeeshoSyncResultResponse runSync(Long userId, String syncType, SyncWork work) {
-        MarketplaceConnection connection = connectionService.requirePanelConnection(userId);
+        MarketplaceConnection connection = credentialService.ensureConnection(userId, userRepository);
         MarketplaceSyncRun run = syncRunRepository.save(MarketplaceSyncRun.builder()
                 .connection(connection)
                 .user(userRepository.getReferenceById(userId))
@@ -190,7 +233,7 @@ public class MeeshoPanelSyncService {
                 .startedAt(Instant.now())
                 .build());
         try {
-            MeeshoPanelSession session = connectionService.ensureSession(connection);
+            MeeshoPanelSession session = credentialService.requireSession(userId);
             SyncCounts counts = work.execute(connection, session, run);
             run.setItemsOk(counts.ok());
             run.setItemsFailed(counts.failed());
@@ -210,6 +253,10 @@ public class MeeshoPanelSyncService {
 
     private void upsertOrder(Long userId, MarketplaceConnection connection, MeeshoRemoteOrder item) {
         String sub = item.externalSubOrderId() == null ? "" : item.externalSubOrderId();
+        boolean isNew = orderRepository
+                .findByConnectionIdAndExternalOrderIdAndExternalSubOrderId(
+                        connection.getId(), item.externalOrderId(), sub)
+                .isEmpty();
         MarketplaceChannelOrder order = orderRepository
                 .findByConnectionIdAndExternalOrderIdAndExternalSubOrderId(
                         connection.getId(), item.externalOrderId(), sub)
@@ -220,7 +267,11 @@ public class MeeshoPanelSyncService {
                         .externalOrderId(item.externalOrderId())
                         .externalSubOrderId(sub)
                         .build());
-        order.setStatus(StringUtils.hasText(item.status()) ? item.status() : "PENDING");
+        String channelStatus = StringUtils.hasText(item.status()) ? item.status() : "PENDING";
+        String oms = statusMapper.toInternal(channelStatus);
+        order.setChannelStatus(channelStatus);
+        order.setOmsStatus(oms);
+        order.setStatus(oms);
         order.setSku(item.sku());
         order.setQuantity(Math.max(1, item.quantity()));
         order.setBuyerName(item.buyerName());
@@ -232,6 +283,15 @@ public class MeeshoPanelSyncService {
         order.setLastSyncedAt(Instant.now());
         order.setRawJson(item.raw() == null ? Map.of() : item.raw());
         orderRepository.save(order);
+
+        if (ChannelStockReservationService.looksCancelled(oms) || statusMapper.isTerminalCancel(oms)) {
+            reservationService.releaseForOrder(userId, order);
+        } else if (properties.oms().meesho().reserveOnOrderImport()) {
+            reservationService.reserveForOrder(userId, order);
+        }
+        if (isNew) {
+            autoActionService.onOrderImported(userId, MeeshoPanelConnectionService.MARKETPLACE, order);
+        }
     }
 
     private void touchConfig(MarketplaceConnection connection, String key) {

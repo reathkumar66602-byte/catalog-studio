@@ -181,27 +181,43 @@ public class CampaignService {
         }
         int processed = 0;
         Set<Long> runIds = new HashSet<>();
+        Set<Long> pausedRuns = new HashSet<>();
         for (CampaignRunItem item : pending) {
             CampaignRun run = item.getCampaignRun();
+            if (run.getStatus() == RunStatus.PAUSED || run.getStatus() == RunStatus.FAILED) {
+                continue;
+            }
+            if (pausedRuns.contains(run.getId())) {
+                continue;
+            }
             if (run.getStatus() == RunStatus.PENDING) {
                 run.setStatus(RunStatus.RUNNING);
                 run.setStartedAt(java.time.Instant.now());
             }
-            processItem(item, run);
+            boolean pausedForBilling = processItem(item, run);
             runIds.add(run.getId());
+            if (pausedForBilling) {
+                pausedRuns.add(run.getId());
+                continue;
+            }
             processed++;
         }
         for (Long runId : runIds) {
-            finalizeRunIfComplete(runId);
+            if (!pausedRuns.contains(runId)) {
+                finalizeRunIfComplete(runId);
+            }
         }
         return processed;
     }
 
-    private void processItem(CampaignRunItem item, CampaignRun run) {
+    /**
+     * @return true when the run was paused for billing/quota and this item was left PENDING
+     */
+    private boolean processItem(CampaignRunItem item, CampaignRun run) {
         User user = item.getUser();
         if (user == null || user.getStatus() == User.UserStatus.DISABLED) {
             markSkipped(item, run, "User deactivated");
-            return;
+            return false;
         }
         Map<String, String> vars = buildVariables(user, run);
         DeliveryChannel channel = run.getChannel();
@@ -233,9 +249,25 @@ public class CampaignService {
             }
         }
 
+        if (lastError != null && CampaignBillingErrors.isBillingOrQuotaError(lastError)) {
+            if (anySent) {
+                // Partial success (e.g. email ok, WhatsApp out of credit) — keep progress, pause rest.
+                item.setStatus(ItemStatus.SENT);
+                item.setSentAt(java.time.Instant.now());
+                item.setErrorMessage(lastError);
+                run.setSentCount(run.getSentCount() + 1);
+            } else {
+                // Leave PENDING so Resume retries the same recipient after top-up.
+                item.setErrorMessage(lastError);
+            }
+            pauseRun(run, lastError);
+            return true;
+        }
+
         if (anySent) {
             item.setStatus(ItemStatus.SENT);
             item.setSentAt(java.time.Instant.now());
+            item.setErrorMessage(null);
             run.setSentCount(run.getSentCount() + 1);
         } else if (lastError != null) {
             item.setStatus(ItemStatus.FAILED);
@@ -243,6 +275,72 @@ public class CampaignService {
             run.setFailedCount(run.getFailedCount() + 1);
         } else {
             markSkipped(item, run, lastSkip == null ? "Nothing to send" : lastSkip);
+        }
+        return false;
+    }
+
+    private void pauseRun(CampaignRun run, String reason) {
+        run.setStatus(RunStatus.PAUSED);
+        run.setPauseReason(reason);
+        run.setFinishedAt(null);
+        log.warn("Campaign run {} paused for billing/quota: {}", run.getUuid(), reason);
+    }
+
+    @Transactional
+    public CampaignRunResponse resume(UUID runId) {
+        requireStaff();
+        CampaignRun run = runRepository.findByUuid(runId)
+                .orElseThrow(() -> ApiException.notFound("Campaign run not found"));
+        if (run.getStatus() != RunStatus.PAUSED) {
+            throw ApiException.badRequest("Only paused campaigns can be resumed");
+        }
+        long pending = itemRepository.countByCampaignRunIdAndStatus(run.getId(), ItemStatus.PENDING);
+        if (pending == 0) {
+            finalizeRunIfComplete(run.getId());
+            return toResponse(runRepository.findById(run.getId()).orElse(run));
+        }
+        run.setStatus(RunStatus.RUNNING);
+        run.setPauseReason(null);
+        run.setFinishedAt(null);
+        if (run.getStartedAt() == null) {
+            run.setStartedAt(java.time.Instant.now());
+        }
+        log.info("Campaign run {} resumed ({} pending)", run.getUuid(), pending);
+        return toResponse(run);
+    }
+
+    @Transactional
+    public CampaignRunResponse retryFailed(UUID runId) {
+        requireStaff();
+        CampaignRun run = runRepository.findByUuid(runId)
+                .orElseThrow(() -> ApiException.notFound("Campaign run not found"));
+        List<CampaignRunItem> failed = itemRepository.findByCampaignRunIdAndStatus(
+                run.getId(), ItemStatus.FAILED);
+        if (failed.isEmpty()) {
+            throw ApiException.badRequest("No failed recipients to retry");
+        }
+        for (CampaignRunItem item : failed) {
+            item.setStatus(ItemStatus.PENDING);
+            item.setErrorMessage(null);
+            item.setSkipReason(null);
+            item.setSentAt(null);
+        }
+        run.setFailedCount(Math.max(0, run.getFailedCount() - failed.size()));
+        run.setStatus(RunStatus.RUNNING);
+        run.setPauseReason(null);
+        run.setFinishedAt(null);
+        if (run.getStartedAt() == null) {
+            run.setStartedAt(java.time.Instant.now());
+        }
+        log.info("Campaign run {} retrying {} failed recipients", run.getUuid(), failed.size());
+        return toResponse(run);
+    }
+
+    private void requireStaff() {
+        User actor = userRepository.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> ApiException.unauthorized("Unauthorized"));
+        if (!actor.isStaff()) {
+            throw ApiException.forbidden("Only admin or super admin can manage campaigns");
         }
     }
 
@@ -271,8 +369,9 @@ public class CampaignService {
                     StringUtils.hasText(template.getBodyHtml()) ? template.getBodyHtml() : template.getBodyText(),
                     vars);
             String text = EmailTemplateRenderer.render(template.getBodyText(), vars);
-            boolean sent = mailDispatchService.sendCampaignHtml(user.getEmail().trim(), subject, html, text);
-            return sent ? null : "ERROR:Email provider did not accept message";
+            String error = mailDispatchService.sendCampaignHtmlOrError(
+                    user.getEmail().trim(), subject, html, text);
+            return error == null ? null : "ERROR:" + error;
         } catch (Exception ex) {
             log.warn("Campaign email failed for {}: {}", user.getEmail(), ex.toString());
             return "ERROR:" + ex.getMessage();
@@ -490,6 +589,7 @@ public class CampaignService {
 
     private CampaignRunResponse toResponse(CampaignRun run) {
         TipVideo tip = run.getTipVideo();
+        int pending = (int) itemRepository.countByCampaignRunIdAndStatus(run.getId(), ItemStatus.PENDING);
         return new CampaignRunResponse(
                 run.getUuid(),
                 run.getCampaignType().name(),
@@ -501,6 +601,8 @@ public class CampaignService {
                 run.getSentCount(),
                 run.getSkippedCount(),
                 run.getFailedCount(),
+                pending,
+                run.getPauseReason(),
                 run.getNotes(),
                 tip == null ? null : tip.getUuid(),
                 tip == null ? null : tip.getTitle(),

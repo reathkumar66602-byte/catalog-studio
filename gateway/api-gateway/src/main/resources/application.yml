@@ -38,6 +38,16 @@ spring:
             - Path=/api/v1/supplier-files/**
           filters:
             - RewritePath=/api/v1/supplier-files/(?<segment>.*), /api/v1/files/${segment}
+        - id: support-service
+          uri: ${SUPPORT_SERVICE_URI:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/support/**
+        - id: support-files
+          uri: ${SUPPORT_SERVICE_URI:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/support-files/**
+          filters:
+            - RewritePath=/api/v1/support-files/(?<segment>.*), /api/v1/support/attachments/${segment}/download
         - id: platform-api
           uri: ${PLATFORM_SERVICE_URI:http://localhost:8082}
           predicates:

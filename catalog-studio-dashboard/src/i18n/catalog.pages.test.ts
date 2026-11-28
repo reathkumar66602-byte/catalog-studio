@@ -3,17 +3,25 @@ import { LOCALES, translate } from "./catalog";
 import { PAGES_CATALOG } from "./catalog.pages";
 import { UI_CATALOG } from "./catalog.ui";
 
-const LOCALE_CODES = LOCALES.map((item) => item.code);
+/** Locales that require full catalog rows. gu/or are selectable and fall back to en. */
+const FULL_LOCALE_CODES = LOCALES.map((item) => item.code).filter(
+  (code) => code !== "gu" && code !== "or",
+);
 
 describe("PAGES_CATALOG locale coverage", () => {
-  it("has every key in all 10 locales", () => {
+  it("has every key in all fully-translated locales", () => {
     const missing: string[] = [];
     for (const [key, row] of Object.entries(PAGES_CATALOG)) {
-      for (const code of LOCALE_CODES) {
+      for (const code of FULL_LOCALE_CODES) {
         if (!row[code]?.trim()) missing.push(`${key}.${code}`);
       }
     }
     expect(missing).toEqual([]);
+  });
+
+  it("includes Gujarati and Odia in LOCALES for selection", () => {
+    expect(LOCALES.some((item) => item.code === "gu")).toBe(true);
+    expect(LOCALES.some((item) => item.code === "or")).toBe(true);
   });
 
   it("translates store GSTIN hint and Verify GST in Hindi", () => {
@@ -45,7 +53,7 @@ describe("wholesale nav UI_CATALOG", () => {
     ] as const) {
       const row = UI_CATALOG[key];
       expect(row, key).toBeTruthy();
-      for (const code of LOCALE_CODES) {
+      for (const code of FULL_LOCALE_CODES) {
         expect(row[code]?.trim(), `${key}.${code}`).toBeTruthy();
       }
     }

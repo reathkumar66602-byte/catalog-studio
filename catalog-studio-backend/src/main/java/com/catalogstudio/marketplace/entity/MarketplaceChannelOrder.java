@@ -100,6 +100,16 @@ public class MarketplaceChannelOrder {
     private String labelStatus = "NONE";
 
     @Builder.Default
+    @Column(name = "inventory_reserved", nullable = false)
+    private boolean inventoryReserved = false;
+
+    @Column(name = "oms_status", length = 40)
+    private String omsStatus;
+
+    @Column(name = "return_status", length = 40)
+    private String returnStatus;
+
+    @Builder.Default
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_json", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> rawJson = Map.of();

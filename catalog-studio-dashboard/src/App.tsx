@@ -59,6 +59,12 @@ import { CloudCostAdminPage } from "./features/admin/CloudCostAdminPage";
 import { UsersAdminPage } from "./features/admin/UsersAdminPage";
 import { AccessAdminPage } from "./features/admin/AccessAdminPage";
 import { StaffAdminPage } from "./features/admin/StaffAdminPage";
+import { SupportTicketsAdminPage } from "./features/admin/SupportTicketsAdminPage";
+import { SupportTicketDetailAdminPage } from "./features/admin/SupportTicketDetailAdminPage";
+import { SupportSettingsAdminPage } from "./features/admin/SupportSettingsAdminPage";
+import { SupportHubPage } from "./features/support/SupportHubPage";
+import { MyTicketsPage } from "./features/support/MyTicketsPage";
+import { TicketDetailPage } from "./features/support/TicketDetailPage";
 import { TransactionHistoryPage } from "./features/subscription/TransactionHistoryPage";
 import { EntitlementGate } from "./routes/EntitlementGate";
 import { GuestToolRedirect } from "./routes/GuestToolRedirect";
@@ -107,6 +113,7 @@ export default function App() {
                   <Route path="/templates" element={<TemplatesPage />} />
                   <Route path="/profiles" element={<ProfilesPage />} />
                   <Route path="/marketplaces" element={<MarketplacesPage />} />
+                  <Route path="/orders" element={<OrderManagerPage />} />
                   <Route element={<FeatureRoute feature="analysis" />}>
                     <Route path="/analysis" element={<AnalysisHistoryPage />} />
                   </Route>
@@ -158,6 +165,9 @@ export default function App() {
                   <Route element={<FeatureRoute feature="settings" />}>
                     <Route path="/settings" element={<SettingsPage />} />
                   </Route>
+                  <Route path="/support" element={<SupportHubPage />} />
+                  <Route path="/support/tickets" element={<MyTicketsPage />} />
+                  <Route path="/support/tickets/:id" element={<TicketDetailPage />} />
                   <Route element={<AdminRoute />}>
                     <Route path="/admin/users" element={<UsersAdminPage />} />
                     <Route path="/admin/access" element={<AccessAdminPage />} />
@@ -165,12 +175,14 @@ export default function App() {
                     <Route path="/admin/billing" element={<BillingAdminPage />} />
                     <Route path="/admin/payments" element={<AdminPaymentsPage />} />
                     <Route path="/admin/tips" element={<TipsAdminPage />} />
+                    <Route path="/admin/support-tickets" element={<SupportTicketsAdminPage />} />
+                    <Route path="/admin/support-tickets/:id" element={<SupportTicketDetailAdminPage />} />
                     <Route path="/settings/email-templates" element={<EmailTemplatesPage />} />
                   </Route>
                   <Route element={<SuperAdminRoute />}>
-                    <Route path="/orders" element={<OrderManagerPage />} />
                     <Route path="/admin/staff" element={<StaffAdminPage />} />
                     <Route path="/admin/cloud-cost" element={<CloudCostAdminPage />} />
+                    <Route path="/admin/support-settings" element={<SupportSettingsAdminPage />} />
                   </Route>
                   </Route>
                 </Route>

@@ -9,9 +9,11 @@ import {
   ClipboardList,
   Cloud,
   Globe,
+  Headphones,
   History,
   KeyRound,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   TrendingUp,
   Mail,
@@ -20,6 +22,7 @@ import {
   Package,
   PackageCheck,
   PlayCircle,
+  BookMarked,
   BookOpen,
   GraduationCap,
   Receipt,
@@ -140,7 +143,8 @@ export function AppLayout() {
         link.to === "/subscription" ||
         link.to === "/transactions" ||
         link.to === "/settings" ||
-        link.to === "/billing-address"
+        link.to === "/billing-address" ||
+        link.to === "/support"
       );
     };
 
@@ -162,6 +166,8 @@ export function AppLayout() {
           { to: "/tools/meesho-calculator", label: t("nav.calculator"), icon: Calculator, feature: "meesho_calculator" },
           { to: "/extension", label: t("nav.extension"), icon: Chrome, feature: "extension" },
           { to: "/inventory", label: t("nav.inventory"), icon: Package, feature: "inventory" },
+          { to: "/marketplaces", label: t("nav.marketplaces"), icon: Store },
+          { to: "/orders", label: t("nav.orderManager"), icon: ClipboardList },
         ].filter(allow),
       },
       {
@@ -205,16 +211,17 @@ export function AppLayout() {
           { to: "/transactions", label: t("nav.transactions"), icon: Receipt, feature: "transactions" },
           { to: "/billing-address", label: t("nav.billing"), icon: MapPin, feature: "billing_address" },
           { to: "/settings", label: t("nav.settings"), icon: Settings, feature: "settings" },
+          { to: "/support", label: t("nav.support"), icon: LifeBuoy },
         ].filter(allow),
       },
     ].filter((group) => group.links.length > 0);
 
     const staffLinks: MenuLink[] = [
-      { to: "/orders", label: t("nav.orderManager"), icon: ClipboardList, superAdminOnly: true },
-      { to: "/marketplaces", label: t("nav.marketplaces"), icon: Store, superAdminOnly: true },
       { to: "/admin/users", label: t("nav.users"), icon: Users },
       { to: "/admin/access", label: t("nav.access"), icon: KeyRound },
       { to: "/admin/tips", label: t("nav.tipsAdmin"), icon: PlayCircle },
+      { to: "/admin/support-tickets", label: t("nav.supportTickets"), icon: Headphones },
+      { to: "/admin/support-settings", label: t("nav.supportSettings"), icon: BookMarked, superAdminOnly: true },
       { to: "/admin/staff", label: t("nav.admin"), icon: Shield, superAdminOnly: true },
       { to: "/admin/site", label: t("nav.websiteSettings"), icon: Globe },
       { to: "/admin/billing", label: t("nav.trialPayment"), icon: Wallet },

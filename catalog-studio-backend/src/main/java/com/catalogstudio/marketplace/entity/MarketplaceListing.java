@@ -57,6 +57,15 @@ public class MarketplaceListing {
     @Column(name = "stock_mirror")
     private Integer stockMirror;
 
+    @Column(name = "last_pushed_stock")
+    private Integer lastPushedStock;
+
+    @Column(name = "last_pushed_price", precision = 12, scale = 2)
+    private BigDecimal lastPushedPrice;
+
+    @Column(name = "offer_title", length = 255)
+    private String offerTitle;
+
     @Builder.Default
     @Column(nullable = false, length = 32)
     private String status = "DRAFT";

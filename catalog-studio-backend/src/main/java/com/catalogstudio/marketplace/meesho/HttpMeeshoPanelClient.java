@@ -44,7 +44,40 @@ public class HttpMeeshoPanelClient implements MeeshoPanelClient {
 
     private static final List<String> LABEL_PATHS = List.of(
             "/api/supplier/v1/order/label",
+            "/api/supplier/v1/order/labels",
             "/api/v1/orders/label");
+
+    private static final List<String> OFFER_PATHS = List.of(
+            "/api/supplier/v1/product/list",
+            "/api/supplier/v1/catalog/products",
+            "/api/supplier/v1/inventory/list",
+            "/api/v1/products");
+
+    private static final List<String> PRICE_PATHS = List.of(
+            "/api/supplier/v1/inventory/update",
+            "/api/supplier/v1/product/price/update",
+            "/api/v1/inventory/update");
+
+    private static final List<String> RETURN_PATHS = List.of(
+            "/api/supplier/v1/order/returns",
+            "/api/supplier/v1/returns/in-transit",
+            "/api/v1/orders/returns");
+
+    private static final List<String> ACCEPT_PATHS = List.of(
+            "/api/supplier/v1/order/accept",
+            "/api/supplier/v1/order/confirm",
+            "/api/v1/orders/accept");
+
+    private static final List<String> STATUS_PATHS = List.of(
+            "/api/supplier/v1/order/status",
+            "/api/supplier/v1/order/update-status",
+            "/api/v1/orders/status");
+
+    private static final List<String> SHIP_PATHS = List.of(
+            "/api/supplier/v1/order/ship",
+            "/api/supplier/v1/order/manifest",
+            "/api/supplier/v1/shipping/create",
+            "/api/v1/orders/ship");
 
     private final ObjectMapper objectMapper;
     private final String baseUrl;
@@ -228,6 +261,214 @@ public class HttpMeeshoPanelClient implements MeeshoPanelClient {
                     : new MeeshoLabelResult(orderId, null, null, "PENDING", "Meesho label route pending mapping"));
         }
         return results;
+    }
+
+    @Override
+    public List<MeeshoRemoteOffer> fetchOffers(MeeshoPanelSession session) {
+        if (session == null) {
+            return List.of();
+        }
+        HttpClient http = client(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+        for (String path : OFFER_PATHS) {
+            try {
+                HttpResponse<String> response = get(http, path, session);
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    continue;
+                }
+                JsonNode list = firstArray(objectMapper.readTree(response.body() == null ? "{}" : response.body()));
+                if (list == null) {
+                    continue;
+                }
+                List<MeeshoRemoteOffer> out = new ArrayList<>();
+                for (JsonNode n : list) {
+                    String sku = first(text(n, "sku"), text(n, "supplierSku"), text(n, "variantSku"), text(n, "ssku"));
+                    String listingId = first(text(n, "productId"), text(n, "id"), text(n, "listingId"), sku);
+                    if (!StringUtils.hasText(sku) && !StringUtils.hasText(listingId)) {
+                        continue;
+                    }
+                    Integer stock = n.has("inventory") ? n.path("inventory").asInt()
+                            : (n.has("quantity") ? n.path("quantity").asInt() : null);
+                    Double price = n.has("price") && n.path("price").isNumber()
+                            ? n.path("price").asDouble()
+                            : null;
+                    out.add(new MeeshoRemoteOffer(
+                            listingId,
+                            sku,
+                            first(text(n, "title"), text(n, "productName"), text(n, "name")),
+                            stock,
+                            price,
+                            first(text(n, "status"), "LIVE"),
+                            objectMapper.convertValue(n, Map.class)));
+                }
+                log.info("Meesho pulled {} offers via {}", out.size(), path);
+                return out;
+            } catch (Exception ex) {
+                log.warn("Meesho offer pull {} failed: {}", path, ex.toString());
+            }
+        }
+        return List.of();
+    }
+
+    @Override
+    public int pushPrices(MeeshoPanelSession session, Map<String, Double> skuPrices) {
+        if (session == null || skuPrices == null || skuPrices.isEmpty()) {
+            return 0;
+        }
+        HttpClient http = client(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+        int ok = 0;
+        for (Map.Entry<String, Double> e : skuPrices.entrySet()) {
+            if (!StringUtils.hasText(e.getKey()) || e.getValue() == null) {
+                continue;
+            }
+            ObjectNode body = objectMapper.createObjectNode()
+                    .put("sku", e.getKey().trim())
+                    .put("price", e.getValue())
+                    .put("mrp", e.getValue());
+            boolean pushed = false;
+            for (String path : PRICE_PATHS) {
+                try {
+                    HttpResponse<String> response = post(http, path, body.toString(), session);
+                    if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                        ok++;
+                        pushed = true;
+                        break;
+                    }
+                } catch (Exception ex) {
+                    log.warn("Meesho price {} failed: {}", path, ex.toString());
+                }
+            }
+            if (!pushed) {
+                log.debug("Meesho price route pending for sku={}", e.getKey());
+            }
+        }
+        return ok;
+    }
+
+    @Override
+    public List<MeeshoRemoteReturn> fetchReturns(MeeshoPanelSession session) {
+        if (session == null) {
+            return List.of();
+        }
+        HttpClient http = client(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+        for (String path : RETURN_PATHS) {
+            try {
+                HttpResponse<String> response = get(http, path, session);
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    continue;
+                }
+                JsonNode list = firstArray(objectMapper.readTree(response.body() == null ? "{}" : response.body()));
+                if (list == null) {
+                    continue;
+                }
+                List<MeeshoRemoteReturn> out = new ArrayList<>();
+                for (JsonNode n : list) {
+                    out.add(new MeeshoRemoteReturn(
+                            first(text(n, "orderId"), text(n, "id"), text(n, "order_id")),
+                            first(text(n, "subOrderId"), text(n, "sub_order_id"), ""),
+                            first(text(n, "sku"), text(n, "supplierSku")),
+                            Math.max(1, n.path("quantity").asInt(1)),
+                            first(text(n, "status"), text(n, "returnStatus"), "IN_TRANSIT"),
+                            Instant.now(),
+                            objectMapper.convertValue(n, Map.class)));
+                }
+                log.info("Meesho pulled {} returns via {}", out.size(), path);
+                return out;
+            } catch (Exception ex) {
+                log.warn("Meesho return pull {} failed: {}", path, ex.toString());
+            }
+        }
+        return List.of();
+    }
+
+    @Override
+    public boolean acceptOrder(MeeshoPanelSession session, String externalOrderId) {
+        if (session == null || !StringUtils.hasText(externalOrderId)) {
+            return false;
+        }
+        return postFlag(session, ACCEPT_PATHS, objectMapper.createObjectNode()
+                .put("orderId", externalOrderId.trim())
+                .put("action", "ACCEPT"));
+    }
+
+    @Override
+    public boolean updateOrderStatus(MeeshoPanelSession session, String externalOrderId, String meeshoStatus) {
+        if (session == null || !StringUtils.hasText(externalOrderId) || !StringUtils.hasText(meeshoStatus)) {
+            return false;
+        }
+        return postFlag(session, STATUS_PATHS, objectMapper.createObjectNode()
+                .put("orderId", externalOrderId.trim())
+                .put("status", meeshoStatus.trim()));
+    }
+
+    @Override
+    public MeeshoLabelResult createShipment(MeeshoPanelSession session, String externalOrderId) {
+        if (session == null || !StringUtils.hasText(externalOrderId)) {
+            return new MeeshoLabelResult(externalOrderId, null, null, "ERROR", "Missing order id");
+        }
+        HttpClient http = client(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+        ObjectNode body = objectMapper.createObjectNode().put("orderId", externalOrderId.trim());
+        for (String path : SHIP_PATHS) {
+            try {
+                HttpResponse<String> response = post(http, path, body.toString(), session);
+                if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                    JsonNode root = objectMapper.readTree(response.body() == null ? "{}" : response.body());
+                    String url = first(text(root, "labelUrl"), text(root.path("data"), "labelUrl"));
+                    String awb = first(text(root, "awb"), text(root.path("data"), "awb"));
+                    return new MeeshoLabelResult(
+                            externalOrderId,
+                            awb,
+                            url,
+                            StringUtils.hasText(url) || StringUtils.hasText(awb) ? "READY" : "PENDING",
+                            null);
+                }
+            } catch (Exception ex) {
+                log.warn("Meesho ship {} failed: {}", path, ex.toString());
+            }
+        }
+        // Fall back to label fetch — Meesho often exposes label after Ready-to-ship.
+        List<MeeshoLabelResult> labels = fetchLabels(session, List.of(externalOrderId));
+        if (!labels.isEmpty() && StringUtils.hasText(labels.get(0).labelUrl())) {
+            return labels.get(0);
+        }
+        return new MeeshoLabelResult(externalOrderId, null, null, "PENDING", "Meesho ship route pending mapping");
+    }
+
+    private boolean postFlag(MeeshoPanelSession session, List<String> paths, ObjectNode body) {
+        HttpClient http = client(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+        for (String path : paths) {
+            try {
+                HttpResponse<String> response = post(http, path, body.toString(), session);
+                if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                    return true;
+                }
+            } catch (Exception ex) {
+                log.warn("Meesho post {} failed: {}", path, ex.toString());
+            }
+        }
+        return false;
+    }
+
+    private static JsonNode firstArray(JsonNode root) {
+        if (root == null) {
+            return null;
+        }
+        if (root.isArray()) {
+            return root;
+        }
+        for (String key : List.of("data", "orders", "products", "items", "payload", "returns", "result")) {
+            JsonNode n = root.path(key);
+            if (n.isArray()) {
+                return n;
+            }
+            if (n.isObject()) {
+                for (String inner : List.of("products", "orders", "items", "list", "content")) {
+                    if (n.path(inner).isArray()) {
+                        return n.path(inner);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private HttpClient client(CookieManager cookies) {

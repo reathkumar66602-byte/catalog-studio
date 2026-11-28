@@ -17,6 +17,8 @@ public interface CampaignRunItemRepository extends JpaRepository<CampaignRunItem
 
     long countByCampaignRunIdAndStatus(Long campaignRunId, ItemStatus status);
 
+    List<CampaignRunItem> findByCampaignRunIdAndStatus(Long campaignRunId, ItemStatus status);
+
     @Query("""
             select i.user.id, count(i)
             from CampaignRunItem i

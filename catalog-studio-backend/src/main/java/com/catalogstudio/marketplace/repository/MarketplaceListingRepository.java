@@ -23,4 +23,31 @@ public interface MarketplaceListingRepository extends JpaRepository<MarketplaceL
     List<MarketplaceListing> findAllForUser(@Param("userId") Long userId);
 
     Optional<MarketplaceListing> findByUuidAndVariant_Product_User_Id(UUID uuid, Long userId);
+
+    @Query("""
+            select l from MarketplaceListing l
+            join fetch l.variant v
+            join fetch v.product p
+            join fetch l.connection c
+            where p.user.id = :userId
+              and c.id = :connectionId
+              and l.status in ('LIVE', 'PAUSED', 'DRAFT')
+            order by l.updatedAt desc
+            """)
+    List<MarketplaceListing> findLinkedForUserAndConnection(
+            @Param("userId") Long userId, @Param("connectionId") Long connectionId);
+
+    @Query("""
+            select l from MarketplaceListing l
+            join fetch l.variant v
+            join fetch v.product p
+            join fetch l.connection c
+            where p.user.id = :userId
+              and upper(c.marketplace) = upper(:marketplace)
+              and l.status in ('LIVE', 'PAUSED')
+            """)
+    List<MarketplaceListing> findActiveForUserAndMarketplace(
+            @Param("userId") Long userId, @Param("marketplace") String marketplace);
+
+    Optional<MarketplaceListing> findByConnectionIdAndExternalSkuIgnoreCase(Long connectionId, String externalSku);
 }

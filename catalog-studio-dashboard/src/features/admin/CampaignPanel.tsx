@@ -20,6 +20,8 @@ type CampaignRun = {
   sentCount: number;
   skippedCount: number;
   failedCount: number;
+  pendingCount?: number;
+  pauseReason?: string | null;
   createdAt: string;
   whatsappCapability?: string;
 };
@@ -99,7 +101,26 @@ export function CampaignPanel() {
     },
   });
 
+  const resumeRun = useMutation({
+    mutationFn: (id: string) => api.post(`/admin/campaigns/runs/${id}/resume`),
+    onSuccess: async () => {
+      setMessage("Campaign resumed. Remaining recipients will continue in the next batches.");
+      await qc.invalidateQueries({ queryKey: ["admin-campaign-runs"] });
+    },
+    onError: (err) => setMessage(apiErrorMessage(err)),
+  });
+
+  const retryFailed = useMutation({
+    mutationFn: (id: string) => api.post(`/admin/campaigns/runs/${id}/retry-failed`),
+    onSuccess: async () => {
+      setMessage("Failed recipients re-queued. They will send again in the next batches.");
+      await qc.invalidateQueries({ queryKey: ["admin-campaign-runs"] });
+    },
+    onError: (err) => setMessage(apiErrorMessage(err)),
+  });
+
   const activePromos = (promos.data || []).filter((p) => (p.status || "").toUpperCase() === "ACTIVE");
+  const actionBusy = resumeRun.isPending || retryFailed.isPending;
 
   return (
     <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
@@ -111,6 +132,8 @@ export function CampaignPanel() {
             Email templates → Campaigns
           </Link>
           . Prior sends keeps people you already contacted off the list. Deactivated accounts are left out.
+          If credits run out mid-campaign, the run pauses — top up Zoho/Meta, then Resume. Use Retry failed
+          for one-off delivery errors.
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -194,7 +217,7 @@ export function CampaignPanel() {
       {trigger.isError && <p className="text-sm text-red-600">{apiErrorMessage(trigger.error)}</p>}
       {(runs.data || []).length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-xs">
+          <table className="w-full min-w-[860px] text-left text-xs">
             <thead className="text-slate-500">
               <tr>
                 <th className="py-2">Type</th>
@@ -203,23 +226,59 @@ export function CampaignPanel() {
                 <th>Promo</th>
                 <th>Status</th>
                 <th>Recipients</th>
-                <th>Sent / skip / fail</th>
+                <th>Sent / skip / fail / pending</th>
                 <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {(runs.data || []).slice(0, 8).map((run) => (
-                <tr key={run.id} className="border-t">
+                <tr key={run.id} className="border-t align-top">
                   <td className="py-2 font-medium">{run.campaignType}</td>
                   <td>{run.channel}</td>
                   <td>{run.maxPriorSends == null ? "any" : run.maxPriorSends}</td>
                   <td>{run.promoCode || "—"}</td>
-                  <td>{run.status}</td>
+                  <td>
+                    <div>{run.status}</div>
+                    {run.status === "PAUSED" && run.pauseReason ? (
+                      <div className="mt-1 max-w-[180px] text-[11px] leading-snug text-amber-700">
+                        {run.pauseReason}
+                      </div>
+                    ) : null}
+                  </td>
                   <td>{run.totalRecipients}</td>
                   <td>
-                    {run.sentCount} / {run.skippedCount} / {run.failedCount}
+                    {run.sentCount} / {run.skippedCount} / {run.failedCount} / {run.pendingCount ?? "—"}
                   </td>
                   <td>{new Date(run.createdAt).toLocaleString()}</td>
+                  <td className="space-y-1 py-2">
+                    {run.status === "PAUSED" && (
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => {
+                          setMessage("");
+                          resumeRun.mutate(run.id);
+                        }}
+                        className="block rounded-lg bg-amber-600 px-2 py-1 font-semibold text-white disabled:opacity-60"
+                      >
+                        Resume
+                      </button>
+                    )}
+                    {run.failedCount > 0 && (
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => {
+                          setMessage("");
+                          retryFailed.mutate(run.id);
+                        }}
+                        className="block rounded-lg border border-slate-300 px-2 py-1 font-semibold text-slate-700 disabled:opacity-60"
+                      >
+                        Retry failed
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

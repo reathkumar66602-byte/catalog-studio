@@ -64,6 +64,13 @@ public class GlobalExceptionHandler {
                         List.of(new ApiResponse.FieldError("images", "File size exceeds the allowed limit"))));
     }
 
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(
+            org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("This ticket was updated by someone else. Refresh and try again."));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnknown(Exception ex, HttpServletRequest request) {
         String traceId = UUID.randomUUID().toString();

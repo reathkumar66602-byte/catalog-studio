@@ -70,11 +70,16 @@ services:
       AMAZON_LWA_REFRESH_TOKEN: ${AMAZON_LWA_REFRESH_TOKEN:-}
       AMAZON_MARKETPLACE_ID: ${AMAZON_MARKETPLACE_ID:-A21TJRUUN4KGV}
       AMAZON_SP_API_SANDBOX: ${AMAZON_SP_API_SANDBOX:-true}
-      MEESHO_OMS_ENABLED: ${MEESHO_OMS_ENABLED:-false}
+      MEESHO_OMS_ENABLED: ${MEESHO_OMS_ENABLED:-true}
       MEESHO_PANEL_EMAIL: ${MEESHO_PANEL_EMAIL:-}
       MEESHO_PANEL_PASSWORD: ${MEESHO_PANEL_PASSWORD:-}
       MEESHO_PANEL_BASE_URL: ${MEESHO_PANEL_BASE_URL:-https://supplier.meesho.com}
       MEESHO_PANEL_LIVE_AUTH_REQUIRED: ${MEESHO_PANEL_LIVE_AUTH_REQUIRED:-false}
+      MEESHO_PREFER_PROPERTY_CREDENTIALS: ${MEESHO_PREFER_PROPERTY_CREDENTIALS:-false}
+      MEESHO_AUTO_SYNC_ENABLED: ${MEESHO_AUTO_SYNC_ENABLED:-true}
+      MEESHO_ORDER_POLL_MS: ${MEESHO_ORDER_POLL_MS:-300000}
+      MEESHO_PUSH_STOCK_ON_CHANGE: ${MEESHO_PUSH_STOCK_ON_CHANGE:-true}
+      MEESHO_RESERVE_ON_ORDER_IMPORT: ${MEESHO_RESERVE_ON_ORDER_IMPORT:-true}
       WHOLESALE_GST_PROVIDER: ${WHOLESALE_GST_PROVIDER:-gstinapi}
       WHOLESALE_GST_NAME_MATCH_THRESHOLD: ${WHOLESALE_GST_NAME_MATCH_THRESHOLD:-0.72}
       GSTINAPI_BASE_URL: ${GSTINAPI_BASE_URL:-https://www.gstinapi.in}
@@ -119,10 +124,36 @@ services:
     ports: !override
       - "127.0.0.1:8081:8081"
 
+  support-service:
+    environment:
+      SERVER_PORT: "8083"
+      SUPPORT_DATABASE_URL: jdbc:postgresql://postgres:5432/catalog_studio_support
+      SUPPORT_DATABASE_USER: catalog_studio
+      SUPPORT_DATABASE_PASSWORD: ${DATABASE_PASSWORD:-catalog_studio}
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-catalogstudio}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-catalogstudio}
+      MESSAGING_ENABLED: "true"
+      PLATFORM_BASE_URL: http://platform-api:8082
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-catalog-studio-internal}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      STORAGE_LOCAL_PATH: /var/catalog-studio/uploads-support
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
+      SUPPORT_AI_PROVIDER: ${SUPPORT_AI_PROVIDER:-}
+      SUPPORT_AI_API_KEY: ${SUPPORT_AI_API_KEY:-}
+      SUPPORT_AI_MODEL: ${SUPPORT_AI_MODEL:-}
+    ports: !override
+      - "127.0.0.1:8083:8083"
+
   api-gateway:
     environment:
       SERVER_PORT: "8080"
       SUPPLIER_SERVICE_URI: http://supplier-service:8081
+      SUPPORT_SERVICE_URI: http://support-service:8083
       PLATFORM_SERVICE_URI: http://platform-api:8082
     ports: !override
       - "127.0.0.1:8080:8080"

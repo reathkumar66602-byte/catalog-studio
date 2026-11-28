@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/marketplaces/amazon/sp-api")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('SUPERADMIN')")
+@PreAuthorize("hasAnyRole('SUPERADMIN', 'ADMIN', 'SELLER')")
 @Tag(name = "Amazon SP-API")
 public class AmazonSpApiController {
 
